@@ -155,18 +155,18 @@ router.patch('/me', authenticate, async (req, res, next) => {
 
     const result = await query(
       `UPDATE users SET
-        name = COALESCE($1, name),
-        profession = COALESCE($2, profession),
+        name = $1,
+        profession = $2,
         primary_niche = $3,
         internal_context = $4,
         updated_at = NOW()
        WHERE id = $5
        RETURNING id, email, name, profession, primary_niche, internal_context`,
       [
-        data.name === '' ? null : data.name,
-        data.profession || null,
-        data.primary_niche || null,
-        data.internal_context || null,
+        data.name === undefined ? req.user.name : (data.name === '' ? null : data.name),
+        data.profession === undefined ? req.user.profession : data.profession,
+        data.primary_niche === undefined ? req.user.primary_niche : (data.primary_niche || null),
+        data.internal_context === undefined ? req.user.internal_context : (data.internal_context || null),
         req.user.id
       ]
     );
