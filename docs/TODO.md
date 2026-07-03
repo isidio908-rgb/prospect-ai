@@ -78,37 +78,43 @@ Checklist:
 - Confirmar que `whatsapp` e preenchido nos leads aprovados.
 - Ajustar parser de resposta se a Evolution retornar shape diferente.
 
+### 5. Perfil profissional editavel
+
+Objetivo: permitir alterar depois do cadastro a profissao, nicho foco e instrucoes internas usadas pela IA.
+
+Escopo sugerido:
+
+- Criar rota `GET /api/auth/me` ja existente como fonte de dados.
+- Criar rota `PATCH /api/auth/me` para atualizar `name`, `profession`, `primary_niche` e `internal_context`.
+- Criar pagina `Perfil` ou secao em Configuracoes.
+- Atualizar `authStore` e `localStorage` depois de salvar.
+
 ## Prioridade Media
 
-### 5. Testes automatizados dos modulos novos
+### 6. Testes automatizados dos modulos novos
 
 Cobrir:
 
 - Credenciais LLM.
 - Rotas `/api/ai/*`.
+- Personalizacao profissional dos prompts de IA.
+- CRM Kanban e mudanca de status.
 - Verificacao WhatsApp na coleta.
 - Salvamento do campo `whatsapp`.
 - Exportacao JSON de leads.
 - Deduplicacao com `place_id`, `business_id`, `google_id`, telefone, dominio e nome+cidade.
 
-### 6. Kanban comercial
+### 7. Kanban comercial avancado
 
-Objetivo: transformar o CRM atual em uma visualizacao de pipeline.
+O Kanban basico ja existe em `/crm`. Melhorias futuras:
 
-Colunas sugeridas:
+- Drag-and-drop.
+- Filtros por responsavel, nicho, cidade e prioridade.
+- Contagem de valor potencial por coluna.
+- Edicao rapida de proxima acao.
+- Registro automatico de follow-up ao mover card.
 
-- novo
-- analisado
-- mensagem_pronta
-- contato_enviado
-- respondeu
-- reuniao_marcada
-- proposta_enviada
-- cliente_fechado
-- sem_interesse
-- nao_respondeu
-
-### 7. Dashboard comercial avancado
+### 8. Dashboard comercial avancado
 
 Adicionar:
 
@@ -121,7 +127,7 @@ Adicionar:
 - Leads com WhatsApp confirmado.
 - Leads por fonte de coleta.
 
-### 8. Documentacao operacional especifica
+### 9. Documentacao operacional especifica
 
 Criar guias separados:
 
@@ -132,15 +138,15 @@ Criar guias separados:
 
 ## Prioridade Baixa
 
-### 9. Exportacao PDF
+### 10. Exportacao PDF
 
 Gerar PDF com diagnostico por lead para enviar em conversa comercial.
 
-### 10. Templates comerciais por nicho
+### 11. Templates comerciais por nicho
 
 Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
 
-### 11. Priorizacao inteligente avancada
+### 12. Priorizacao inteligente avancada
 
 Usar IA para sugerir:
 
@@ -151,8 +157,11 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Cadastro com contexto profissional do usuario (`profession`, `primary_niche`, `internal_context`).
+- Prompts internos de IA ajustados pela profissao/nicho/instrucoes do usuario.
+- Pagina CRM Kanban basica em `/crm`.
+- Menu lateral com link para CRM Kanban.
 - Exportacao JSON de leads com filtros.
-
 - Credenciais de scraper e LLM agrupadas na UI.
 - Campo `model` para credenciais IA/LLM.
 - Assistente IA em detalhes do lead.
