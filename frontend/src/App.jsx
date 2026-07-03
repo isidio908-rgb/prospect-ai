@@ -7,6 +7,8 @@ import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import LeadDetails from './pages/LeadDetails';
 import CrmKanban from './pages/CrmKanban';
+import CollectionHistory from './pages/CollectionHistory';
+import Profile from './pages/Profile';
 import Credentials from './pages/Credentials';
 import WhatsAppSettings from './pages/WhatsAppSettings';
 import Collect from './pages/Collect';
@@ -71,6 +73,17 @@ function App() {
         />
 
         <Route
+          path="/collections"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <CollectionHistory />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
           path="/leads"
           element={
             <PrivateRoute>
@@ -109,6 +122,17 @@ function App() {
             <PrivateRoute>
               <Layout>
                 <Credentials />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <Profile />
               </Layout>
             </PrivateRoute>
           }
