@@ -20,10 +20,18 @@ export async function initDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         name VARCHAR(255),
+        profession VARCHAR(255) DEFAULT 'Gestor de Tráfego',
+        primary_niche VARCHAR(255),
+        internal_context TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // Migração: contexto profissional do usuário usado pela UI e pelos prompts internos de IA.
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profession VARCHAR(255) DEFAULT 'Gestor de Tráfego'`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_niche VARCHAR(255)`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS internal_context TEXT`);
 
     // Criar tabela de configurações do usuário (credenciais RapidAPI)
     await client.query(`
