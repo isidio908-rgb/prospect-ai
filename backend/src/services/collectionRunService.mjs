@@ -73,7 +73,7 @@ export async function addCollectionRunLog(runId, userId, level, event, message, 
 
   const result = await query(
     `INSERT INTO collection_run_logs (run_id, user_id, level, event, message, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)
      RETURNING id, created_at`,
     [runId, userId, level, event, message, JSON.stringify(metadata || {})]
   );
@@ -144,7 +144,7 @@ export async function saveCollectionCache(userId, input = {}, responseJson = {})
     `INSERT INTO collection_cache (
       user_id, cache_key, source_type, query, niche, city, region,
       limit_requested, params_json, response_json, expires_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + ($11 || ' minutes')::INTERVAL)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, NOW() + ($11::text || ' minutes')::INTERVAL)
     ON CONFLICT (user_id, cache_key)
     DO UPDATE SET
       source_type = EXCLUDED.source_type,
