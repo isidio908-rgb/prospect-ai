@@ -64,9 +64,13 @@ Cache, historico e CRM:
 - CRM/Kanban validado com status `contato_enviado`.
 - Backend rejeita corretamente status antigo invalido como `em_contato`.
 
-Risco tecnico aberto:
+Auditoria de dependencias:
 
-- `npm install` do backend reporta 2 vulnerabilidades altas no audit. Nao foi aplicado `npm audit fix` para evitar mudancas de dependencias fora do escopo.
+- `npm audit --json` do backend foi avaliado sem `npm audit fix`.
+- O audit apontava 2 vulnerabilidades altas em `tar`, via `@mapbox/node-pre-gyp`, puxado por `bcrypt@5.1.1`.
+- Correcao aplicada: atualizacao direcionada de `bcrypt` para `^6.0.0`, que remove `@mapbox/node-pre-gyp` e `tar` da arvore de dependencias.
+- Resultado final: `npm audit --json` do backend com 0 vulnerabilidades.
+- `backend npm test`, `frontend npm run build` e `docker compose build backend frontend` passaram apos a atualizacao.
 
 ## Modulos Implementados
 
@@ -313,8 +317,7 @@ Migracoes idempotentes relevantes:
 
 Prioridade alta:
 
-1. Avaliar e corrigir as 2 vulnerabilidades altas reportadas pelo `npm audit` do backend.
-2. Preparar operacao controlada de prospeccao real com baixo volume e acompanhamento de conversao.
+1. Preparar operacao controlada de prospeccao real com baixo volume e acompanhamento de conversao.
 
 Prioridade media:
 
@@ -339,4 +342,4 @@ Estimativa pragmatica:
 - Produto comercial: 56% pronto.
 - Documentacao: atualizada para a validacao pos-merge.
 
-O sistema ja pode ser usado internamente para coletar, analisar, priorizar e abordar leads com credenciais reais e WhatsApp conectado. O proximo passo tecnico e tratar o audit do backend; o proximo passo operacional e iniciar prospeccao real controlada.
+O sistema ja pode ser usado internamente para coletar, analisar, priorizar e abordar leads com credenciais reais e WhatsApp conectado. O audit do backend foi tratado com atualizacao controlada de dependencia; o proximo passo operacional e iniciar prospeccao real controlada.

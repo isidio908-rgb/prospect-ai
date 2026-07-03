@@ -6,22 +6,7 @@ Este arquivo substitui listas antigas de proximas acoes que ja foram executadas.
 
 ## Prioridade Alta
 
-### 1. Avaliar vulnerabilidades do backend
-
-Objetivo: tratar as 2 vulnerabilidades altas reportadas pelo `npm audit` do backend sem aplicar mudancas automaticas que possam quebrar dependencias.
-
-Checklist:
-
-- Rodar `npm audit` no backend.
-- Identificar pacotes afetados e cadeia de dependencia.
-- Conferir se existe patch seguro sem breaking change.
-- Atualizar dependencias de forma controlada.
-- Rodar `backend npm test`.
-- Rodar `frontend npm run build` se houver impacto indireto.
-- Rodar `docker compose build backend frontend`.
-- Registrar decisao se alguma vulnerabilidade precisar ficar aceita temporariamente.
-
-### 2. Preparar operacao controlada de prospeccao real
+### 1. Preparar operacao controlada de prospeccao real
 
 Objetivo: iniciar uso operacional com volume baixo e rastreavel.
 
@@ -37,7 +22,7 @@ Checklist:
 
 ## Prioridade Media
 
-### 3. Melhorar controle visual de cache
+### 2. Melhorar controle visual de cache
 
 O backend ja possui cache de coleta por assinatura de busca, historico indica `cache_hit` e a tela de coleta ja possui toggle para forcar nova coleta.
 
@@ -47,7 +32,7 @@ Melhorias futuras:
 - Permitir limpar cache manualmente por busca.
 - Indicar visualmente quando o lead veio de cache versus provider real.
 
-### 4. Testes automatizados complementares
+### 3. Testes automatizados complementares
 
 Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, erro RapidAPI sem expor key e erro Apify sem expor token.
 
@@ -63,7 +48,7 @@ Cobrir proximas camadas:
 - Exportacao JSON de leads.
 - Deduplicacao com `place_id`, `business_id`, `google_id`, telefone, dominio e nome+cidade.
 
-### 5. Kanban comercial avancado
+### 4. Kanban comercial avancado
 
 O Kanban basico ja existe em `/crm`. Melhorias futuras:
 
@@ -73,7 +58,7 @@ O Kanban basico ja existe em `/crm`. Melhorias futuras:
 - Edicao rapida de proxima acao.
 - Registro automatico de follow-up ao mover card.
 
-### 6. Dashboard comercial avancado - proxima camada
+### 5. Dashboard comercial avancado - proxima camada
 
 O dashboard ja mostra funil, resposta, valor fechado, presenca digital, fontes, conversao por nicho e conversao por cidade.
 
@@ -85,7 +70,7 @@ Melhorias futuras:
 - Custo por fonte de coleta.
 - Receita potencial por nicho/cidade.
 
-### 7. Documentacao operacional especifica
+### 6. Documentacao operacional especifica
 
 Criar guias separados:
 
@@ -96,15 +81,15 @@ Criar guias separados:
 
 ## Prioridade Baixa
 
-### 8. Exportacao PDF
+### 7. Exportacao PDF
 
 Gerar PDF com diagnostico por lead para enviar em conversa comercial.
 
-### 9. Templates comerciais por nicho
+### 8. Templates comerciais por nicho
 
 Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
 
-### 10. Priorizacao inteligente avancada
+### 9. Priorizacao inteligente avancada
 
 Usar IA para sugerir:
 
@@ -115,6 +100,10 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Avaliacao manual de `npm audit --json` do backend sem `npm audit fix`.
+- Atualizacao segura de `bcrypt` de `^5.1.1` para `^6.0.0`, removendo a cadeia vulneravel `@mapbox/node-pre-gyp` -> `tar`.
+- `npm audit --json` do backend limpo: 0 vulnerabilidades.
+- `backend npm test`, `frontend npm run build` e `docker compose build backend frontend` passaram apos a atualizacao de dependencia.
 - Validacao pos-merge em `main` com `git pull origin main`.
 - Backend `npm test`: 32 testes passando.
 - Frontend `npm run build`: passando.
