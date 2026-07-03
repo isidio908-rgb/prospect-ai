@@ -108,7 +108,7 @@ function formatApifyError(status, text, requestBody) {
   const hint = type === 'invalid-input'
     ? 'Verifique se o Actor usa o schema { language, location, max_results, query }.'
     : type === 'full-permission-actor-not-approved'
-      ? 'Aprove as permissoes do Actor na conta Apify antes de executar.'
+      ? 'Este Actor da Apify precisa ser aprovado na sua conta antes de executar.'
       : null;
 
   return `Apify retornou ${status}: ${[type, message, hint].filter(Boolean).join(' - ')} | input=${JSON.stringify(requestBody)}`;
