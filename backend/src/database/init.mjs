@@ -104,6 +104,81 @@ export async function initDatabase() {
       )
     `);
 
+    // Histórico persistente de execuções de coleta.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS collection_runs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        credential_id INTEGER REFERENCES credentials(id) ON DELETE SET NULL,
+        source_type VARCHAR(100),
+        query TEXT,
+        niche VARCHAR(255),
+        city VARCHAR(255),
+        region VARCHAR(50),
+        limit_requested INTEGER,
+        total_found INTEGER DEFAULT 0,
+        saved_count INTEGER DEFAULT 0,
+        duplicate_count INTEGER DEFAULT 0,
+        error_count INTEGER DEFAULT 0,
+        whatsapp_check_enabled BOOLEAN DEFAULT FALSE,
+        whatsapp_verified_count INTEGER DEFAULT 0,
+        whatsapp_rejected_count INTEGER DEFAULT 0,
+        without_phone_count INTEGER DEFAULT 0,
+        cache_key VARCHAR(128),
+        cache_hit BOOLEAN DEFAULT FALSE,
+        status VARCHAR(50) DEFAULT 'running',
+        error_message TEXT,
+        started_at TIMESTAMP DEFAULT NOW(),
+        finished_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS cache_key VARCHAR(128)`);
+    await client.query(`ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS cache_hit BOOLEAN DEFAULT FALSE`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_runs_user_started ON collection_runs(user_id, started_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_runs_status ON collection_runs(user_id, status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_runs_cache_key ON collection_runs(user_id, cache_key) WHERE cache_key IS NOT NULL`);
+
+    // Logs persistentes das execuções de coleta.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS collection_run_logs (
+        id SERIAL PRIMARY KEY,
+        run_id INTEGER REFERENCES collection_runs(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        level VARCHAR(20) DEFAULT 'info',
+        event VARCHAR(100),
+        message TEXT,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_run_logs_run ON collection_run_logs(run_id, created_at ASC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_run_logs_user ON collection_run_logs(user_id, created_at DESC)`);
+
+    // Cache de busca/coleta para evitar chamadas repetidas ao mesmo provedor.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS collection_cache (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        cache_key VARCHAR(128) NOT NULL,
+        source_type VARCHAR(100),
+        query TEXT,
+        niche VARCHAR(255),
+        city VARCHAR(255),
+        region VARCHAR(50),
+        limit_requested INTEGER,
+        params_json JSONB DEFAULT '{}'::jsonb,
+        response_json JSONB NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, cache_key)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_cache_user_key ON collection_cache(user_id, cache_key)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_cache_expires ON collection_cache(expires_at)`);
+
     // Criar tabela de leads
     await client.query(`
       CREATE TABLE IF NOT EXISTS leads (
