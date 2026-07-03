@@ -5,22 +5,33 @@ import { authenticate } from '../middleware/auth.mjs';
 import { encrypt, decrypt, maskApiKey } from '../../services/encryption.mjs';
 import { listProviders, getProvider } from '../../services/scrapers/providers.mjs';
 import { testCredentialByType } from '../../services/scraperCollector.mjs';
+import { isLlmType } from '../../services/llm/providers.mjs';
+import { testLlm } from '../../services/llm/client.mjs';
 
 const router = express.Router();
 
 // Todas as rotas precisam de autenticação
 router.use(authenticate);
 
-// Schema de validação. `type` deve ser um provedor de scraper suportado.
+// Determina a categoria da credencial a partir do tipo (scraper vs llm).
+const SCRAPER_TYPES = ['rapidapi', 'apify', 'serper'];
+function categoryForType(type) {
+  if (isLlmType(type)) return 'llm';
+  if (SCRAPER_TYPES.includes(type)) return 'scraper';
+  return null;
+}
+
+// Schema de validação. `type` pode ser um scraper ou um provedor de IA.
 const credentialSchema = z.object({
   name: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
-  type: z.enum(['rapidapi', 'apify', 'serper']),
+  type: z.string().min(1).refine((t) => categoryForType(t) !== null, 'Provedor não suportado'),
   provider: z.string().optional(),
   api_host: z.string().optional(),
   api_key: z.string().min(10, 'API Key inválida'),
   base_url: z.string().url('URL base inválida').optional(),
   search_endpoint: z.string().optional(),
   details_endpoint: z.string().optional(),
+  model: z.string().optional(),
   daily_limit: z.number().int().positive().default(100),
   monthly_limit: z.number().int().positive().default(3000),
   notes: z.string().optional()
@@ -37,7 +48,7 @@ router.get('/', async (req, res, next) => {
   try {
     const result = await query(
       `SELECT 
-        id, name, type, provider, api_host, base_url, 
+        id, name, type, category, model, provider, api_host, base_url, 
         search_endpoint, details_endpoint, daily_limit, monthly_limit,
         used_today, used_month, last_used_at, status, notes, created_at,
         api_key_encrypted
@@ -67,7 +78,7 @@ router.get('/:id', async (req, res, next) => {
     
     const result = await query(
       `SELECT 
-        id, name, type, provider, api_host, base_url,
+        id, name, type, category, model, provider, api_host, base_url,
         search_endpoint, details_endpoint, daily_limit, monthly_limit,
         used_today, used_month, last_used_at, status, notes, created_at,
         api_key_encrypted
@@ -94,26 +105,31 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const data = credentialSchema.parse(req.body);
-    
+
+    // Categoria é derivada do tipo no servidor (não confiar no cliente)
+    const category = categoryForType(data.type);
+
     // Criptografar API Key
     const encryptedKey = encrypt(data.api_key);
-    
+
     const result = await query(
       `INSERT INTO credentials (
-        user_id, name, type, provider, api_host, api_key_encrypted,
-        base_url, search_endpoint, details_endpoint, daily_limit, monthly_limit, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING id, name, type, provider, status, created_at`,
+        user_id, name, type, category, provider, api_host, api_key_encrypted,
+        base_url, search_endpoint, details_endpoint, model, daily_limit, monthly_limit, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING id, name, type, category, model, provider, status, created_at`,
       [
         req.user.id,
         data.name,
         data.type,
+        category,
         data.provider || null,
         data.api_host || null,
         encryptedKey,
         data.base_url || null,
-        data.search_endpoint || '/search',
+        category === 'scraper' ? (data.search_endpoint || '/search') : (data.search_endpoint || null),
         data.details_endpoint || null,
+        data.model || null,
         data.daily_limit,
         data.monthly_limit,
         data.notes || null
@@ -177,6 +193,11 @@ router.put('/:id', async (req, res, next) => {
     if (data.search_endpoint !== undefined) {
       updates.push(`search_endpoint = $${paramIndex++}`);
       values.push(data.search_endpoint);
+    }
+
+    if (data.model !== undefined) {
+      updates.push(`model = $${paramIndex++}`);
+      values.push(data.model);
     }
 
     if (data.daily_limit !== undefined) {
@@ -316,7 +337,7 @@ router.post('/:id/test', async (req, res, next) => {
 
     // Buscar credencial
     const result = await query(
-      `SELECT type, api_key_encrypted, api_host, base_url, search_endpoint
+      `SELECT type, category, model, api_key_encrypted, api_host, base_url, search_endpoint
        FROM credentials
        WHERE id = $1 AND user_id = $2`,
       [id, req.user.id]
@@ -333,8 +354,10 @@ router.post('/:id/test', async (req, res, next) => {
       return res.status(500).json({ error: 'Erro ao descriptografar API Key' });
     }
 
-    // Teste específico por provedor (RapidAPI, Apify, Serper)
-    const { success, statusCode } = await testCredentialByType(cred.type, apiKey, cred);
+    // Teste específico por categoria/provedor
+    const { success, statusCode } = isLlmType(cred.type)
+      ? await testLlm(cred, apiKey)
+      : await testCredentialByType(cred.type, apiKey, cred);
 
     // Atualizar status da credencial
     const newStatus = success ? 'active' : 'error_auth';

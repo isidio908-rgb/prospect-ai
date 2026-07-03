@@ -85,6 +85,7 @@ export function listProviders() {
   return Object.values(SCRAPER_PROVIDERS).map((p) => ({
     type: p.type,
     label: p.label,
+    category: 'scraper',
     auth: p.auth,
     freeCredits: p.freeCredits,
     docs: p.docs,
