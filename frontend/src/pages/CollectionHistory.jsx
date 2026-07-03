@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Clock3, Database, FileText, RefreshCw } from 'lucide-react';
+import { Clock, Database, FileText, RefreshCw } from 'lucide-react';
 import { collections } from '../services/api';
 
 const STATUS_LABELS = {
@@ -174,7 +174,7 @@ export default function CollectionHistory() {
                       {log.event || log.level}
                     </span>
                     <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                      <Clock3 className="w-3 h-3" /> {formatTime(log.created_at)}
+                      <Clock className="w-3 h-3" /> {formatTime(log.created_at)}
                     </span>
                   </div>
                   <p className="text-sm text-gray-700 dark:text-gray-300">{log.message}</p>
