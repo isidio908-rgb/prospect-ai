@@ -3,7 +3,7 @@
 **Ultima Atualizacao:** 03/07/2026  
 **Status:** Produto interno funcional em validacao operacional
 
-## Inicio Rapido
+## Leitura Rapida
 
 ### Quero entender o estado atual
 
@@ -17,9 +17,7 @@
 2. Acesse o frontend em `http://localhost:5173`.
 3. Acesse a API em `http://localhost:3001`.
 4. Cadastre credenciais em `/credentials`.
-5. Colete leads em `/collect`.
-6. Analise leads em `/leads`.
-7. Use o detalhe do lead para CRM, WhatsApp e IA.
+5. Configure WhatsApp em `/whatsapp` se for usar chat ou verificacao de numeros.
 
 ### Quero continuar o desenvolvimento
 
@@ -64,7 +62,7 @@ Estes arquivos registram etapas anteriores e podem estar parcialmente desatualiz
 - Autenticacao JWT.
 - CRUD de leads.
 - Importacao manual e CSV.
-- Exportacao CSV.
+- Exportacao CSV e JSON.
 - Coleta via RapidAPI, Apify e Serper.
 - Deduplicacao avancada.
 - Auditoria de site.
@@ -136,5 +134,3 @@ A fonte de verdade operacional agora e:
 2. `STATUS-ATUAL.md`.
 3. `TODO.md`.
 4. `HISTORICO.md`.
-
-Arquivos historicos antigos devem ser tratados como contexto, nao como status atual.

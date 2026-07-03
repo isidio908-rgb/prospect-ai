@@ -6,25 +6,7 @@ Este arquivo substitui listas antigas de proximas acoes que ja foram executadas.
 
 ## Prioridade Alta
 
-### 1. Exportacao JSON de leads
-
-Objetivo: permitir exportar os leads em JSON alem de CSV.
-
-Escopo sugerido:
-
-- Adicionar `GET /api/leads/export-json` ou `GET /api/leads/export?format=json`.
-- Reaproveitar os mesmos filtros do CSV: status, prioridade, cidade, nicho, minScore.
-- Garantir que API keys e dados sensiveis nunca sejam exportados.
-- Adicionar botao no frontend na pagina de Leads.
-
-Arquivos provaveis:
-
-- `backend/src/api/routes/leads.mjs`
-- `backend/src/services/csvImporter.mjs` ou novo `backend/src/services/exporter.mjs`
-- `frontend/src/pages/Leads.jsx`
-- `frontend/src/services/api.js`
-
-### 2. Historico persistente de coletas
+### 1. Historico persistente de coletas
 
 Objetivo: registrar cada execucao de coleta para auditoria operacional e futura tela de historico.
 
@@ -61,7 +43,7 @@ Arquivos provaveis:
 - `frontend/src/pages/Collect.jsx`
 - futura pagina `frontend/src/pages/CollectionHistory.jsx`
 
-### 3. Logs persistentes de execucao
+### 2. Logs persistentes de execucao
 
 Objetivo: registrar erros e eventos importantes de coleta sem depender apenas de console/log Docker.
 
@@ -72,7 +54,7 @@ Escopo sugerido:
 - Registrar falhas de provedor e falhas de verificacao WhatsApp.
 - Exibir detalhes no frontend apenas para o usuario dono da coleta.
 
-### 4. Cache de coleta
+### 3. Cache de coleta
 
 Objetivo: evitar chamadas repetidas desnecessarias para o mesmo nicho/local/fonte.
 
@@ -83,7 +65,7 @@ Escopo sugerido:
 - Permitir forcar nova coleta quando necessario.
 - Nao usar cache para burlar limite de provedor; usar para reduzir custo.
 
-### 5. Validar verificacao WhatsApp em uso real
+### 4. Validar verificacao WhatsApp em uso real
 
 Objetivo: confirmar resposta real do endpoint Evolution usado para checar existencia de numeros.
 
@@ -98,7 +80,7 @@ Checklist:
 
 ## Prioridade Media
 
-### 6. Testes automatizados dos modulos novos
+### 5. Testes automatizados dos modulos novos
 
 Cobrir:
 
@@ -106,10 +88,10 @@ Cobrir:
 - Rotas `/api/ai/*`.
 - Verificacao WhatsApp na coleta.
 - Salvamento do campo `whatsapp`.
-- Exportacao JSON quando criada.
+- Exportacao JSON de leads.
 - Deduplicacao com `place_id`, `business_id`, `google_id`, telefone, dominio e nome+cidade.
 
-### 7. Kanban comercial
+### 6. Kanban comercial
 
 Objetivo: transformar o CRM atual em uma visualizacao de pipeline.
 
@@ -126,7 +108,7 @@ Colunas sugeridas:
 - sem_interesse
 - nao_respondeu
 
-### 8. Dashboard comercial avancado
+### 7. Dashboard comercial avancado
 
 Adicionar:
 
@@ -139,7 +121,7 @@ Adicionar:
 - Leads com WhatsApp confirmado.
 - Leads por fonte de coleta.
 
-### 9. Documentacao operacional especifica
+### 8. Documentacao operacional especifica
 
 Criar guias separados:
 
@@ -150,15 +132,15 @@ Criar guias separados:
 
 ## Prioridade Baixa
 
-### 10. Exportacao PDF
+### 9. Exportacao PDF
 
 Gerar PDF com diagnostico por lead para enviar em conversa comercial.
 
-### 11. Templates comerciais por nicho
+### 10. Templates comerciais por nicho
 
 Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
 
-### 12. Priorizacao inteligente avancada
+### 11. Priorizacao inteligente avancada
 
 Usar IA para sugerir:
 
@@ -168,6 +150,8 @@ Usar IA para sugerir:
 - Urgencia do lead.
 
 ## Itens Concluidos Recentemente
+
+- Exportacao JSON de leads com filtros.
 
 - Credenciais de scraper e LLM agrupadas na UI.
 - Campo `model` para credenciais IA/LLM.

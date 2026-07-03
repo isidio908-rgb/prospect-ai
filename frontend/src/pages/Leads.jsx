@@ -83,22 +83,36 @@ export default function Leads() {
     }
   };
 
+  const downloadBlob = (data, filename, type) => {
+    const url = window.URL.createObjectURL(new Blob([data], { type }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleExport = async () => {
     try {
       const response = await leads.export(filters);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `leads-${new Date().toISOString()}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      downloadBlob(response.data, `leads-${new Date().toISOString()}.csv`, 'text/csv');
       toast.success('CSV exportado com sucesso!');
     } catch (error) {
       toast.error('Erro ao exportar CSV');
     }
   };
 
+  const handleExportJson = async () => {
+    try {
+      const response = await leads.exportJson(filters);
+      downloadBlob(response.data, `leads-${new Date().toISOString()}.json`, 'application/json');
+      toast.success('JSON exportado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao exportar JSON');
+    }
+  };
   const handleImportCSV = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -184,7 +198,11 @@ export default function Leads() {
           </label>
           <button onClick={handleExport} className="btn btn-secondary flex items-center gap-2">
             <Download className="w-5 h-5" />
-            Exportar
+            Exportar CSV
+          </button>
+          <button onClick={handleExportJson} className="btn btn-secondary flex items-center gap-2">
+            <Download className="w-5 h-5" />
+            Exportar JSON
           </button>
           <button
             onClick={handleAnalyze}

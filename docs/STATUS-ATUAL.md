@@ -36,7 +36,7 @@ Arquivos principais:
 - Importacao manual.
 - Importacao CSV.
 - Listagem com filtros.
-- Exportacao CSV.
+- Exportacao CSV e JSON.
 - Analise em lote.
 - Status comercial do lead.
 - Responsavel, proxima acao, valor potencial, motivo de perda.
@@ -322,11 +322,11 @@ Status validado em 03/07/2026:
 
 Prioridade alta:
 
-1. Exportacao JSON de leads.
-2. Historico persistente de coletas (`collection_runs`).
-3. Logs persistentes de execucao de coleta.
-4. Cache/controle para evitar recoletar a mesma busca em curto intervalo.
-5. Teste real da verificacao WhatsApp em coleta com instancia conectada.
+1. Historico persistente de coletas (`collection_runs`).
+2. Logs persistentes de execucao de coleta.
+3. Cache/controle para evitar recoletar a mesma busca em curto intervalo.
+4. Teste real da verificacao WhatsApp em coleta com instancia conectada.
+5. Testes automatizados para IA, WhatsApp e coleta.
 
 Prioridade media:
 

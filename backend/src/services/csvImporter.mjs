@@ -159,10 +159,7 @@ function mapCSVToLead(header, values) {
   return lead;
 }
 
-/**
- * Exporta leads para CSV
- */
-export async function exportLeadsToCSV(userId, filters = {}) {
+async function getExportableLeads(userId, filters = {}) {
   // Construir query com filtros
   let whereConditions = ['user_id = $1'];
   let params = [userId];
@@ -215,16 +212,25 @@ export async function exportLeadsToCSV(userId, filters = {}) {
      ORDER BY score DESC, nome_empresa ASC`,
     params
   );
+
+  return result.rows;
+}
+
+/**
+ * Exporta leads para CSV
+ */
+export async function exportLeadsToCSV(userId, filters = {}) {
+  const rows = await getExportableLeads(userId, filters);
   
-  if (result.rows.length === 0) {
+  if (rows.length === 0) {
     return '';
   }
   
   // Criar CSV
-  const headers = Object.keys(result.rows[0]);
+  const headers = Object.keys(rows[0]);
   const csvLines = [headers.join(',')];
   
-  for (const row of result.rows) {
+  for (const row of rows) {
     const values = headers.map(header => {
       const value = row[header];
       if (value === null || value === undefined) return '';
@@ -241,4 +247,11 @@ export async function exportLeadsToCSV(userId, filters = {}) {
   }
   
   return csvLines.join('\n');
+}
+
+/**
+ * Exporta leads para JSON usando os mesmos filtros e campos do CSV.
+ */
+export async function exportLeadsToJSON(userId, filters = {}) {
+  return getExportableLeads(userId, filters);
 }
