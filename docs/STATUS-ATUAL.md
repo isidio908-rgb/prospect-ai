@@ -7,6 +7,8 @@
 
 O Prospect AI ja funciona como uma maquina de prospeccao comercial, nao apenas como scraper. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens de WhatsApp, gerencia credenciais de scraper e LLM, conversa via WhatsApp/Evolution API e usa IA para melhorar textos e diagnosticos.
 
+A versao atual tambem inclui contexto profissional do usuario no cadastro, prompts internos de IA ajustados por profissao/nicho/instrucoes e uma pagina CRM Kanban para acompanhar os leads no pipeline comercial.
+
 ## Stack Atual
 
 - Backend: Node.js + Express + ESModules, PostgreSQL, porta 3001.
@@ -19,16 +21,22 @@ O Prospect AI ja funciona como uma maquina de prospeccao comercial, nao apenas c
 
 ## Modulos Implementados
 
-### Autenticacao
+### Autenticacao e Perfil Profissional
 
 - Registro, login e JWT.
 - Middleware de autenticacao aplicado nas rotas protegidas.
+- Cadastro com campos profissionais: `profession`, `primary_niche` e `internal_context`.
+- Layout exibe profissao e nicho foco do usuario.
+- Prompts internos de IA usam esses campos para adaptar diagnosticos, mensagens, e-mails, roteiros e propostas ao ponto de vista do usuario.
 
 Arquivos principais:
 
 - `backend/src/api/routes/auth.mjs`
 - `backend/src/api/middleware/auth.mjs`
+- `backend/src/database/init.mjs`
+- `frontend/src/pages/Login.jsx`
 - `frontend/src/store/authStore.js`
+- `frontend/src/components/Layout.jsx`
 
 ### Leads e CRM
 
@@ -41,6 +49,7 @@ Arquivos principais:
 - Status comercial do lead.
 - Responsavel, proxima acao, valor potencial, motivo de perda.
 - Historico de follow-up e notas.
+- Pagina CRM Kanban em `/crm` com colunas por status e movimentacao rapida do lead.
 
 Arquivos principais:
 
@@ -48,6 +57,7 @@ Arquivos principais:
 - `backend/src/services/csvImporter.mjs`
 - `frontend/src/pages/Leads.jsx`
 - `frontend/src/pages/LeadDetails.jsx`
+- `frontend/src/pages/CrmKanban.jsx`
 
 ### Coleta de Leads
 
@@ -241,6 +251,7 @@ Implementado:
 - Execucao de tarefas por lead.
 - Aplicacao do resultado em campos do lead quando permitido.
 - Assistente IA dentro da pagina de detalhes do lead.
+- Prompt-base dinamico com profissao, nicho foco e instrucoes internas do usuario.
 
 Tarefas atuais:
 
@@ -295,6 +306,9 @@ Tabelas principais:
 
 Migracoes idempotentes relevantes:
 
+- `users.profession`
+- `users.primary_niche`
+- `users.internal_context`
 - `credentials.category`
 - `credentials.model`
 - campos normalizados em `leads`
@@ -326,15 +340,15 @@ Prioridade alta:
 2. Logs persistentes de execucao de coleta.
 3. Cache/controle para evitar recoletar a mesma busca em curto intervalo.
 4. Teste real da verificacao WhatsApp em coleta com instancia conectada.
-5. Testes automatizados para IA, WhatsApp e coleta.
+5. Perfil profissional editavel depois do cadastro.
+6. Testes automatizados para IA, WhatsApp, Kanban e coleta.
 
 Prioridade media:
 
-1. Kanban comercial.
+1. Kanban comercial avancado com drag-and-drop e filtros.
 2. Dashboard comercial avancado.
 3. Filtros adicionais no dashboard.
-4. Testes automatizados para IA, WhatsApp e coleta.
-5. Documentacao especifica de operacao WhatsApp/IA.
+4. Documentacao especifica de operacao WhatsApp/IA.
 
 Prioridade baixa:
 
@@ -347,9 +361,9 @@ Prioridade baixa:
 
 Estimativa pragmatica:
 
-- Core de prospeccao: 85% pronto.
-- Operacao interna local: 80% pronta.
-- Produto comercial: 45% pronto.
+- Core de prospeccao: 88% pronto.
+- Operacao interna local: 84% pronta.
+- Produto comercial: 48% pronto.
 - Documentacao: em atualizacao.
 
 O sistema ja pode ser usado internamente para coletar, analisar, priorizar e abordar leads, desde que as credenciais estejam configuradas e o WhatsApp esteja conectado quando a verificacao de existencia for usada.
