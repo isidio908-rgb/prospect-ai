@@ -40,13 +40,14 @@ export const SCRAPER_PROVIDERS = {
     label: 'Apify · Google Maps Scraper',
     auth: 'token_query',
     freeCredits: true,
-    docs: 'https://apify.com/damilo/google-maps-scraper',
+    docs: 'https://apify.com/store?search=google%20maps%20scraper',
     defaults: {
       provider: 'Apify Google Maps Scraper',
       api_host: 'api.apify.com',
       base_url: 'https://api.apify.com/v2',
-      // Actor ID no formato usuario~nome. O actor damilo/google-maps-scraper
-      // aceita o input { keyword: [], location, max_result_per_keyword }.
+      // Actor ID no formato usuario~nome. O coletor atual envia o input:
+      // { language, location, max_results, query }.
+      // Use um Actor que aceite esse schema, igual ao testado no console da Apify.
       search_endpoint: 'damilo~google-maps-scraper',
       daily_limit: 50,
       monthly_limit: 1000,
@@ -54,7 +55,7 @@ export const SCRAPER_PROVIDERS = {
     fields: ['search_endpoint'],
     fieldHints: {
       search_endpoint:
-        'ID do Actor no formato usuario~nome (ex: damilo~google-maps-scraper). Cole o token da API em API Key.',
+        'ID do Actor no formato usuario~nome. O Actor precisa aceitar input { language, location, max_results, query }. Cole o token da API em API Key.',
     },
   },
 
