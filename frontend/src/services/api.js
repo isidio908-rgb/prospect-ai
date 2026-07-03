@@ -59,6 +59,7 @@ export const leads = {
 export const collections = {
   list: (params) => api.get('/api/collections', { params }),
   logs: (id) => api.get(`/api/collections/${id}/logs`),
+  clearCache: (id) => api.delete(`/api/collections/${id}/cache`),
 };
 
 // Stats

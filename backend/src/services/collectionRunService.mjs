@@ -187,10 +187,21 @@ export async function listCollectionRuns(userId, options = {}) {
       cr.total_found, cr.saved_count, cr.duplicate_count, cr.error_count,
       cr.whatsapp_check_enabled, cr.whatsapp_verified_count,
       cr.whatsapp_rejected_count, cr.without_phone_count,
-      cr.cache_hit, cr.status, cr.error_message,
+      cr.cache_hit, cache_meta.expires_at as cache_expires_at,
+      cache_meta.ttl_seconds as cache_ttl_seconds,
+      cr.status, cr.error_message,
       cr.started_at, cr.finished_at, cr.created_at
      FROM collection_runs cr
      LEFT JOIN credentials c ON c.id = cr.credential_id AND c.user_id = cr.user_id
+     LEFT JOIN LATERAL (
+       SELECT
+         cc.expires_at,
+         GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (cc.expires_at - NOW()))))::INTEGER as ttl_seconds
+       FROM collection_cache cc
+       WHERE cc.user_id = cr.user_id AND cc.cache_key = cr.cache_key
+       ORDER BY cc.updated_at DESC
+       LIMIT 1
+     ) cache_meta ON TRUE
      WHERE cr.user_id = $1
      ORDER BY cr.started_at DESC
      LIMIT $2 OFFSET $3`,
@@ -210,4 +221,29 @@ export async function listCollectionRunLogs(userId, runId) {
   );
 
   return result.rows;
+}
+
+export async function clearCollectionCacheForRun(userId, runId) {
+  const runResult = await query(
+    `SELECT id, cache_key
+     FROM collection_runs
+     WHERE user_id = $1 AND id = $2
+     LIMIT 1`,
+    [userId, runId]
+  );
+
+  const run = runResult.rows[0];
+  if (!run) return null;
+  if (!run.cache_key) return { deletedCount: 0, hadCacheKey: false };
+
+  const deleteResult = await query(
+    `DELETE FROM collection_cache
+     WHERE user_id = $1 AND cache_key = $2`,
+    [userId, run.cache_key]
+  );
+
+  return {
+    deletedCount: deleteResult.rowCount,
+    hadCacheKey: true,
+  };
 }

@@ -5,6 +5,7 @@ import { encrypt } from '../src/services/encryption.mjs';
 import {
   addCollectionRunLog,
   buildCollectionCacheKey,
+  clearCollectionCacheForRun,
   createCollectionRun,
   finishCollectionRun,
   getCollectionCache,
@@ -179,13 +180,32 @@ describe('collection run storage', () => {
     assert.equal(cached.response_json.total, 12);
 
     const runs = await listCollectionRuns(userId, { limit: 10, offset: 0 });
-    assert.ok(runs.some((entry) => entry.id === runId && entry.credential_name === 'Credencial Coleta Teste'));
-    assert.ok(runs.some((entry) => entry.cache_hit === true));
+    const savedRun = runs.find((entry) => entry.id === runId);
+    assert.ok(savedRun);
+    assert.equal(savedRun.credential_name, 'Credencial Coleta Teste');
+    assert.equal(savedRun.cache_hit, true);
+    assert.ok(savedRun.cache_expires_at);
+    assert.ok(Number(savedRun.cache_ttl_seconds) > 0);
 
     const logs = await listCollectionRunLogs(userId, runId);
     assert.equal(logs.length, 1);
     assert.equal(logs[0].event, 'collection_started');
     assert.ok(!JSON.stringify(logs).match(/api_key|apiKey|secret|Bearer/i));
     assert.ok(!JSON.stringify(cached).match(/api_key|apiKey|secret|Bearer/i));
+  });
+
+  test('limpa cache apenas da execução do usuário', async () => {
+    const missing = await clearCollectionCacheForRun(userId, 999999999);
+    assert.equal(missing, null);
+
+    const cleared = await clearCollectionCacheForRun(userId, runId);
+    assert.equal(cleared.hadCacheKey, true);
+    assert.equal(cleared.deletedCount, 1);
+
+    const runs = await listCollectionRuns(userId, { limit: 10, offset: 0 });
+    const savedRun = runs.find((entry) => entry.id === runId);
+    assert.ok(savedRun);
+    assert.equal(savedRun.cache_expires_at, null);
+    assert.equal(savedRun.cache_ttl_seconds, null);
   });
 });
