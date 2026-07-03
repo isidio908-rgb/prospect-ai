@@ -1,0 +1,129 @@
+import express from 'express';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { z } from 'zod';
+import { query } from '../../database/init.mjs';
+import { authenticate } from '../middleware/auth.mjs';
+
+const router = express.Router();
+
+// Schema de validação
+const registerSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
+  name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres').optional()
+});
+
+const loginSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: z.string().min(1, 'Senha é obrigatória')
+});
+
+// POST /api/auth/register - Criar conta
+router.post('/register', async (req, res, next) => {
+  try {
+    const { email, password, name } = registerSchema.parse(req.body);
+    
+    // Verificar se email já existe
+    const existing = await query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+    
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ 
+        error: 'Email já cadastrado' 
+      });
+    }
+    
+    // Hash da senha
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Criar usuário
+    const result = await query(
+      `INSERT INTO users (email, password_hash, name) 
+       VALUES ($1, $2, $3) 
+       RETURNING id, email, name, created_at`,
+      [email, passwordHash, name || null]
+    );
+    
+    const user = result.rows[0];
+    
+    // Gerar token JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    
+    res.status(201).json({
+      message: 'Conta criada com sucesso',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      },
+      token
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/login - Fazer login
+router.post('/login', async (req, res, next) => {
+  try {
+    const { email, password } = loginSchema.parse(req.body);
+    
+    // Buscar usuário
+    const result = await query(
+      'SELECT id, email, name, password_hash FROM users WHERE email = $1',
+      [email]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(401).json({ 
+        error: 'Email ou senha incorretos' 
+      });
+    }
+    
+    const user = result.rows[0];
+    
+    // Verificar senha
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    
+    if (!validPassword) {
+      return res.status(401).json({ 
+        error: 'Email ou senha incorretos' 
+      });
+    }
+    
+    // Gerar token JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    
+    res.json({
+      message: 'Login realizado com sucesso',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      },
+      token
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/auth/me - Dados do usuário logado
+router.get('/me', authenticate, async (req, res) => {
+  res.json({
+    user: req.user
+  });
+});
+
+export default router;

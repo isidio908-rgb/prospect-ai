@@ -8,6 +8,18 @@ export async function collectFromRapidApi(options) {
 
   if (!query) throw new Error("Informe --query ou --niche com --city");
 
+  // Parametros da Local Business Data (com valores padrao da especificacao)
+  const zoom = options.zoom ?? 13;
+  const region = options.region ?? "br";
+  const language = options.language ?? "pt";
+  const extractEmailsAndContacts = parseBoolean(options.extractEmailsAndContacts ?? false);
+
+  // lat/lng sao obrigatorios quando o template da URL exige {lat}/{lng}
+  const templateNeedsLatLng = /\{lat\}|\{lng\}/.test(config.searchUrl);
+  if (templateNeedsLatLng && (options.lat === undefined || options.lng === undefined)) {
+    throw new Error("Este provider exige --lat e --lng (ex: --lat -15.6014 --lng -56.0979)");
+  }
+
   const quota = await readQuota(config.quotaPath);
   const usedToday = quota[config.providerKey]?.[today()] ?? 0;
   const limit = Number(options.limit ?? 20);
@@ -22,6 +34,12 @@ export async function collectFromRapidApi(options) {
     city: options.city ?? "",
     niche: options.niche ?? "",
     limit: requestLimit,
+    lat: options.lat ?? "",
+    lng: options.lng ?? "",
+    zoom,
+    region,
+    language,
+    extractEmailsAndContacts,
   });
 
   const response = await fetch(url, {
@@ -37,6 +55,7 @@ export async function collectFromRapidApi(options) {
   await incrementQuota(config.quotaPath, config.providerKey);
 
   if (!response.ok) {
+    // A API key nunca deve aparecer no erro/log, apenas o status e um trecho do corpo
     throw new Error(`RapidAPI retornou HTTP ${response.status}: ${body.slice(0, 300)}`);
   }
 
@@ -63,33 +82,56 @@ export async function collectFromRapidApi(options) {
   };
 }
 
+/**
+ * Normaliza um registro de negocio para o contrato interno do Prospect AI.
+ * Mapeamento oficial (docs/providers/local-business-data.md), com fallback
+ * para chaves genericas de outros providers RapidAPI compativeis.
+ */
 export function normalizePlace(place, context = {}) {
   const site = pick(place, ["website", "site", "url", "business_website", "web_url", "links.website"]);
   const phone = pick(place, [
+    "phone_number",
     "phone",
     "telephone",
-    "phone_number",
     "international_phone_number",
     "formatted_phone_number",
   ]);
   const rating = pick(place, ["rating", "stars", "review_rating"]);
-  const reviews = pick(place, ["reviews", "reviews_count", "user_ratings_total", "review_count"]);
-  const mapsUrl = pick(place, ["google_maps_url", "maps_url", "place_link", "url", "link"]);
-  const address = pick(place, ["address", "full_address", "formatted_address"]);
+  const reviews = pick(place, ["review_count", "reviews", "reviews_count", "user_ratings_total"]);
+  const mapsUrl = pick(place, ["place_link", "google_maps_url", "maps_url", "url", "link"]);
+  const reviewsLink = pick(place, ["reviews_link"]);
+  const address = pick(place, ["full_address", "address", "formatted_address"]);
+  const about = pick(place, ["about.summary"]);
+  const subtypes = Array.isArray(place?.subtypes) ? place.subtypes.join(",") : "";
 
   return {
     nome_empresa: pick(place, ["name", "title", "business_name", "place_name"]),
     site,
     telefone: phone,
-    cidade: context.city,
+    cidade: pick(place, ["city"]) || context.city,
     nicho: context.niche,
-    categoria: pick(place, ["category", "type", "main_category", "business_type"]),
+    categoria: pick(place, ["type", "category", "main_category", "business_type"]),
     fonte: context.source ?? "rapidapi",
     observacoes: [
       rating ? `rating=${rating}` : "",
       reviews ? `reviews=${reviews}` : "",
       mapsUrl ? `maps=${mapsUrl}` : "",
-      address,
+      reviewsLink ? `reviews_link=${reviewsLink}` : "",
+      address ? `address=${address}` : "",
+      pick(place, ["place_id"]) ? `place_id=${pick(place, ["place_id"])}` : "",
+      pick(place, ["business_id"]) ? `business_id=${pick(place, ["business_id"])}` : "",
+      pick(place, ["google_id"]) ? `google_id=${pick(place, ["google_id"])}` : "",
+      pick(place, ["business_status"]) ? `status=${pick(place, ["business_status"])}` : "",
+      pick(place, ["verified"]) ? `verified=${pick(place, ["verified"])}` : "",
+      pick(place, ["district"]) ? `district=${pick(place, ["district"])}` : "",
+      pick(place, ["street_address"]) ? `street_address=${pick(place, ["street_address"])}` : "",
+      pick(place, ["zipcode"]) ? `zipcode=${pick(place, ["zipcode"])}` : "",
+      pick(place, ["state"]) ? `state=${pick(place, ["state"])}` : "",
+      pick(place, ["country"]) ? `country=${pick(place, ["country"])}` : "",
+      pick(place, ["latitude"]) ? `latitude=${pick(place, ["latitude"])}` : "",
+      pick(place, ["longitude"]) ? `longitude=${pick(place, ["longitude"])}` : "",
+      subtypes ? `subtypes=${subtypes}` : "",
+      about ? `about=${about}` : "",
     ].filter(Boolean).join(" | "),
   };
 }
@@ -120,6 +162,11 @@ function buildSearchUrl(template, params) {
     url = url.replaceAll(`{${key}}`, encodeURIComponent(String(value)));
   }
   return url;
+}
+
+function parseBoolean(value) {
+  if (typeof value === "boolean") return value;
+  return String(value).trim().toLowerCase() === "true";
 }
 
 function findPlacesArray(value) {

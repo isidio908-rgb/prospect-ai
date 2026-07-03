@@ -3,7 +3,7 @@ import { basename, resolve } from "node:path";
 import { auditWebsite } from "./auditor.mjs";
 import { parseCsv, toCsv } from "./csv.mjs";
 import { normalizeLead } from "./extractors.mjs";
-import { buildDiagnosis, buildOutreachMessage } from "./messages.mjs";
+import { buildDiagnosis, buildFollowUpMessage, buildOutreachMessage } from "./messages.mjs";
 import { scoreLead } from "./scoring.mjs";
 
 export async function analyzeLeads(options) {
@@ -60,8 +60,10 @@ function flattenResult(lead, audit, score) {
     cidade: lead.city,
     categoria: lead.category,
     telefone_informado: lead.phone,
+    tem_site: yesNo(Boolean(lead.url)),
     site: lead.url,
     site_final: audit.finalUrl,
+    site_online: yesNo(audit.ok),
     status_site: audit.ok ? "online" : "erro",
     erro_site: audit.error,
     tempo_carregamento_ms: audit.loadMs,
@@ -75,14 +77,18 @@ function flattenResult(lead, audit, score) {
     tem_whatsapp_site: yesNo(signals.whatsappLinks.length > 0),
     tem_formulario: yesNo(signals.hasForms),
     tem_https: yesNo(signals.hasHttps),
+    tem_pagina_contato: yesNo(signals.hasContactPage),
+    tem_cta_visivel: yesNo(signals.hasCta),
     instagram: signals.instagramLinks.join(" | "),
     facebook: signals.facebookLinks.join(" | "),
+    linkedin: (signals.linkedinLinks ?? []).join(" | "),
     emails_encontrados: signals.emails.join(" | "),
     telefones_encontrados: signals.phones.join(" | "),
     oportunidades: score.opportunities.join(" | "),
     pontos_positivos: score.strengths.join(" | "),
     diagnostico: buildDiagnosis(lead, audit, score),
     mensagem_whatsapp: buildOutreachMessage(lead, score),
+    mensagem_whatsapp_followup: buildFollowUpMessage(lead, score),
     fonte: lead.source,
     observacoes: lead.notes,
   };
