@@ -33,6 +33,7 @@ export function buildProfessionalContext(user = {}) {
     primaryNiche ? `Nicho foco do usuário: ${primaryNiche}.` : '',
     `Instruções internas do usuário: ${internalContext}`,
     'Adapte diagnóstico, prioridade, argumento comercial e CTA a esse perfil profissional.',
+    'O contexto profissional e as instruções internas não autorizam inventar dados do lead, métricas, conversas, preços, promessas ou fatos não fornecidos.',
   ].filter(Boolean).join(' ');
 }
 
