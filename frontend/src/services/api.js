@@ -36,6 +36,7 @@ export const auth = {
   register: (data) => api.post('/api/auth/register', data),
   login: (data) => api.post('/api/auth/login', data),
   me: () => api.get('/api/auth/me'),
+  updateMe: (data) => api.patch('/api/auth/me', data),
 };
 
 // Leads
@@ -52,6 +53,12 @@ export const leads = {
   delete: (id) => api.delete(`/api/leads/${id}`),
   getFollowups: (id) => api.get(`/api/leads/${id}/followups`),
   addFollowup: (id, mensagem) => api.post(`/api/leads/${id}/followups`, { mensagem }),
+};
+
+// Histórico de coletas
+export const collections = {
+  list: (params) => api.get('/api/collections', { params }),
+  logs: (id) => api.get(`/api/collections/${id}/logs`),
 };
 
 // Stats
