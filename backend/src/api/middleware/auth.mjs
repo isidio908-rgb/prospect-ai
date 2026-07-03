@@ -16,9 +16,11 @@ export async function authenticate(req, res, next) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
-      // Buscar usuário no banco
+      // Buscar usuário no banco, incluindo contexto profissional usado pela UI e IA.
       const result = await query(
-        'SELECT id, email, name FROM users WHERE id = $1',
+        `SELECT id, email, name, profession, primary_niche, internal_context
+         FROM users
+         WHERE id = $1`,
         [decoded.userId]
       );
       
