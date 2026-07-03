@@ -35,6 +35,7 @@ Documentacao principal:
 ## O Que O Sistema Faz Hoje
 
 - Autenticacao com JWT.
+- Cadastro com contexto profissional do usuario: profissao, nicho foco e instrucoes internas para IA.
 - Cadastro, listagem, edicao e exclusao de leads.
 - Importacao manual e CSV.
 - Exportacao CSV e JSON.
@@ -48,10 +49,12 @@ Documentacao principal:
 - Diagnostico comercial.
 - Mensagem WhatsApp inicial e follow-up.
 - CRM basico com status, responsavel, proxima acao, valor potencial e motivo de perda.
+- Pagina CRM Kanban para mover leads pelo pipeline comercial.
 - Historico de follow-up.
 - WhatsApp via Evolution API com chat no lead, envio de texto/midia/audio e webhook.
 - Verificacao opcional de existencia de WhatsApp na coleta.
 - IA/LLM com tarefas comerciais dentro do detalhe do lead.
+- Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
 - Dashboard basico.
 - Dark mode.
 
@@ -74,9 +77,9 @@ Audita sites
       ↓
 Calcula score
       ↓
-Gera diagnostico e mensagens
+Gera diagnostico e mensagens conforme profissao/contexto do usuario
       ↓
-Usa CRM, WhatsApp e IA para abordagem
+Usa CRM Kanban, WhatsApp e IA para abordagem
 ```
 
 ## Fontes De Coleta
@@ -116,6 +119,39 @@ Regras:
 - API key nao deve ser colocada em README, logs ou commits.
 - Uso diario/mensal e controlado por credencial.
 
+## Personalizacao Interna
+
+No cadastro, o usuario informa:
+
+- Profissao/função.
+- Nicho foco.
+- Instrucoes internas de como a IA deve pensar, escrever e priorizar.
+
+Esses dados sao usados para:
+
+- Exibir o perfil correto no layout.
+- Ajustar prompts internos das LLMs.
+- Adaptar diagnosticos, mensagens, follow-ups, e-mails, roteiros e propostas ao ponto de vista profissional do usuario.
+
+Exemplo: para um gestor de trafego focado em imobiliario, a IA prioriza qualidade do lead, WhatsApp, rastreamento, oportunidades de captação e conversao em reunioes.
+
+## CRM Kanban
+
+A pagina `/crm` organiza os leads em pipeline visual:
+
+- Novo.
+- Analisado.
+- Mensagem pronta.
+- Contato enviado.
+- Respondeu.
+- Reuniao marcada.
+- Proposta enviada.
+- Cliente fechado.
+- Sem interesse.
+- Nao respondeu.
+
+Cada card permite abrir o detalhe do lead e mover rapidamente para a proxima etapa.
+
 ## WhatsApp
 
 O modulo WhatsApp usa Evolution API.
@@ -144,6 +180,8 @@ Tarefas atuais:
 - Roteiro Loom.
 - Resumo e posicionamento.
 - Estrutura de proposta.
+
+Todas as tarefas usam o contexto profissional cadastrado pelo usuario.
 
 ## Rodar Localmente
 
@@ -192,7 +230,7 @@ Principais proximos passos:
 3. Cache de busca/coleta.
 4. Teste real da verificacao WhatsApp em coleta com instancia conectada.
 5. Testes automatizados dos modulos novos.
-6. Kanban comercial.
+6. Edicao posterior do perfil profissional do usuario.
 7. Dashboard comercial avancado.
 
 Lista completa em `docs/TODO.md`.
