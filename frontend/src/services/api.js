@@ -45,6 +45,7 @@ export const leads = {
   import: (data) => api.post('/api/leads/import', data),
   importCSV: (csvContent) => api.post('/api/leads/import-csv', { csvContent }),
   export: (params) => api.get('/api/leads/export', { params, responseType: 'blob' }),
+  exportJson: (params) => api.get('/api/leads/export-json', { params, responseType: 'blob' }),
   collect: (data) => api.post('/api/leads/collect', data),
   analyze: (leadIds) => api.post('/api/leads/analyze', { leadIds }),
   update: (id, data) => api.patch(`/api/leads/${id}`, data),

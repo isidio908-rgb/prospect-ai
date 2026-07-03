@@ -19,7 +19,7 @@ Este arquivo foi atualizado para nao manter pendencias antigas como se ainda est
 - Autenticacao JWT.
 - CRUD de leads.
 - Importacao manual e CSV.
-- Exportacao CSV.
+- Exportacao CSV e JSON.
 - Coleta via RapidAPI Local Business Data, Apify e Serper.
 - Credenciais criptografadas.
 - Controle de uso diario/mensal por credencial.
@@ -71,14 +71,13 @@ Este arquivo foi atualizado para nao manter pendencias antigas como se ainda est
 
 Ver `TODO.md` para detalhes. Principais itens:
 
-1. Exportacao JSON.
-2. Historico persistente de coletas.
-3. Logs persistentes de execucao.
-4. Cache de busca/coleta.
-5. Teste real da verificacao WhatsApp com instancia conectada.
-6. Testes automatizados dos modulos novos.
-7. Kanban comercial.
-8. Dashboard comercial avancado.
+1. Historico persistente de coletas.
+2. Logs persistentes de execucao.
+3. Cache de busca/coleta.
+4. Teste real da verificacao WhatsApp com instancia conectada.
+5. Testes automatizados dos modulos novos.
+6. Kanban comercial.
+7. Dashboard comercial avancado.
 
 ## Arquivos Importantes
 

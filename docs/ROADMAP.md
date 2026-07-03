@@ -14,13 +14,13 @@ Status: implementado.
 - Diagnostico comercial.
 - Mensagem inicial de WhatsApp.
 - Mensagem de follow-up.
-- Exportacao CSV.
+- Exportacao CSV e JSON.
 - Controle simples de cota.
 - Deduplicacao antes de salvar.
 
 Pendencia residual:
 
-- Exportacao JSON.
+- Historico persistente de coletas.
 
 ## V2 - Credenciais na Plataforma
 

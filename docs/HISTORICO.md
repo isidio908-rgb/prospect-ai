@@ -40,7 +40,7 @@ Este arquivo consolida o historico operacional do projeto. Documentos antigos de
 - Autenticacao com JWT.
 - CRUD de leads.
 - Importacao manual e CSV.
-- Exportacao CSV.
+- Exportacao CSV e JSON.
 - Auditoria de site.
 - Lead Score.
 - Diagnostico comercial.
@@ -76,10 +76,9 @@ O projeto esta pronto para uso interno controlado, desde que:
 
 ## Proximos Marcos
 
-1. Exportacao JSON.
-2. Historico persistente de coletas.
-3. Logs de execucao.
-4. Cache de busca.
-5. Testes automatizados dos modulos novos.
-6. Kanban comercial.
+1. Historico persistente de coletas.
+2. Logs de execucao.
+3. Cache de busca/coleta.
+4. Testes automatizados dos modulos novos.
+5. Kanban comercial.
 7. Dashboard comercial avancado.

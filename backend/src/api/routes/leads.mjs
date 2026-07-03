@@ -1,7 +1,7 @@
 import express from 'express';
 import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
-import { importLeadsFromCSV, exportLeadsToCSV } from '../../services/csvImporter.mjs';
+import { importLeadsFromCSV, exportLeadsToCSV, exportLeadsToJSON } from '../../services/csvImporter.mjs';
 import { 
   findAllDuplicates, 
   mergeLeads, 
@@ -142,6 +142,40 @@ router.get('/export', async (req, res, next) => {
   }
 });
 
+// GET /api/leads/export-json - Exportar leads para JSON (DEVE VIR ANTES DE /:id)
+router.get('/export-json', async (req, res, next) => {
+  try {
+    const { status, prioridade, cidade, nicho, minScore } = req.query;
+
+    const exportedLeads = await exportLeadsToJSON(req.user.id, {
+      status,
+      prioridade,
+      cidade,
+      nicho,
+      minScore: minScore ? parseInt(minScore) : undefined
+    });
+
+    if (exportedLeads.length === 0) {
+      return res.status(404).json({
+        error: 'Nenhum lead encontrado com os filtros especificados'
+      });
+    }
+
+    const exportedAt = new Date().toISOString();
+    const timestamp = exportedAt.replace(/[:.]/g, '-');
+    const filename = `leads-export-${timestamp}.json`;
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify({
+      exportedAt,
+      total: exportedLeads.length,
+      leads: exportedLeads
+    }, null, 2));
+  } catch (error) {
+    next(error);
+  }
+});
 // GET /api/leads/duplicates - Encontrar leads duplicados (DEVE VIR ANTES DE /:id)
 router.get('/duplicates', async (req, res, next) => {
   try {

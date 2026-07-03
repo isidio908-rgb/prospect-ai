@@ -25,7 +25,7 @@ Implementado:
 - Lead Score.
 - Diagnostico comercial.
 - Mensagem WhatsApp inicial e follow-up.
-- Exportacao CSV.
+- Exportacao CSV e JSON.
 - CRM basico.
 - Historico de follow-up.
 - WhatsApp Evolution API.
@@ -98,10 +98,10 @@ O sistema consegue hoje:
 
 Prioridades reais:
 
-1. Exportacao JSON.
-2. Historico persistente de coletas.
-3. Logs de execucao.
-4. Cache para evitar recoletas desnecessarias.
+1. Historico persistente de coletas.
+2. Logs de execucao.
+3. Cache de busca/coleta.
+4. Teste real da verificacao WhatsApp em coleta com instancia conectada.
 5. Testes automatizados dos modulos novos.
 6. Kanban comercial.
 7. Dashboard comercial avancado.
@@ -112,4 +112,4 @@ A ferramenta ja esta forte para uso proprio, mas ainda precisa de historico de c
 
 ## Conclusao
 
-O Prospect AI esta em fase de validacao operacional interna. A prioridade agora nao e criar grandes modulos novos, mas consolidar confiabilidade: exportacao JSON, historico de coletas, logs, cache e testes.
+O Prospect AI esta em fase de validacao operacional interna. A prioridade agora nao e criar grandes modulos novos, mas consolidar confiabilidade: historico de coletas, logs, cache e testes automatizados.

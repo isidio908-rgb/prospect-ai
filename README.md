@@ -37,7 +37,7 @@ Documentacao principal:
 - Autenticacao com JWT.
 - Cadastro, listagem, edicao e exclusao de leads.
 - Importacao manual e CSV.
-- Exportacao CSV.
+- Exportacao CSV e JSON.
 - Coleta por RapidAPI Local Business Data, Apify e Serper.
 - Cadastro de credenciais de scraper e IA/LLM.
 - Criptografia e mascara de API keys.
@@ -187,10 +187,10 @@ npm run dev
 
 Principais proximos passos:
 
-1. Exportacao JSON.
-2. Historico persistente de coletas.
-3. Logs persistentes de execucao.
-4. Cache de busca/coleta.
+1. Historico persistente de coletas.
+2. Logs persistentes de execucao.
+3. Cache de busca/coleta.
+4. Teste real da verificacao WhatsApp em coleta com instancia conectada.
 5. Testes automatizados dos modulos novos.
 6. Kanban comercial.
 7. Dashboard comercial avancado.
