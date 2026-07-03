@@ -3,19 +3,7 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowRight, CalendarClock, MessageCircle, RefreshCw, Search } from 'lucide-react';
 import { leads as leadsApi } from '../services/api';
-
-const STATUSES = [
-  { id: 'novo', label: 'Novo', description: 'Lead recém coletado ou importado' },
-  { id: 'analisado', label: 'Analisado', description: 'Já passou por auditoria/score' },
-  { id: 'mensagem_pronta', label: 'Mensagem pronta', description: 'Copy pronta para abordagem' },
-  { id: 'contato_enviado', label: 'Contato enviado', description: 'Primeira abordagem feita' },
-  { id: 'respondeu', label: 'Respondeu', description: 'Abriu conversa' },
-  { id: 'reuniao_marcada', label: 'Reunião marcada', description: 'Chamada ou diagnóstico agendado' },
-  { id: 'proposta_enviada', label: 'Proposta enviada', description: 'Oferta enviada' },
-  { id: 'cliente_fechado', label: 'Cliente fechado', description: 'Venda concluída' },
-  { id: 'sem_interesse', label: 'Sem interesse', description: 'Lead recusou' },
-  { id: 'nao_respondeu', label: 'Não respondeu', description: 'Sem retorno após follow-up' },
-];
+import { CLOSED_LEAD_STATUSES, KANBAN_COLUMNS } from '../data/leadStatuses';
 
 const PRIORITY_CLASSES = {
   'Prioridade maxima': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-200',
@@ -60,7 +48,7 @@ export default function CrmKanban() {
   }, [leads, search]);
 
   const columns = useMemo(() => {
-    return STATUSES.map((status) => ({
+    return KANBAN_COLUMNS.map((status) => ({
       ...status,
       leads: filteredLeads.filter((lead) => (lead.status || 'novo') === status.id),
     }));
@@ -68,7 +56,7 @@ export default function CrmKanban() {
 
   const totals = useMemo(() => ({
     total: filteredLeads.length,
-    open: filteredLeads.filter((lead) => !['cliente_fechado', 'sem_interesse', 'nao_respondeu'].includes(lead.status)).length,
+    open: filteredLeads.filter((lead) => !CLOSED_LEAD_STATUSES.includes(lead.status)).length,
     won: filteredLeads.filter((lead) => lead.status === 'cliente_fechado').length,
     meetings: filteredLeads.filter((lead) => lead.status === 'reuniao_marcada').length,
   }), [filteredLeads]);
@@ -87,9 +75,9 @@ export default function CrmKanban() {
   }
 
   function nextStatus(currentStatus) {
-    const index = STATUSES.findIndex((status) => status.id === (currentStatus || 'novo'));
-    if (index < 0 || index >= STATUSES.length - 1) return null;
-    return STATUSES[index + 1];
+    const index = KANBAN_COLUMNS.findIndex((status) => status.id === (currentStatus || 'novo'));
+    if (index < 0 || index >= KANBAN_COLUMNS.length - 1) return null;
+    return KANBAN_COLUMNS[index + 1];
   }
 
   return (
