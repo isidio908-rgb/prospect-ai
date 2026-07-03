@@ -490,6 +490,17 @@ router.post('/collect', async (req, res, next) => {
       return res.status(400).json({ error: 'credentialId é obrigatório' });
     }
 
+    const credentialCheck = await query(
+      `SELECT id, type
+       FROM credentials
+       WHERE id = $1 AND user_id = $2 AND category = 'scraper'`,
+      [credentialId, req.user.id]
+    );
+
+    if (credentialCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Credencial de coleta não encontrada' });
+    }
+
     const normalizedLimit = limit || 20;
     const cacheInput = {
       credentialId,
@@ -504,6 +515,7 @@ router.post('/collect', async (req, res, next) => {
       region,
       extractEmailsAndContacts,
       verifyWhatsAppExists,
+      sourceType: credentialCheck.rows[0].type,
       params: { lat, lng, zoom, language, region, extractEmailsAndContacts, verifyWhatsAppExists }
     };
     const cacheKey = buildCollectionCacheKey(cacheInput);
