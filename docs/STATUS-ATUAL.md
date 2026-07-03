@@ -1,7 +1,7 @@
 # Prospect AI - Status Atual do Projeto
 
 **Data:** 03/07/2026  
-**Estado:** produto interno em fase de validacao operacional, com historico de coleta, logs, cache, CRM, dashboard comercial e providers validados no PR #6.
+**Estado:** produto interno operacional em `main`, validado pos-merge com credenciais reais, WhatsApp conectado, coletas reais, historico, cache e CRM.
 
 ## Resumo Executivo
 
@@ -9,7 +9,7 @@ O Prospect AI ja funciona como uma maquina de prospeccao comercial, nao apenas c
 
 A versao atual inclui contexto profissional do usuario no cadastro e na pagina de perfil, prompts internos de IA ajustados por profissao/nicho/instrucoes, pagina CRM Kanban, historico persistente de coletas, logs de execucao, cache de busca/coleta e dashboard comercial ampliado.
 
-O PR #6 validou backend, frontend, build Docker, historico/logs/cache, providers Serper/Apify/RapidAPI e mensagens amigaveis para erros conhecidos de provider.
+O `main` foi validado apos merge do PR #6 com backend, frontend, build Docker, providers Serper/Apify/RapidAPI, WhatsApp real, historico/logs/cache e CRM Kanban.
 
 ## Stack Atual
 
@@ -20,6 +20,53 @@ O PR #6 validou backend, frontend, build Docker, historico/logs/cache, providers
 - Infra local: `docker compose` em `docker-compose.yml`.
 - Autenticacao: JWT.
 - Criptografia: AES-256-GCM para API keys.
+
+## Validacao Pos-Merge Em Main
+
+Valido em 03/07/2026:
+
+- `git checkout main` e `git pull origin main`: ok.
+- Backend `npm test`: 32 testes passando.
+- Frontend `npm run build`: passando.
+- `docker compose build backend frontend`: passando.
+- `docker compose up -d backend frontend`: passando.
+- Stack final saudavel: backend, frontend, postgres, redis e evolution-api.
+- `GET /health`: ok.
+- Frontend HTTP 200 em `/`, `/collections`, `/profile`, `/leads` e `/dashboard`.
+- Working tree limpo em `main...origin/main` apos validacao.
+
+Credenciais reais:
+
+- Serper: teste de credencial ok, statusCode 200.
+- RapidAPI: teste de credencial ok, statusCode 200.
+- Apify: teste de credencial ok, statusCode 200.
+- Chaves mascaradas nas respostas; nenhuma chave completa observada em respostas/logs.
+
+WhatsApp:
+
+- Evolution API conectada.
+- Envio real de mensagem para lead de teste executado com sucesso.
+- Historico de mensagens atualizado apos envio.
+- Respostas/historico sem padroes de segredo.
+
+Coletas reais com WhatsApp ligado:
+
+- Serper: run 17, total 3, saved 0, duplicates 2, wa_verified 2, wa_rejected 1.
+- Apify: run 18, total 1, saved 0, duplicates 0, wa_verified 0, wa_rejected 1.
+- RapidAPI: run 19, total 5, saved 0, duplicates 3, wa_verified 3, wa_rejected 2.
+- Logs dos runs incluem `collection_started`, `cache_miss`, `whatsapp_connection_ok`, `provider_collected`, `whatsapp_verified`, `database_saved`.
+- Logs sem `api_key`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou `token`.
+
+Cache, historico e CRM:
+
+- Cache hit confirmado ao repetir Serper sem `forceRefresh`: run 20.
+- `/api/collections` lista os runs novos.
+- CRM/Kanban validado com status `contato_enviado`.
+- Backend rejeita corretamente status antigo invalido como `em_contato`.
+
+Risco tecnico aberto:
+
+- `npm install` do backend reporta 2 vulnerabilidades altas no audit. Nao foi aplicado `npm audit fix` para evitar mudancas de dependencias fora do escopo.
 
 ## Modulos Implementados
 
@@ -54,6 +101,7 @@ Arquivos principais:
 - Responsavel, proxima acao, valor potencial, motivo de perda.
 - Historico de follow-up e notas.
 - Pagina CRM Kanban em `/crm` com colunas por status e movimentacao rapida do lead.
+- Enum de status protegido no backend.
 
 Arquivos principais:
 
@@ -65,7 +113,7 @@ Arquivos principais:
 
 ### Coleta, Historico, Logs e Cache
 
-Fontes suportadas:
+Fontes suportadas e validadas:
 
 - RapidAPI Local Business Data.
 - Apify Google Maps Scraper.
@@ -79,7 +127,7 @@ A coleta permite selecionar:
 - Modificador.
 - Quantidade de leads.
 - Extracao adicional de contatos no RapidAPI.
-- Verificacao opcional de existencia de WhatsApp antes de salvar.
+- Verificacao de existencia de WhatsApp antes de salvar.
 - Forcar nova coleta ignorando cache.
 
 Persistencia operacional implementada:
@@ -105,15 +153,15 @@ Arquivos principais:
 
 ### Validacao De Providers
 
-Estado registrado no PR #6:
+Estado atual:
 
-- Serper: coleta real pequena passou, total 3, saved 3, duplicates 0.
-- Apify: coleta real pequena passou, total 1, saved 1, com input `{ language, location, max_results, query }`.
-- RapidAPI: coleta real pequena passou no ambiente do PR, total 5, saved 3, duplicates 2.
+- Serper: credencial real testada e coleta real com WhatsApp validada.
+- Apify: credencial real testada e coleta real com WhatsApp validada usando input `{ language, location, max_results, query }`.
+- RapidAPI: credencial real testada e coleta real com WhatsApp validada.
 - RapidAPI 403 `not subscribed`: mensagem amigavel implementada e coberta por teste.
 - Apify `full-permission-actor-not-approved`: mensagem amigavel implementada e coberta por teste.
 
-Observacao: se a interface local do usuario retornar 403 `You are not subscribed to this API` no RapidAPI, validar assinatura da API exata, projeto/API key selecionado e `x-rapidapi-host` copiado do playground da API assinada.
+Observacao: se a interface local retornar 403 `You are not subscribed to this API` no RapidAPI, validar assinatura da API exata, projeto/API key selecionado e `x-rapidapi-host` copiado do playground da API assinada.
 
 ### Verificacao de WhatsApp na Coleta
 
@@ -121,7 +169,7 @@ Opcao adicionada na pagina de coleta:
 
 - `Verificar se o telefone existe no WhatsApp antes de salvar`.
 
-Comportamento:
+Comportamento validado:
 
 - Requer WhatsApp conectado.
 - Valida a conexao antes de consumir cota do scraper.
@@ -131,7 +179,7 @@ Comportamento:
 - Retorna estatisticas de confirmados, rejeitados e sem telefone.
 - Registra os contadores no historico da coleta.
 
-Status: implementado, mas ainda falta teste real com instancia conectada.
+Status: implementado e validado em coletas reais nos providers Serper, Apify e RapidAPI.
 
 Arquivos principais:
 
@@ -265,8 +313,8 @@ Migracoes idempotentes relevantes:
 
 Prioridade alta:
 
-1. Teste real da verificacao WhatsApp em coleta com instancia conectada.
-2. Revalidacao dos providers no frontend apos merge usando credenciais reais do usuario.
+1. Avaliar e corrigir as 2 vulnerabilidades altas reportadas pelo `npm audit` do backend.
+2. Preparar operacao controlada de prospeccao real com baixo volume e acompanhamento de conversao.
 
 Prioridade media:
 
@@ -286,9 +334,9 @@ Prioridade baixa:
 
 Estimativa pragmatica:
 
-- Core de prospeccao: 94% pronto.
-- Operacao interna local: 91% pronta.
-- Produto comercial: 54% pronto.
-- Documentacao: em atualizacao.
+- Core de prospeccao: 96% pronto.
+- Operacao interna local: 95% pronta.
+- Produto comercial: 56% pronto.
+- Documentacao: atualizada para a validacao pos-merge.
 
-O sistema ja pode ser usado internamente para coletar, analisar, priorizar e abordar leads, desde que as credenciais estejam configuradas e o WhatsApp esteja conectado quando a verificacao de existencia for usada.
+O sistema ja pode ser usado internamente para coletar, analisar, priorizar e abordar leads com credenciais reais e WhatsApp conectado. O proximo passo tecnico e tratar o audit do backend; o proximo passo operacional e iniciar prospeccao real controlada.
