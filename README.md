@@ -41,6 +41,7 @@ Documentacao principal:
 - Logs persistentes de execucao por coleta.
 - Cache de busca/coleta para evitar chamadas repetidas ao mesmo provider.
 - Toggle para forcar nova coleta ignorando cache.
+- TTL visual e limpeza manual de cache em `/collections`.
 - Cadastro de credenciais de scraper e IA/LLM.
 - Criptografia e mascara de API keys.
 - Controle de uso diario/mensal por credencial.
@@ -49,8 +50,8 @@ Documentacao principal:
 - Lead Score.
 - Diagnostico comercial.
 - Mensagem WhatsApp inicial e follow-up.
-- CRM basico com status, responsavel, proxima acao, valor potencial e motivo de perda.
-- Pagina CRM Kanban para mover leads pelo pipeline comercial.
+- CRM com status, responsavel, proxima acao, valor potencial e motivo de perda.
+- Pagina CRM Kanban com drag-and-drop, filtros e edicao rapida.
 - Historico de follow-up.
 - WhatsApp via Evolution API com chat no lead, envio de texto/midia/audio e webhook.
 - Verificacao de existencia de WhatsApp durante a coleta.
@@ -166,6 +167,8 @@ A tela `/collections` mostra:
 - Duplicados.
 - Erros.
 - Cache hit.
+- TTL do cache.
+- Limpeza manual de cache por execucao.
 - Logs detalhados da execucao.
 
 ## Credenciais
@@ -229,7 +232,14 @@ A pagina `/crm` organiza os leads em pipeline visual:
 - Sem interesse.
 - Nao respondeu.
 
-Cada card permite abrir o detalhe do lead e mover rapidamente para a proxima etapa.
+Recursos atuais:
+
+- Drag-and-drop entre colunas.
+- Filtros por status, prioridade, cidade, nicho, responsavel e busca livre.
+- Contagem de valor potencial por coluna.
+- Edicao rapida de responsavel, proxima acao e valor potencial.
+- Botao de avanco rapido para a proxima etapa.
+- Abertura do detalhe completo do lead.
 
 ## WhatsApp
 
@@ -310,9 +320,9 @@ npm run dev
 
 Principais proximos passos:
 
-1. Kanban com drag-and-drop, filtros e edicao rapida.
-2. Filtros por periodo/fonte no dashboard comercial.
-3. TTL visual e limpeza manual de cache.
+1. Filtros por periodo/fonte no dashboard comercial.
+2. Testes automatizados complementares dos fluxos novos.
+3. Exportacao PDF, templates por nicho e priorizacao inteligente avancada.
 
 Lista completa em `docs/TODO.md`.
 
