@@ -32,6 +32,7 @@ export default function Collect() {
   const [limit, setLimit] = useState(25);
   const [extractContacts, setExtractContacts] = useState(false);
   const [verifyWhatsAppExists, setVerifyWhatsAppExists] = useState(false);
+  const [forceRefresh, setForceRefresh] = useState(false);
 
   // UI dos nichos
   const [activeTier, setActiveTier] = useState(1);
@@ -137,6 +138,7 @@ export default function Collect() {
         language: 'pt',
         extractEmailsAndContacts: isRapidApi ? extractContacts : false,
         verifyWhatsAppExists,
+        forceRefresh,
       };
       const response = await leads.collect(payload);
       setResult(response.data);
@@ -441,6 +443,21 @@ export default function Collect() {
               </span>
             </span>
           </label>
+
+          <label className="flex items-start gap-2 cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              checked={forceRefresh}
+              onChange={(e) => setForceRefresh(e.target.checked)}
+              className="w-4 h-4 mt-0.5"
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              Forçar nova coleta, ignorando o cache
+              <span className="block text-xs text-gray-500 dark:text-gray-400">
+                Usa o provider mesmo quando existir uma execução recente com a mesma busca.
+              </span>
+            </span>
+          </label>
         </div>
         <div className="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/40 rounded-lg p-3">
           <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -485,6 +502,13 @@ export default function Collect() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               Cota da credencial: {result.credential.used}/{result.credential.limit} hoje
               ({result.credential.remaining} restantes)
+            </p>
+          )}
+
+          {result.cache && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Cache: {result.cache.hit ? 'hit' : 'miss'}
+              {result.collectionRun?.id ? ` • execução #${result.collectionRun.id}` : ''}
             </p>
           )}
 

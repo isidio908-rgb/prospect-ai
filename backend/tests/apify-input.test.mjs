@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildApifyGoogleMapsInput } from '../src/services/scrapers/apifyGoogleMaps.mjs';
+import { buildApifyGoogleMapsInput, collect } from '../src/services/scrapers/apifyGoogleMaps.mjs';
 
 describe('Apify Google Maps input', () => {
   test('monta input no schema query/location/max_results/language', () => {
@@ -34,5 +34,36 @@ describe('Apify Google Maps input', () => {
       max_results: 100,
       query: 'restaurant',
     });
+  });
+
+  test('retorna erro amigavel quando o Actor precisa de aprovacao', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 403,
+      text: async () => JSON.stringify({
+        error: {
+          type: 'full-permission-actor-not-approved',
+          message: 'Actor requires approval',
+        },
+      }),
+    });
+
+    try {
+      await assert.rejects(
+        () => collect('apify-token-secret', { search_endpoint: 'vendor~actor' }, {
+          query: 'ortopedista particular para empresas em Pombal, Leiria, Portugal',
+          language: 'pt',
+          limit: 25,
+        }),
+        (error) => {
+          assert.match(error.message, /Este Actor da Apify precisa ser aprovado na sua conta antes de executar/);
+          assert.doesNotMatch(error.message, /apify-token-secret/);
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

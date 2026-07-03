@@ -1,5 +1,24 @@
 import { normalizeLocalBusinessData } from '../localBusinessDataCollector.mjs';
 
+const RAPIDAPI_NOT_SUBSCRIBED_MESSAGE =
+  'Sua chave RapidAPI não está inscrita nesta API. Abra a página da API Local Business Data no RapidAPI, assine o plano desejado e tente novamente.';
+
+function buildRapidApiError(status, text) {
+  let payload = null;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    // Mantem texto bruto quando o RapidAPI nao retornar JSON.
+  }
+
+  const message = payload?.message || text;
+  if (status === 403 && /not subscribed/i.test(message)) {
+    return RAPIDAPI_NOT_SUBSCRIBED_MESSAGE;
+  }
+
+  return `RapidAPI retornou ${status}: ${String(message || '').slice(0, 200)}`;
+}
+
 /**
  * Coleta via RapidAPI - Local Business Data.
  * Função pura: apenas faz a requisição e normaliza. Cota/uso e persistência
@@ -46,7 +65,7 @@ export async function collect(apiKey, credential, options) {
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`RapidAPI retornou ${response.status}: ${error.slice(0, 200)}`);
+    throw new Error(buildRapidApiError(response.status, error.slice(0, 500)));
   }
 
   const data = await response.json();
@@ -73,3 +92,5 @@ export async function test(apiKey, credential) {
   });
   return { success: response.ok, statusCode: response.status };
 }
+
+export { RAPIDAPI_NOT_SUBSCRIBED_MESSAGE, buildRapidApiError };

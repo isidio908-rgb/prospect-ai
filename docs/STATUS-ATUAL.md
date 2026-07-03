@@ -1,13 +1,15 @@
 # Prospect AI - Status Atual do Projeto
 
 **Data:** 03/07/2026  
-**Estado:** produto interno em fase de validacao operacional, com historico de coleta, logs, cache, CRM e dashboard comercial.
+**Estado:** produto interno em fase de validacao operacional, com historico de coleta, logs, cache, CRM, dashboard comercial e providers validados no PR #6.
 
 ## Resumo Executivo
 
 O Prospect AI ja funciona como uma maquina de prospeccao comercial, nao apenas como scraper. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens de WhatsApp, gerencia credenciais de scraper e LLM, conversa via WhatsApp/Evolution API e usa IA para melhorar textos e diagnosticos.
 
 A versao atual inclui contexto profissional do usuario no cadastro e na pagina de perfil, prompts internos de IA ajustados por profissao/nicho/instrucoes, pagina CRM Kanban, historico persistente de coletas, logs de execucao, cache de busca/coleta e dashboard comercial ampliado.
+
+O PR #6 validou backend, frontend, build Docker, historico/logs/cache, providers Serper/Apify/RapidAPI e mensagens amigaveis para erros conhecidos de provider.
 
 ## Stack Atual
 
@@ -78,6 +80,7 @@ A coleta permite selecionar:
 - Quantidade de leads.
 - Extracao adicional de contatos no RapidAPI.
 - Verificacao opcional de existencia de WhatsApp antes de salvar.
+- Forcar nova coleta ignorando cache.
 
 Persistencia operacional implementada:
 
@@ -100,6 +103,18 @@ Arquivos principais:
 - `frontend/src/pages/Collect.jsx`
 - `frontend/src/pages/CollectionHistory.jsx`
 
+### Validacao De Providers
+
+Estado registrado no PR #6:
+
+- Serper: coleta real pequena passou, total 3, saved 3, duplicates 0.
+- Apify: coleta real pequena passou, total 1, saved 1, com input `{ language, location, max_results, query }`.
+- RapidAPI: coleta real pequena passou no ambiente do PR, total 5, saved 3, duplicates 2.
+- RapidAPI 403 `not subscribed`: mensagem amigavel implementada e coberta por teste.
+- Apify `full-permission-actor-not-approved`: mensagem amigavel implementada e coberta por teste.
+
+Observacao: se a interface local do usuario retornar 403 `You are not subscribed to this API` no RapidAPI, validar assinatura da API exata, projeto/API key selecionado e `x-rapidapi-host` copiado do playground da API assinada.
+
 ### Verificacao de WhatsApp na Coleta
 
 Opcao adicionada na pagina de coleta:
@@ -115,6 +130,8 @@ Comportamento:
 - Preenche o campo `whatsapp` do lead com o telefone validado.
 - Retorna estatisticas de confirmados, rejeitados e sem telefone.
 - Registra os contadores no historico da coleta.
+
+Status: implementado, mas ainda falta teste real com instancia conectada.
 
 Arquivos principais:
 
@@ -248,16 +265,15 @@ Migracoes idempotentes relevantes:
 
 Prioridade alta:
 
-1. Validar build/test desta sprint no ambiente local atualizado.
-2. Teste real da verificacao WhatsApp em coleta com instancia conectada.
-3. Toggle visual para forcar nova coleta ignorando cache.
-4. Testes automatizados com banco para historico/logs/cache.
+1. Teste real da verificacao WhatsApp em coleta com instancia conectada.
+2. Revalidacao dos providers no frontend apos merge usando credenciais reais do usuario.
 
 Prioridade media:
 
-1. Kanban comercial avancado com drag-and-drop e filtros.
+1. Kanban comercial avancado com drag-and-drop, filtros e edicao rapida.
 2. Filtros por periodo/fonte no dashboard comercial.
-3. Documentacao especifica de operacao WhatsApp/IA/coleta.
+3. TTL visual e limpeza manual de cache.
+4. Documentacao especifica de operacao WhatsApp/IA/coleta/credenciais.
 
 Prioridade baixa:
 
@@ -270,9 +286,9 @@ Prioridade baixa:
 
 Estimativa pragmatica:
 
-- Core de prospeccao: 92% pronto.
-- Operacao interna local: 89% pronta.
-- Produto comercial: 52% pronto.
+- Core de prospeccao: 94% pronto.
+- Operacao interna local: 91% pronta.
+- Produto comercial: 54% pronto.
 - Documentacao: em atualizacao.
 
 O sistema ja pode ser usado internamente para coletar, analisar, priorizar e abordar leads, desde que as credenciais estejam configuradas e o WhatsApp esteja conectado quando a verificacao de existencia for usada.

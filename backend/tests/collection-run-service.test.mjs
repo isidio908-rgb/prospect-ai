@@ -1,6 +1,17 @@
-import { describe, test } from 'node:test';
+import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCollectionCacheKey } from '../src/services/collectionRunService.mjs';
+import { query } from '../src/database/init.mjs';
+import { encrypt } from '../src/services/encryption.mjs';
+import {
+  addCollectionRunLog,
+  buildCollectionCacheKey,
+  createCollectionRun,
+  finishCollectionRun,
+  getCollectionCache,
+  listCollectionRunLogs,
+  listCollectionRuns,
+  saveCollectionCache,
+} from '../src/services/collectionRunService.mjs';
 
 describe('collection run cache key', () => {
   test('normaliza diferenças de caixa e espaços na mesma busca', () => {
@@ -38,5 +49,143 @@ describe('collection run cache key', () => {
 
     assert.notEqual(base, otherCredential);
     assert.notEqual(base, otherLimit);
+  });
+});
+
+describe('collection run storage', () => {
+  let userId;
+  let credentialId;
+  let runId;
+  const uniqueTag = Date.now();
+
+  before(async () => {
+    const userResult = await query(
+      `INSERT INTO users (email, password_hash, name, profession, primary_niche, internal_context)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
+      [
+        `collection-${uniqueTag}@prospect.ai`,
+        'hash',
+        'Teste Coleta',
+        'Gestor de Tráfego',
+        'Clínicas',
+        'Contexto de validação',
+      ]
+    );
+    userId = userResult.rows[0].id;
+
+    const credentialResult = await query(
+      `INSERT INTO credentials (
+        user_id, name, type, category, provider, api_host, api_key_encrypted,
+        base_url, search_endpoint, status, daily_limit, monthly_limit
+      ) VALUES ($1, $2, $3, 'scraper', $4, $5, $6, $7, $8, 'active', 100, 3000)
+      RETURNING id`,
+      [
+        userId,
+        'Credencial Coleta Teste',
+        'rapidapi',
+        'Local Business Data',
+        'local-business-data.p.rapidapi.com',
+        encrypt('validation-key-1234567890'),
+        'https://local-business-data.p.rapidapi.com',
+        '/search',
+      ]
+    );
+    credentialId = credentialResult.rows[0].id;
+  });
+
+  after(async () => {
+    if (userId) {
+      await query('DELETE FROM users WHERE id = $1', [userId]);
+    }
+  });
+
+  test('persiste execução, logs e cache sem expor credenciais', async () => {
+    const cacheKey = buildCollectionCacheKey({
+      credentialId,
+      query: 'clinicas odontologicas em cuiaba',
+      city: 'Cuiaba',
+      niche: 'clinicas odontologicas',
+      region: 'br',
+      language: 'pt',
+      limit: 25,
+      extractEmailsAndContacts: false,
+      verifyWhatsAppExists: true,
+    });
+
+    const run = await createCollectionRun(userId, {
+      credentialId,
+      sourceType: 'rapidapi',
+      query: 'clinicas odontologicas em cuiaba',
+      niche: 'clinicas odontologicas',
+      city: 'Cuiaba',
+      region: 'br',
+      limit: 25,
+      verifyWhatsAppExists: true,
+      cacheKey,
+    });
+
+    runId = run.id;
+    assert.ok(runId);
+
+    const startedLog = await addCollectionRunLog(
+      runId,
+      userId,
+      'info',
+      'collection_started',
+      'Coleta iniciada',
+      { query: 'clinicas odontologicas em cuiaba' }
+    );
+    assert.ok(startedLog.id);
+
+    const finished = await finishCollectionRun(runId, userId, {
+      sourceType: 'rapidapi',
+      totalFound: 12,
+      savedCount: 8,
+      duplicateCount: 2,
+      errorCount: 1,
+      whatsappVerifiedCount: 6,
+      whatsappRejectedCount: 2,
+      withoutPhoneCount: 1,
+      cacheHit: true,
+      status: 'completed_with_errors',
+    });
+
+    assert.equal(finished.status, 'completed_with_errors');
+    assert.equal(finished.cache_hit, true);
+
+    const cache = await saveCollectionCache(
+      userId,
+      {
+        cacheKey,
+        sourceType: 'rapidapi',
+        query: 'clinicas odontologicas em cuiaba',
+        niche: 'clinicas odontologicas',
+        city: 'Cuiaba',
+        region: 'br',
+        limit: 25,
+        params: { verifyWhatsAppExists: true },
+      },
+      {
+        total: 12,
+        leads: [{ nome_empresa: 'Clinica Teste' }],
+        sourceType: 'rapidapi',
+      }
+    );
+    assert.ok(cache.id);
+
+    const cached = await getCollectionCache(userId, cacheKey);
+    assert.ok(cached);
+    assert.equal(cached.response_json.total, 12);
+
+    const runs = await listCollectionRuns(userId, { limit: 10, offset: 0 });
+    assert.ok(runs.some((entry) => entry.id === runId && entry.credential_name === 'Credencial Coleta Teste'));
+    assert.ok(runs.some((entry) => entry.cache_hit === true));
+
+    const logs = await listCollectionRunLogs(userId, runId);
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].event, 'collection_started');
+    assert.ok(!JSON.stringify(logs).match(/api_key|apiKey|secret|Bearer/i));
+    assert.ok(!JSON.stringify(cached).match(/api_key|apiKey|secret|Bearer/i));
   });
 });

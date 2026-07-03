@@ -7,7 +7,7 @@ O objetivo inicial e uso proprio, separado do Performance Hub. A arquitetura ja 
 ## Status Atual
 
 **Atualizado em:** 03/07/2026  
-**Estado:** funcional para uso interno local, em validacao operacional.
+**Estado:** funcional para uso interno local, com PR #6 validado em ambiente local.
 
 Stack local validada com Docker:
 
@@ -36,6 +36,7 @@ Documentacao principal:
 - Historico persistente de coletas em `/collections`.
 - Logs persistentes de execucao por coleta.
 - Cache de busca/coleta para evitar chamadas repetidas ao mesmo provider.
+- Toggle para forcar nova coleta ignorando cache.
 - Cadastro de credenciais de scraper e IA/LLM.
 - Criptografia e mascara de API keys.
 - Controle de uso diario/mensal por credencial.
@@ -53,6 +54,28 @@ Documentacao principal:
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
 - Dashboard comercial com funil, fontes, WhatsApp confirmado e conversao por nicho/cidade.
 - Dark mode.
+
+## Validacao Do PR #6
+
+Validadacoes registradas no PR:
+
+- Backend `npm test`: 32 testes passando.
+- Frontend `npm run build`: passando.
+- `docker compose build backend frontend`: passando.
+- Stack local com backend/frontend saudaveis.
+- `GET /health`: ok.
+- `/collections`, `/profile`, `/leads`, `/dashboard`: HTTP 200.
+- `PATCH /api/auth/me`: validado.
+- `GET /api/collections` e logs por run: validados.
+
+Providers validados:
+
+- Serper: coleta real pequena passou, com leads salvos.
+- Apify: coleta real passou usando input `{ language, location, max_results, query }`.
+- RapidAPI: coleta real pequena passou no ambiente de validacao.
+- RapidAPI 403 `not subscribed`: mensagem amigavel implementada e testada.
+
+Observacao operacional: quando RapidAPI retornar `You are not subscribed to this API`, o problema esperado e assinatura/projeto/API key/host da conta RapidAPI, nao o fluxo principal do Prospect AI.
 
 ## Fluxo Principal
 
@@ -156,7 +179,7 @@ Esses dados sao usados para:
 - Ajustar prompts internos das LLMs.
 - Adaptar diagnosticos, mensagens, follow-ups, e-mails, roteiros e propostas ao ponto de vista profissional do usuario.
 
-Exemplo: para um gestor de trafego focado em imobiliario, a IA prioriza qualidade do lead, WhatsApp, rastreamento, oportunidades de captação e conversao em reunioes.
+Exemplo: para um gestor de trafego focado em imobiliario, a IA prioriza qualidade do lead, WhatsApp, rastreamento, oportunidades de captacao e conversao em reunioes.
 
 ## CRM Kanban
 
@@ -189,6 +212,8 @@ Implementado:
 - Webhook de mensagens.
 - Historico de mensagens.
 - Verificacao de existencia de WhatsApp durante a coleta.
+
+Pendente: teste real da verificacao de existencia em coleta com instancia conectada.
 
 ## IA
 
@@ -248,12 +273,11 @@ npm run dev
 
 Principais proximos passos:
 
-1. Validar build/test desta sprint no ambiente local atualizado.
-2. Teste real da verificacao WhatsApp em coleta com instancia conectada.
-3. Toggle visual para forcar nova coleta ignorando cache.
-4. Testes automatizados com banco para historico/logs/cache.
-5. Kanban com drag-and-drop e edicao rapida.
-6. Filtros por periodo/fonte no dashboard comercial.
+1. Teste real da verificacao WhatsApp em coleta com instancia conectada.
+2. Revalidar Serper, Apify e RapidAPI no frontend apos merge usando credenciais reais do usuario.
+3. Kanban com drag-and-drop, filtros e edicao rapida.
+4. Filtros por periodo/fonte no dashboard comercial.
+5. Documentacao operacional especifica para WhatsApp, IA, coleta e credenciais.
 
 Lista completa em `docs/TODO.md`.
 
