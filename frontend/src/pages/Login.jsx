@@ -35,19 +35,19 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary-600 mb-2">Prospect AI</h1>
-          <p className="text-gray-600">Sistema de Prospecção Inteligente</p>
+          <h1 className="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-2">Prospect AI</h1>
+          <p className="text-gray-600 dark:text-gray-400">Sistema de Prospecção Inteligente</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
+          <div className="flex mb-6 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
               onClick={() => setIsRegister(false)}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                !isRegister ? 'bg-white text-primary-600 shadow' : 'text-gray-600'
+                !isRegister ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow' : 'text-gray-600 dark:text-gray-300'
               }`}
             >
               Login
@@ -55,7 +55,7 @@ export default function Login() {
             <button
               onClick={() => setIsRegister(true)}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-                isRegister ? 'bg-white text-primary-600 shadow' : 'text-gray-600'
+                isRegister ? 'bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow' : 'text-gray-600 dark:text-gray-300'
               }`}
             >
               Criar Conta

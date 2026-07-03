@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Habilita dark mode manual por classe (.dark no <html>), em vez do padrão
+   do Tailwind v4 que segue prefers-color-scheme. Assim o toggle controla. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary-50: #eff6ff;
   --color-primary-100: #dbeafe;
@@ -20,8 +24,19 @@
     border-color: var(--color-gray-200, #e5e7eb);
   }
 
+  .dark *,
+  .dark ::after,
+  .dark ::before {
+    border-color: var(--color-gray-700, #374151);
+  }
+
   body {
     @apply bg-gray-50 text-gray-900;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .dark body {
+    @apply bg-gray-900 text-gray-100;
   }
 }
 
@@ -37,6 +52,10 @@
   .btn-secondary {
     @apply bg-gray-200 text-gray-900 hover:bg-gray-300;
   }
+
+  .dark .btn-secondary {
+    @apply bg-gray-700 text-gray-100 hover:bg-gray-600;
+  }
   
   .btn-danger {
     @apply bg-red-600 text-white hover:bg-red-700;
@@ -45,9 +64,17 @@
   .input {
     @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500;
   }
+
+  .dark .input {
+    @apply bg-gray-800 border-gray-600 text-gray-100 placeholder-gray-500;
+  }
   
   .card {
     @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+  }
+
+  .dark .card {
+    @apply bg-gray-800 border-gray-700;
   }
   
   .badge {
@@ -69,4 +96,31 @@
   .badge-info {
     @apply bg-blue-100 text-blue-800;
   }
+
+  .dark .badge-success { @apply bg-green-900/40 text-green-300; }
+  .dark .badge-warning { @apply bg-yellow-900/40 text-yellow-300; }
+  .dark .badge-danger { @apply bg-red-900/40 text-red-300; }
+  .dark .badge-info { @apply bg-blue-900/40 text-blue-300; }
 }
+
+/* Regras sem @layer têm prioridade sobre as utilities do Tailwind. Usadas
+   para garantir legibilidade global no dark mode de elementos que aparecem
+   em muitas telas (labels de formulário), evitando editar centenas de
+   ocorrências individuais de text-gray-700. */
+.dark label {
+  color: var(--color-gray-300, #d1d5db);
+}
+
+/* Melhora legibilidade dos textos secundários em cinza dentro dos cards no
+   dark mode. Os callouts coloridos (bg-*-50 com text-*-800) usam tons de cor,
+   não de cinza, então não são afetados por estas regras. */
+.dark .card .text-gray-500,
+.dark .card .text-gray-600 {
+  color: var(--color-gray-400, #9ca3af);
+}
+
+.dark .card .text-gray-700,
+.dark .card .text-gray-800 {
+  color: var(--color-gray-300, #d1d5db);
+}
+

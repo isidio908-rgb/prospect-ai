@@ -114,8 +114,8 @@ export default function WhatsAppSettings() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">WhatsApp</h1>
-        <p className="text-gray-600">Conecte um número para conversar com os leads direto pelo CRM</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">WhatsApp</h1>
+        <p className="text-gray-600 dark:text-gray-400">Conecte um número para conversar com os leads direto pelo CRM</p>
       </div>
 
       {/* Status atual */}
@@ -128,11 +128,11 @@ export default function WhatsAppSettings() {
               <XCircle className="w-8 h-8 text-gray-400" />
             )}
             <div>
-              <p className="font-semibold text-gray-900">
+              <p className="font-semibold text-gray-900 dark:text-gray-100">
                 {connected ? 'Conectado' : instance ? 'Desconectado' : 'Nenhum número conectado'}
               </p>
               {instance?.phone_number && (
-                <p className="text-sm text-gray-500">{instance.phone_number}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{instance.phone_number}</p>
               )}
             </div>
           </div>
@@ -162,8 +162,8 @@ export default function WhatsAppSettings() {
         <div className="card text-center">
           {qrcode ? (
             <>
-              <p className="text-gray-700 mb-4">Abra o WhatsApp no celular, vá em Aparelhos conectados e escaneie:</p>
-              <img src={qrcode} alt="QR Code WhatsApp" className="mx-auto rounded-lg border" style={{ maxWidth: 280 }} />
+              <p className="text-gray-700 dark:text-gray-300 mb-4">Abra o WhatsApp no celular, vá em Aparelhos conectados e escaneie:</p>
+              <img src={qrcode} alt="QR Code WhatsApp" className="mx-auto rounded-lg border bg-white p-2" style={{ maxWidth: 280 }} />
               <p className="text-xs text-gray-400 mt-3">O código expira em alguns minutos. Clique em "Gerar novo QR code" se necessário.</p>
               <button onClick={handleConnect} disabled={connecting} className="btn btn-secondary mt-4">
                 {connecting ? 'Gerando...' : 'Gerar novo QR code'}
@@ -171,8 +171,8 @@ export default function WhatsAppSettings() {
             </>
           ) : (
             <>
-              <QrCode className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-600 mb-4">Configure as opções de segurança abaixo e conecte seu WhatsApp.</p>
+              <QrCode className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Configure as opções de segurança abaixo e conecte seu WhatsApp.</p>
             </>
           )}
         </div>
@@ -182,9 +182,9 @@ export default function WhatsAppSettings() {
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <ShieldCheck className="w-5 h-5 text-primary-600" />
-          <h2 className="text-lg font-semibold">Configurações de Segurança</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Configurações de Segurança</h2>
         </div>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           Reduzem o risco de bloqueio do número. Recomendamos manter os valores padrão.
         </p>
 
@@ -252,8 +252,8 @@ function SecurityToggle({ label, description, checked, onChange }) {
         className="mt-1 w-4 h-4"
       />
       <div>
-        <p className="text-sm font-medium text-gray-800">{label}</p>
-        {description && <p className="text-xs text-gray-500">{description}</p>}
+        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</p>
+        {description && <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>}
       </div>
     </label>
   );

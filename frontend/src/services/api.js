@@ -58,6 +58,26 @@ export const stats = {
   get: () => api.get('/api/stats'),
 };
 
+// Credenciais
+export const credentials = {
+  providers: () => api.get('/api/credentials/providers'),
+  list: () => api.get('/api/credentials'),
+  create: (data) => api.post('/api/credentials', data),
+  update: (id, data) => api.put(`/api/credentials/${id}`, data),
+  remove: (id) => api.delete(`/api/credentials/${id}`),
+  test: (id) => api.post(`/api/credentials/${id}/test`),
+  updateStatus: (id, status) => api.patch(`/api/credentials/${id}/status`, { status }),
+  usage: (id) => api.get(`/api/credentials/${id}/usage`),
+};
+
+// IA (LLM)
+export const ai = {
+  providers: () => api.get('/api/ai/providers'),
+  tasks: () => api.get('/api/ai/tasks'),
+  status: () => api.get('/api/ai/status'),
+  run: (data) => api.post('/api/ai/run', data),
+};
+
 // WhatsApp (Evolution API)
 export const whatsapp = {
   connect: (securityOptions) => api.post('/api/whatsapp/connect', securityOptions || {}),

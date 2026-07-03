@@ -1,58 +1,110 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { credentials as credentialsApi } from '../services/api';
+
+const FIELD_LABELS = {
+  api_host: 'API Host',
+  base_url: 'Base URL',
+  search_endpoint: 'Endpoint / Actor ID',
+  model: 'Modelo',
+};
+
+const BASE_FORM = {
+  name: '',
+  type: 'rapidapi',
+  provider: '',
+  api_host: '',
+  api_key: '',
+  base_url: '',
+  search_endpoint: '',
+  model: '',
+  daily_limit: 100,
+  monthly_limit: 3000,
+  notes: '',
+};
 
 const Credentials = () => {
   const navigate = useNavigate();
   const [credentials, setCredentials] = useState([]);
+  const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [testingId, setTestingId] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    type: 'rapidapi',
-    provider: 'Local Business Data',
-    api_host: 'local-business-data.p.rapidapi.com',
-    api_key: '',
-    base_url: 'https://local-business-data.p.rapidapi.com',
-    search_endpoint: '/search',
-    daily_limit: 100,
-    monthly_limit: 3000,
-    notes: ''
-  });
+  const [formData, setFormData] = useState(BASE_FORM);
 
   useEffect(() => {
+    loadProviders();
     loadCredentials();
   }, []);
 
+  const providersMap = Object.fromEntries(providers.map((p) => [p.type, p]));
+  const selectedProvider = providersMap[formData.type];
+
+  const loadProviders = async () => {
+    try {
+      const response = await credentialsApi.providers();
+      setProviders(response.data.providers || []);
+    } catch {
+      // Segue com a lista vazia; o formulário ainda funciona no modo manual
+    }
+  };
+
   const loadCredentials = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-
-      const response = await fetch('http://localhost:3001/api/credentials', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.status === 401) {
-        localStorage.removeItem('token');
-        navigate('/login');
-        return;
-      }
-
-      const data = await response.json();
-      setCredentials(data.credentials || []);
+      const response = await credentialsApi.list();
+      setCredentials(response.data.credentials || []);
       setLoading(false);
     } catch (err) {
+      if (err.response?.status === 401) {
+        navigate('/login');
+        return;
+      }
       setError('Erro ao carregar credenciais');
       setLoading(false);
     }
+  };
+
+  const applyProviderDefaults = (type, provider) => {
+    const p = provider || providersMap[type];
+    if (!p) {
+      setFormData((f) => ({ ...f, type }));
+      return;
+    }
+    setFormData((f) => ({
+      ...f,
+      type,
+      provider: p.defaults.provider || '',
+      api_host: p.defaults.api_host || '',
+      base_url: p.defaults.base_url || '',
+      search_endpoint: p.defaults.search_endpoint || '',
+      model: p.defaults.model || '',
+      daily_limit: p.defaults.daily_limit ?? f.daily_limit,
+      monthly_limit: p.defaults.monthly_limit ?? f.monthly_limit,
+    }));
+  };
+
+  const openNewForm = () => {
+    setEditingId(null);
+    const first = providers[0];
+    const type = first?.type || 'rapidapi';
+    const seed = { ...BASE_FORM, type, name: '', api_key: '', notes: '' };
+    setFormData(seed);
+    // aplica defaults do provedor após semear os campos comuns
+    if (first) {
+      setFormData({
+        ...seed,
+        provider: first.defaults.provider || '',
+        api_host: first.defaults.api_host || '',
+        base_url: first.defaults.base_url || '',
+        search_endpoint: first.defaults.search_endpoint || '',
+        model: first.defaults.model || '',
+        daily_limit: first.defaults.daily_limit ?? BASE_FORM.daily_limit,
+        monthly_limit: first.defaults.monthly_limit ?? BASE_FORM.monthly_limit,
+      });
+    }
+    setShowForm(true);
   };
 
   const handleSubmit = async (e) => {
@@ -60,74 +112,41 @@ const Credentials = () => {
     setError('');
 
     try {
-      const token = localStorage.getItem('token');
-      const url = editingId 
-        ? `http://localhost:3001/api/credentials/${editingId}`
-        : 'http://localhost:3001/api/credentials';
-      
-      const method = editingId ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Erro ao salvar credencial');
+      const payload = {
+        ...formData,
+        daily_limit: parseInt(formData.daily_limit, 10),
+        monthly_limit: parseInt(formData.monthly_limit, 10),
+      };
+      if (editingId) {
+        await credentialsApi.update(editingId, payload);
+      } else {
+        await credentialsApi.create(payload);
       }
 
-      // Recarregar lista
       await loadCredentials();
-      
-      // Limpar formulário
       setShowForm(false);
       setEditingId(null);
-      setFormData({
-        name: '',
-        type: 'rapidapi',
-        provider: 'Local Business Data',
-        api_host: 'local-business-data.p.rapidapi.com',
-        api_key: '',
-        base_url: 'https://local-business-data.p.rapidapi.com',
-        search_endpoint: '/search',
-        daily_limit: 100,
-        monthly_limit: 3000,
-        notes: ''
-      });
+      setFormData(BASE_FORM);
     } catch (err) {
-      setError(err.message);
+      const zodMsg = err.response?.data?.error?.issues?.[0]?.message;
+      setError(zodMsg || err.response?.data?.error || 'Erro ao salvar credencial');
     }
   };
 
   const handleTest = async (id) => {
     setTestingId(id);
     setError('');
-
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/credentials/${id}/test`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-      
+      const response = await credentialsApi.test(id);
+      const data = response.data;
       if (data.success) {
         alert('✅ Credencial válida!');
       } else {
-        alert(`❌ Erro: ${data.message}`);
+        alert(`❌ Erro: ${data.message} (HTTP ${data.statusCode})`);
       }
-
       await loadCredentials();
     } catch (err) {
-      alert(`❌ Erro ao testar: ${err.message}`);
+      alert(`❌ Erro ao testar: ${err.response?.data?.message || err.message}`);
     } finally {
       setTestingId(null);
     }
@@ -135,36 +154,19 @@ const Credentials = () => {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:3001/api/credentials/${id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
+      await credentialsApi.updateStatus(id, newStatus);
       await loadCredentials();
-    } catch (err) {
+    } catch {
       setError('Erro ao alterar status');
     }
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Tem certeza que deseja deletar esta credencial?')) return;
-
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:3001/api/credentials/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
+      await credentialsApi.remove(id);
       await loadCredentials();
-    } catch (err) {
+    } catch {
       setError('Erro ao deletar credencial');
     }
   };
@@ -178,209 +180,203 @@ const Credentials = () => {
       api_host: credential.api_host || '',
       api_key: '',
       base_url: credential.base_url || '',
-      search_endpoint: credential.search_endpoint || '/search',
+      search_endpoint: credential.search_endpoint || '',
+      model: credential.model || '',
       daily_limit: credential.daily_limit,
       monthly_limit: credential.monthly_limit,
-      notes: credential.notes || ''
+      notes: credential.notes || '',
     });
     setShowForm(true);
   };
 
   const getStatusColor = (status) => {
     const colors = {
-      active: 'bg-green-100 text-green-800',
-      inactive: 'bg-gray-100 text-gray-800',
-      limit_reached: 'bg-red-100 text-red-800',
-      error_auth: 'bg-orange-100 text-orange-800',
-      error_provider: 'bg-red-100 text-red-800',
-      paused: 'bg-yellow-100 text-yellow-800'
+      active: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+      inactive: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+      limit_reached: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+      error_auth: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+      error_provider: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+      paused: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
     };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+    return colors[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
   };
 
   const getStatusIcon = (status) => {
     const icons = {
-      active: '🟢',
-      inactive: '⚫',
-      limit_reached: '🔴',
-      error_auth: '🟠',
-      error_provider: '🔴',
-      paused: '🟡'
+      active: '🟢', inactive: '⚫', limit_reached: '🔴',
+      error_auth: '🟠', error_provider: '🔴', paused: '🟡',
     };
     return icons[status] || '⚪';
   };
 
   const getStatusLabel = (status) => {
     const labels = {
-      active: 'Ativa',
-      inactive: 'Inativa',
-      limit_reached: 'Limite Atingido',
-      error_auth: 'Erro de Autenticação',
-      error_provider: 'Erro do Provedor',
-      paused: 'Pausada'
+      active: 'Ativa', inactive: 'Inativa', limit_reached: 'Limite Atingido',
+      error_auth: 'Erro de Autenticação', error_provider: 'Erro do Provedor', paused: 'Pausada',
     };
     return labels[status] || status;
   };
+
+  const scraperCredentials = credentials.filter((cred) => cred.category !== 'llm');
+  const llmCredentials = credentials.filter((cred) => cred.category === 'llm');
+  const credentialSections = [
+    { title: 'Scrapers de Leads', items: scraperCredentials },
+    { title: 'Inteligência Artificial', items: llmCredentials },
+  ].filter((section) => section.items.length > 0);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando credenciais...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Carregando credenciais...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">🔑 Credenciais</h1>
-        <p className="mt-2 text-gray-600">
-          Gerencie suas chaves de API para coleta de leads
+    <div className="space-y-6 max-w-5xl">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">🔑 Credenciais</h1>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
+          Cadastre chaves de API para scrapers de leads e provedores de IA/LLM
         </p>
       </div>
 
-      {/* Error Alert */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+        <div className="bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300 px-4 py-3 rounded-lg relative">
           <span className="block sm:inline">{error}</span>
-          <button
-            onClick={() => setError('')}
-            className="absolute top-0 bottom-0 right-0 px-4 py-3"
-          >
+          <button onClick={() => setError('')} className="absolute top-0 bottom-0 right-0 px-4 py-3">
             <span className="text-2xl">&times;</span>
           </button>
         </div>
       )}
 
-      {/* Add Button */}
       {!showForm && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="mb-6 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-        >
-          <span className="text-xl">+</span>
+        <button onClick={openNewForm} className="btn btn-primary flex items-center gap-2">
+          <span className="text-xl leading-none">+</span>
           Nova Credencial
         </button>
       )}
 
-      {/* Form */}
       {showForm && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
             {editingId ? 'Editar Credencial' : 'Nova Credencial'}
           </h2>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Seleção de provedor */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Provedor *
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) => applyProviderDefaults(e.target.value)}
+                className="input"
+                disabled={!!editingId}
+              >
+                {providers.length === 0 && <option value={formData.type}>{formData.type}</option>}
+                {providers.map((p) => (
+                  <option key={p.type} value={p.type}>{p.label}</option>
+                ))}
+              </select>
+              {selectedProvider && (
+                <div className="flex items-center flex-wrap gap-3 mt-2 text-xs">
+                  {selectedProvider.freeCredits && (
+                    <span className="badge badge-success">✨ Oferece créditos gratuitos</span>
+                  )}
+                  <a
+                    href={selectedProvider.docs}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-600 dark:text-primary-400 hover:underline"
+                  >
+                    Ver documentação →
+                  </a>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: Local Business Data - Prod"
+                  className="input"
+                  placeholder="Ex: Minha conta Apify"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Provedor
-                </label>
-                <input
-                  type="text"
-                  value={formData.provider}
-                  onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: Local Business Data"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  API Host *
-                </label>
-                <input
-                  type="text"
-                  value={formData.api_host}
-                  onChange={(e) => setFormData({ ...formData, api_host: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: local-business-data.p.rapidapi.com"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Base URL *
-                </label>
-                <input
-                  type="url"
-                  value={formData.base_url}
-                  onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="https://..."
-                  required
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  API Key * {editingId && <span className="text-xs text-gray-500">(deixe em branco para não alterar)</span>}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  API Key / Token * {editingId && <span className="text-xs text-gray-500 dark:text-gray-400">(em branco = não alterar)</span>}
                 </label>
                 <input
                   type="password"
                   value={formData.api_key}
                   onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="input"
                   placeholder="Sua chave de API"
                   required={!editingId}
                 />
               </div>
 
+              {/* Campos técnicos dinâmicos por provedor */}
+              {(selectedProvider?.fields || ['api_host', 'base_url', 'search_endpoint']).map((field) => (
+                <div key={field} className={field === 'base_url' ? 'md:col-span-2' : ''}>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {FIELD_LABELS[field] || field}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData[field] || ''}
+                    onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+                    className="input"
+                  />
+                  {selectedProvider?.fieldHints?.[field] && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {selectedProvider.fieldHints[field]}
+                    </p>
+                  )}
+                </div>
+              ))}
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Limite Diário *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limite Diário *</label>
                 <input
                   type="number"
                   value={formData.daily_limit}
-                  onChange={(e) => setFormData({ ...formData, daily_limit: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => setFormData({ ...formData, daily_limit: e.target.value })}
+                  className="input"
                   min="1"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Limite Mensal *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limite Mensal *</label>
                 <input
                   type="number"
                   value={formData.monthly_limit}
-                  onChange={(e) => setFormData({ ...formData, monthly_limit: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => setFormData({ ...formData, monthly_limit: e.target.value })}
+                  className="input"
                   min="1"
                   required
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notas
-                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notas</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="input"
                   rows="2"
                   placeholder="Observações sobre esta credencial..."
                 />
@@ -388,19 +384,13 @@ const Credentials = () => {
             </div>
 
             <div className="flex gap-2 pt-4">
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-              >
+              <button type="submit" className="btn btn-primary">
                 {editingId ? 'Atualizar' : 'Criar'} Credencial
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingId(null);
-                }}
-                className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition"
+                onClick={() => { setShowForm(false); setEditingId(null); setFormData(BASE_FORM); }}
+                className="btn btn-secondary"
               >
                 Cancelar
               </button>
@@ -409,140 +399,134 @@ const Credentials = () => {
         </div>
       )}
 
-      {/* Credentials List */}
       {credentials.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+        <div className="card text-center py-12">
           <div className="text-6xl mb-4">🔑</div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
             Nenhuma credencial cadastrada
           </h3>
-          <p className="text-gray-600 mb-6">
-            Adicione sua primeira credencial para começar a coletar leads
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            Adicione uma credencial de scraper para começar a coletar leads
           </p>
-          <button
-            onClick={() => setShowForm(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
-          >
-            + Adicionar Credencial
-          </button>
+          <button onClick={openNewForm} className="btn btn-primary">+ Adicionar Credencial</button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {credentials.map((cred) => (
-            <div key={cred.id} className="bg-white rounded-lg shadow-md p-6">
+        <div className="space-y-6">
+          {credentialSections.map((section) => (
+            <section key={section.title} className="space-y-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{section.title}</h2>
+              {section.items.map((cred) => (
+            <div key={cred.id} className="card">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-semibold text-gray-900">
-                      {cred.name}
-                    </h3>
+                  <div className="flex items-center flex-wrap gap-3 mb-2">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{cred.name}</h3>
+                    <span className="badge badge-info">{providersMap[cred.type]?.label || cred.type}</span>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(cred.status)}`}>
                       {getStatusIcon(cred.status)} {getStatusLabel(cred.status)}
                     </span>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
-                      <p className="text-sm text-gray-500">Provedor</p>
-                      <p className="font-medium">{cred.provider || 'N/A'}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Provedor</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{cred.provider || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500">API Key</p>
-                      <p className="font-mono text-sm">{cred.api_key_masked}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">API Key</p>
+                      <p className="font-mono text-sm text-gray-900 dark:text-gray-100">{cred.api_key_masked}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500">Uso Hoje</p>
-                      <p className="font-medium">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Uso Hoje</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100">
                         {cred.used_today} / {cred.daily_limit}
-                        <span className="text-xs text-gray-500 ml-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
                           ({Math.round((cred.used_today / cred.daily_limit) * 100)}%)
                         </span>
                       </p>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
                         <div
                           className={`h-2 rounded-full ${
                             (cred.used_today / cred.daily_limit) >= 0.9 ? 'bg-red-500' :
-                            (cred.used_today / cred.daily_limit) >= 0.7 ? 'bg-yellow-500' :
-                            'bg-green-500'
+                            (cred.used_today / cred.daily_limit) >= 0.7 ? 'bg-yellow-500' : 'bg-green-500'
                           }`}
                           style={{ width: `${Math.min((cred.used_today / cred.daily_limit) * 100, 100)}%` }}
                         />
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500">Uso Mensal</p>
-                      <p className="font-medium">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Uso Mensal</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100">
                         {cred.used_month} / {cred.monthly_limit}
-                        <span className="text-xs text-gray-500 ml-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
                           ({Math.round((cred.used_month / cred.monthly_limit) * 100)}%)
                         </span>
                       </p>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
                         <div
                           className={`h-2 rounded-full ${
                             (cred.used_month / cred.monthly_limit) >= 0.9 ? 'bg-red-500' :
-                            (cred.used_month / cred.monthly_limit) >= 0.7 ? 'bg-yellow-500' :
-                            'bg-green-500'
+                            (cred.used_month / cred.monthly_limit) >= 0.7 ? 'bg-yellow-500' : 'bg-green-500'
                           }`}
                           style={{ width: `${Math.min((cred.used_month / cred.monthly_limit) * 100, 100)}%` }}
                         />
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500">Último Uso</p>
-                      <p className="text-sm">
-                        {cred.last_used_at 
-                          ? new Date(cred.last_used_at).toLocaleString('pt-BR')
-                          : 'Nunca usado'}
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Último Uso</p>
+                      <p className="text-sm text-gray-900 dark:text-gray-100">
+                        {cred.last_used_at ? new Date(cred.last_used_at).toLocaleString('pt-BR') : 'Nunca usado'}
                       </p>
                     </div>
                   </div>
 
                   {cred.notes && (
-                    <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                    <div className="mt-3 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/40 p-2 rounded">
                       📝 {cred.notes}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="flex gap-2 mt-4 pt-4 border-t">
+              <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   onClick={() => handleTest(cred.id)}
                   disabled={testingId === cred.id}
-                  className="bg-blue-100 text-blue-700 px-4 py-2 rounded hover:bg-blue-200 transition disabled:opacity-50"
+                  className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-4 py-2 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 transition disabled:opacity-50"
                 >
                   {testingId === cred.id ? '⏳ Testando...' : '🧪 Testar'}
                 </button>
                 <button
                   onClick={() => handleEdit(cred)}
-                  className="bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 transition"
+                  className="bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 px-4 py-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition"
                 >
                   ✏️ Editar
                 </button>
                 {cred.status === 'active' ? (
                   <button
                     onClick={() => handleStatusChange(cred.id, 'paused')}
-                    className="bg-yellow-100 text-yellow-700 px-4 py-2 rounded hover:bg-yellow-200 transition"
+                    className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 px-4 py-2 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/60 transition"
                   >
                     ⏸️ Pausar
                   </button>
                 ) : (
                   <button
                     onClick={() => handleStatusChange(cred.id, 'active')}
-                    className="bg-green-100 text-green-700 px-4 py-2 rounded hover:bg-green-200 transition"
+                    className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-4 py-2 rounded hover:bg-green-200 dark:hover:bg-green-900/60 transition"
                   >
                     ▶️ Ativar
                   </button>
                 )}
                 <button
                   onClick={() => handleDelete(cred.id)}
-                  className="bg-red-100 text-red-700 px-4 py-2 rounded hover:bg-red-200 transition ml-auto"
+                  className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-4 py-2 rounded hover:bg-red-200 dark:hover:bg-red-900/60 transition ml-auto"
                 >
                   🗑️ Deletar
                 </button>
               </div>
             </div>
+              ))}
+            </section>
           ))}
         </div>
       )}

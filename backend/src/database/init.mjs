@@ -60,12 +60,14 @@ export async function initDatabase() {
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         name VARCHAR(255) NOT NULL,
         type VARCHAR(50) NOT NULL,
+        category VARCHAR(20) DEFAULT 'scraper',
         provider VARCHAR(255),
         api_host VARCHAR(255),
         api_key_encrypted TEXT NOT NULL,
         base_url TEXT,
         search_endpoint VARCHAR(255),
         details_endpoint VARCHAR(255),
+        model VARCHAR(255),
         daily_limit INTEGER DEFAULT 100,
         monthly_limit INTEGER DEFAULT 3000,
         used_today INTEGER DEFAULT 0,
@@ -77,6 +79,10 @@ export async function initDatabase() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // Migração: garante as colunas category/model em bancos já existentes
+    await client.query(`ALTER TABLE credentials ADD COLUMN IF NOT EXISTS category VARCHAR(20) DEFAULT 'scraper'`);
+    await client.query(`ALTER TABLE credentials ADD COLUMN IF NOT EXISTS model VARCHAR(255)`);
 
     // Criar tabela de uso de credenciais
     await client.query(`

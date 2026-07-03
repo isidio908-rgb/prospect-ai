@@ -8,6 +8,8 @@ import Leads from './pages/Leads';
 import LeadDetails from './pages/LeadDetails';
 import Credentials from './pages/Credentials';
 import WhatsAppSettings from './pages/WhatsAppSettings';
+import Collect from './pages/Collect';
+import './store/themeStore';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuthStore();
@@ -56,6 +58,17 @@ function App() {
           }
         />
         
+        <Route
+          path="/collect"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <Collect />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+
         <Route
           path="/leads"
           element={

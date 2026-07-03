@@ -241,3 +241,15 @@ export function sendPresence(instanceToken, instanceName, { number, presence = '
     body: { number, presence },
   });
 }
+
+/**
+ * Verifica quais números existem no WhatsApp.
+ * Endpoint Evolution API v2: POST /chat/whatsappNumbers/:instance
+ */
+export function checkWhatsAppNumbers(instanceToken, instanceName, numbers) {
+  return request(`/chat/whatsappNumbers/${instanceName}`, {
+    method: 'POST',
+    apiKey: instanceToken,
+    body: { numbers },
+  });
+}
