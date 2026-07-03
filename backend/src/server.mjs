@@ -8,6 +8,7 @@ import leadsRoutes from './api/routes/leads.mjs';
 import statsRoutes from './api/routes/stats.mjs';
 import credentialsRoutes from './api/routes/credentials.mjs';
 import aiRoutes from './api/routes/ai.mjs';
+import collectionRunsRoutes from './api/routes/collectionRuns.mjs';
 import whatsappRoutes from './api/routes/whatsapp.mjs';
 import whatsappWebhookRoutes from './api/routes/whatsappWebhook.mjs';
 import { errorHandler } from './api/middleware/errorHandler.mjs';
@@ -56,6 +57,7 @@ app.use('/api/leads', leadsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/credentials', credentialsRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/collections', collectionRunsRoutes);
 // Webhook público (chamado pela Evolution API, sem autenticação de usuário)
 // deve vir ANTES das rotas autenticadas de /api/whatsapp para não conflitar.
 app.use('/api/whatsapp', whatsappWebhookRoutes);
