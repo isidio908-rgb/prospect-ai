@@ -9,6 +9,11 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [profession, setProfession] = useState('Gestor de Tráfego');
+  const [primaryNiche, setPrimaryNiche] = useState('Imobiliário');
+  const [internalContext, setInternalContext] = useState(
+    'Atuar como gestor de tráfego consultivo, focado em prospecção, diagnóstico comercial, qualidade do lead, WhatsApp e geração de reuniões.'
+  );
   const [loading, setLoading] = useState(false);
   
   const { login, register } = useAuthStore();
@@ -20,7 +25,14 @@ export default function Login() {
 
     try {
       if (isRegister) {
-        await register(email, password, name);
+        await register({
+          email,
+          password,
+          name,
+          profession,
+          primary_niche: primaryNiche,
+          internal_context: internalContext,
+        });
         toast.success('Conta criada com sucesso!');
       } else {
         await login(email, password);
@@ -65,7 +77,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   Nome
                 </label>
                 <input
@@ -80,7 +92,7 @@ export default function Login() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                 Email
               </label>
               <input
@@ -94,7 +106,7 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                 Senha
               </label>
               <input
@@ -107,6 +119,54 @@ export default function Login() {
                 minLength={6}
               />
             </div>
+
+            {isRegister && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                    Profissão / Função
+                  </label>
+                  <input
+                    type="text"
+                    value={profession}
+                    onChange={(e) => setProfession(e.target.value)}
+                    className="input"
+                    placeholder="Ex: Gestor de Tráfego"
+                    maxLength={255}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                    Nicho foco
+                  </label>
+                  <input
+                    type="text"
+                    value={primaryNiche}
+                    onChange={(e) => setPrimaryNiche(e.target.value)}
+                    className="input"
+                    placeholder="Ex: Imobiliário, clínicas, restaurantes"
+                    maxLength={255}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                    Personalização interna da IA
+                  </label>
+                  <textarea
+                    value={internalContext}
+                    onChange={(e) => setInternalContext(e.target.value)}
+                    className="input min-h-[96px] resize-y"
+                    placeholder="Explique como a IA deve pensar, escrever e priorizar para o seu trabalho."
+                    maxLength={3000}
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Esse texto vira contexto interno dos prompts comerciais, diagnósticos e mensagens.
+                  </p>
+                </div>
+              </>
+            )}
 
             <button
               type="submit"
@@ -130,7 +190,7 @@ export default function Login() {
           </form>
         </div>
 
-        <p className="text-center text-sm text-gray-600 mt-4">
+        <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
           Prospect AI v1.0.0 - Sistema de Prospecção para Gestores de Tráfego
         </p>
       </div>
