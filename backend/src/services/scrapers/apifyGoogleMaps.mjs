@@ -4,14 +4,14 @@
  * Usa o endpoint run-sync-get-dataset-items, que dispara o Actor e retorna
  * os itens do dataset quando a execução termina (síncrono).
  *
- * Actor de referência: damilo/google-maps-scraper, cujo input é
- *   { keyword: string[], location: string, max_result_per_keyword: number }
- * e a saída traz place_id, name, full_address, phone, website, total_score,
- * reviews_count, category, google_maps_url, latitude, longitude.
+ * O Actor validado no console da Apify usa este input:
+ *   { language: string, location: string, max_results: number, query: string }
  *
- * A normalização abaixo aceita também nomes de campos alternativos
- * (title/address/totalScore/reviewsCount/phoneNumber/url) para funcionar com
- * outros Actors de Google Maps do store.
+ * Exemplo validado:
+ *   { language: 'en', location: 'San Francisco, CA, USA', max_results: 100, query: 'restaurant' }
+ *
+ * A normalização abaixo aceita nomes de campos alternativos para funcionar com
+ * diferentes Actors de Google Maps do store.
  */
 function firstDefined(...vals) {
   for (const v of vals) {
@@ -20,16 +20,48 @@ function firstDefined(...vals) {
   return undefined;
 }
 
+function splitQueryAndLocation(searchQuery = '') {
+  const value = String(searchQuery || '').trim();
+  const match = value.match(/\s+em\s+(.+)$/i);
+
+  if (!match) {
+    return { query: value, location: '' };
+  }
+
+  return {
+    query: value.slice(0, match.index).trim(),
+    location: match[1].trim(),
+  };
+}
+
+export function buildApifyGoogleMapsInput(options = {}) {
+  const { query: searchQuery, city, niche, limit = 20, language = 'pt', region } = options;
+  const inferred = splitQueryAndLocation(searchQuery);
+  const query = (niche || inferred.query || searchQuery || '').trim();
+  const location = (inferred.location || city || region || '').trim();
+
+  if (!query) {
+    throw new Error('Informe uma busca (query) ou nicho para o Apify');
+  }
+
+  return {
+    language: language || 'pt',
+    location,
+    max_results: Math.max(1, Math.min(Number(limit) || 20, 500)),
+    query,
+  };
+}
+
 function normalizeApifyPlace(item, context = {}) {
-  const name = firstDefined(item.name, item.title, item.placeName) || '';
-  const address = firstDefined(item.full_address, item.address, item.formattedAddress) || '';
-  const phone = firstDefined(item.phone, item.phoneNumber, item.phone_number) || '';
-  const website = firstDefined(item.website, item.website, item.url && !String(item.url).includes('google.') ? item.url : undefined) || '';
-  const rating = firstDefined(item.total_score, item.totalScore, item.rating);
-  const reviews = firstDefined(item.reviews_count, item.reviewsCount, item.review_count, item.userRatingCount);
-  const category = firstDefined(item.category, item.categoryName, Array.isArray(item.categories) ? item.categories[0] : undefined) || '';
-  const mapsUrl = firstDefined(item.google_maps_url, item.googleMapsUrl, item.url, item.placeUrl) || null;
-  const placeId = firstDefined(item.place_id, item.placeId, item.cid) || null;
+  const name = firstDefined(item.name, item.title, item.placeName, item.businessName) || '';
+  const address = firstDefined(item.full_address, item.address, item.formattedAddress, item.street) || '';
+  const phone = firstDefined(item.phone, item.phoneNumber, item.phone_number, item.telephone) || '';
+  const website = firstDefined(item.website, item.url && !String(item.url).includes('google.') ? item.url : undefined) || '';
+  const rating = firstDefined(item.total_score, item.totalScore, item.rating, item.stars);
+  const reviews = firstDefined(item.reviews_count, item.reviewsCount, item.review_count, item.userRatingCount, item.reviews);
+  const category = firstDefined(item.category, item.categoryName, item.type, Array.isArray(item.categories) ? item.categories[0] : undefined) || '';
+  const mapsUrl = firstDefined(item.google_maps_url, item.googleMapsUrl, item.placeUrl, item.url) || null;
+  const placeId = firstDefined(item.place_id, item.placeId, item.cid, item.googlePlaceId) || null;
   const lat = firstDefined(item.latitude, item.lat, item.location?.lat);
   const lng = firstDefined(item.longitude, item.lng, item.location?.lng);
   const city = firstDefined(item.city, context.city) || '';
@@ -52,8 +84,8 @@ function normalizeApifyPlace(item, context = {}) {
     fonte: 'apify_google_maps',
 
     place_id: placeId,
-    business_id: null,
-    google_id: null,
+    business_id: firstDefined(item.business_id, item.businessId) || null,
+    google_id: firstDefined(item.google_id, item.googleId) || null,
 
     rating: rating ?? null,
     total_avaliacoes: reviews ?? null,
@@ -63,8 +95,27 @@ function normalizeApifyPlace(item, context = {}) {
   };
 }
 
+function formatApifyError(status, text, requestBody) {
+  let payload = null;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    // Mantem texto bruto quando a Apify nao retornar JSON.
+  }
+
+  const message = payload?.error?.message || payload?.message || text;
+  const type = payload?.error?.type || payload?.type;
+  const hint = type === 'invalid-input'
+    ? 'Verifique se o Actor usa o schema { language, location, max_results, query }.'
+    : type === 'full-permission-actor-not-approved'
+      ? 'Aprove as permissoes do Actor na conta Apify antes de executar.'
+      : null;
+
+  return `Apify retornou ${status}: ${[type, message, hint].filter(Boolean).join(' - ')} | input=${JSON.stringify(requestBody)}`;
+}
+
 export async function collect(apiKey, credential, options) {
-  const { query: searchQuery, city, niche, limit = 20 } = options;
+  const { city, niche, limit = 20 } = options;
 
   const base = (credential.base_url || 'https://api.apify.com/v2').replace(/\/$/, '');
   const actorId = (credential.search_endpoint || 'damilo~google-maps-scraper')
@@ -72,17 +123,7 @@ export async function collect(apiKey, credential, options) {
     .replace(/^\//, '')
     .replace('/', '~');
 
-  const keyword = searchQuery || (niche && city ? `${niche} em ${city}` : niche || city || '');
-  if (!keyword) {
-    throw new Error('Informe uma busca (query) ou nicho + cidade para o Apify');
-  }
-
-  const body = {
-    keyword: [keyword],
-    location: city || '',
-    max_result_per_keyword: Math.max(1, Math.min(limit, 500)),
-  };
-
+  const body = buildApifyGoogleMapsInput(options);
   const url = `${base}/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(apiKey)}`;
 
   const response = await fetch(url, {
@@ -93,7 +134,7 @@ export async function collect(apiKey, credential, options) {
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Apify retornou ${response.status}: ${error.slice(0, 200)}`);
+    throw new Error(formatApifyError(response.status, error.slice(0, 500), body));
   }
 
   const items = await response.json();
