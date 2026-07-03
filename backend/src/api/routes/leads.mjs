@@ -2,12 +2,20 @@ import express from 'express';
 import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
 import { importLeadsFromCSV, exportLeadsToCSV, exportLeadsToJSON } from '../../services/csvImporter.mjs';
-import { 
-  findAllDuplicates, 
-  mergeLeads, 
+import {
+  findAllDuplicates,
+  mergeLeads,
   normalizeAllLeads,
   updateNormalizedFields
 } from '../../services/deduplicator.mjs';
+import {
+  addCollectionRunLog,
+  buildCollectionCacheKey,
+  createCollectionRun,
+  finishCollectionRun,
+  getCollectionCache,
+  saveCollectionCache
+} from '../../services/collectionRunService.mjs';
 import { updateLeadSchema } from '../validators/leads.mjs';
 
 const router = express.Router();
@@ -29,75 +37,71 @@ router.get('/', async (req, res, next) => {
       sortBy = 'score',
       sortOrder = 'DESC'
     } = req.query;
-    
+
     const offset = (page - 1) * limit;
-    
-    // Construir query dinâmica
+
     let whereConditions = ['user_id = $1'];
     let params = [req.user.id];
     let paramIndex = 2;
-    
+
     if (status) {
       whereConditions.push(`status = $${paramIndex++}`);
       params.push(status);
     }
-    
+
     if (prioridade) {
       whereConditions.push(`prioridade = $${paramIndex++}`);
       params.push(prioridade);
     }
-    
+
     if (cidade) {
       whereConditions.push(`LOWER(cidade) = LOWER($${paramIndex++})`);
       params.push(cidade);
     }
-    
+
     if (nicho) {
       whereConditions.push(`LOWER(nicho) = LOWER($${paramIndex++})`);
       params.push(nicho);
     }
-    
+
     if (search) {
       whereConditions.push(`(
-        LOWER(nome_empresa) LIKE LOWER($${paramIndex}) OR 
-        LOWER(site) LIKE LOWER($${paramIndex}) OR 
+        LOWER(nome_empresa) LIKE LOWER($${paramIndex}) OR
+        LOWER(site) LIKE LOWER($${paramIndex}) OR
         LOWER(telefone) LIKE LOWER($${paramIndex})
       )`);
       params.push(`%${search}%`);
       paramIndex++;
     }
-    
+
     const whereClause = whereConditions.join(' AND ');
-    
-    // Validar sortBy
     const allowedSortColumns = ['score', 'created_at', 'nome_empresa', 'prioridade'];
     const sortColumn = allowedSortColumns.includes(sortBy) ? sortBy : 'score';
     const sortDirection = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-    
-    // Contar total
+
     const countResult = await query(
       `SELECT COUNT(*) as total FROM leads WHERE ${whereClause}`,
       params
     );
-    
+
     const total = parseInt(countResult.rows[0].total);
-    
-    // Buscar leads
+
     params.push(limit, offset);
     const result = await query(
-      `SELECT 
+      `SELECT
         id, nome_empresa, site, telefone, whatsapp, email,
         cidade, bairro, nicho, categoria, fonte,
-        score, prioridade, status, 
+        score, prioridade, status,
         tem_pixel_meta, tem_gtm, tem_ga4, tem_whatsapp_site,
+        proxima_acao, responsavel, valor_potencial,
         data_coleta, data_analise, observacoes
-       FROM leads 
+       FROM leads
        WHERE ${whereClause}
        ORDER BY ${sortColumn} ${sortDirection}
        LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
       params
     );
-    
+
     res.json({
       leads: result.rows,
       pagination: {
@@ -116,7 +120,7 @@ router.get('/', async (req, res, next) => {
 router.get('/export', async (req, res, next) => {
   try {
     const { status, prioridade, cidade, nicho, minScore } = req.query;
-    
+
     const csv = await exportLeadsToCSV(req.user.id, {
       status,
       prioridade,
@@ -124,16 +128,16 @@ router.get('/export', async (req, res, next) => {
       nicho,
       minScore: minScore ? parseInt(minScore) : undefined
     });
-    
+
     if (!csv) {
-      return res.status(404).json({ 
-        error: 'Nenhum lead encontrado com os filtros especificados' 
+      return res.status(404).json({
+        error: 'Nenhum lead encontrado com os filtros especificados'
       });
     }
-    
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `leads-export-${timestamp}.csv`;
-    
+
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csv);
@@ -176,16 +180,17 @@ router.get('/export-json', async (req, res, next) => {
     next(error);
   }
 });
+
 // GET /api/leads/duplicates - Encontrar leads duplicados (DEVE VIR ANTES DE /:id)
 router.get('/duplicates', async (req, res, next) => {
   try {
     const { threshold = 0.85, limit = 100 } = req.query;
-    
+
     const duplicateGroups = await findAllDuplicates(req.user.id, {
       threshold: parseFloat(threshold),
       limit: parseInt(limit)
     });
-    
+
     res.json({
       total: duplicateGroups.length,
       groups: duplicateGroups.map(group => ({
@@ -208,16 +213,16 @@ router.get('/duplicates', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     const result = await query(
       'SELECT * FROM leads WHERE id = $1 AND user_id = $2',
       [id, req.user.id]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Lead não encontrado' });
     }
-    
+
     res.json({ lead: result.rows[0] });
   } catch (error) {
     next(error);
@@ -229,34 +234,31 @@ router.patch('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const data = updateLeadSchema.parse(req.body);
-    
-    // Verificar se o lead existe e pertence ao usuário
+
     const existing = await query(
       'SELECT id, status FROM leads WHERE id = $1 AND user_id = $2',
       [id, req.user.id]
     );
-    
+
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Lead não encontrado' });
     }
 
     const statusAnterior = existing.rows[0].status;
-    
-    // Construir update dinâmico
     const updates = [];
     const values = [];
     let paramIndex = 1;
-    
+
     if (data.status !== undefined) {
       updates.push(`status = $${paramIndex++}`);
       values.push(data.status);
     }
-    
+
     if (data.observacoes !== undefined) {
       updates.push(`observacoes = $${paramIndex++}`);
       values.push(data.observacoes);
     }
-    
+
     if (data.data_contato !== undefined) {
       updates.push(`data_contato = $${paramIndex++}`);
       values.push(data.data_contato);
@@ -286,22 +288,21 @@ router.patch('/:id', async (req, res, next) => {
       updates.push(`motivo_perda = $${paramIndex++}`);
       values.push(data.motivo_perda);
     }
-    
+
     if (updates.length === 0) {
       return res.status(400).json({ error: 'Nenhum campo para atualizar' });
     }
-    
+
     updates.push(`updated_at = NOW()`);
     values.push(id, req.user.id);
-    
+
     await query(
-      `UPDATE leads 
-       SET ${updates.join(', ')} 
+      `UPDATE leads
+       SET ${updates.join(', ')}
        WHERE id = $${paramIndex++} AND user_id = $${paramIndex}`,
       values
     );
 
-    // Registrar histórico quando o status muda (spec seção 11: histórico de mensagens/follow-up)
     if (data.status !== undefined && data.status !== statusAnterior) {
       await query(
         `INSERT INTO lead_followups (lead_id, user_id, tipo, status_anterior, status_novo, mensagem)
@@ -309,7 +310,7 @@ router.patch('/:id', async (req, res, next) => {
         [id, req.user.id, statusAnterior, data.status, data.observacoes || null]
       );
     }
-    
+
     res.json({ message: 'Lead atualizado com sucesso' });
   } catch (error) {
     next(error);
@@ -380,16 +381,16 @@ router.post('/:id/followups', async (req, res, next) => {
 router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     const result = await query(
       'DELETE FROM leads WHERE id = $1 AND user_id = $2 RETURNING id',
       [id, req.user.id]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Lead não encontrado' });
     }
-    
+
     res.json({ message: 'Lead deletado com sucesso' });
   } catch (error) {
     next(error);
@@ -400,11 +401,11 @@ router.delete('/:id', async (req, res, next) => {
 router.post('/import', async (req, res, next) => {
   try {
     const { nome_empresa, site, telefone, cidade, nicho, categoria, fonte, observacoes } = req.body;
-    
+
     if (!nome_empresa) {
       return res.status(400).json({ error: 'nome_empresa é obrigatório' });
     }
-    
+
     const result = await query(
       `INSERT INTO leads (
         user_id, nome_empresa, site, telefone, cidade, nicho, categoria, fonte, observacoes, data_coleta
@@ -423,10 +424,8 @@ router.post('/import', async (req, res, next) => {
       ]
     );
 
-    // Normaliza domínio/telefone/nome — essencial para deduplicação e para
-    // casar mensagens recebidas do WhatsApp com este lead (via phone_normalized).
     await updateNormalizedFields(result.rows[0].id, { site, telefone, nome_empresa });
-    
+
     res.status(201).json({
       message: 'Lead importado com sucesso',
       lead: result.rows[0]
@@ -440,15 +439,15 @@ router.post('/import', async (req, res, next) => {
 router.post('/import-csv', async (req, res, next) => {
   try {
     const { csvContent } = req.body;
-    
+
     if (!csvContent || typeof csvContent !== 'string') {
-      return res.status(400).json({ 
-        error: 'Envie o conteúdo CSV no campo "csvContent"' 
+      return res.status(400).json({
+        error: 'Envie o conteúdo CSV no campo "csvContent"'
       });
     }
-    
+
     const results = await importLeadsFromCSV(req.user.id, csvContent);
-    
+
     res.json({
       message: 'Importação concluída',
       summary: {
@@ -466,14 +465,16 @@ router.post('/import-csv', async (req, res, next) => {
   }
 });
 
-// POST /api/leads/collect - Coletar leads via Local Business Data
+// POST /api/leads/collect - Coletar leads via provider configurado
 router.post('/collect', async (req, res, next) => {
+  let run = null;
+
   try {
-    const { 
+    const {
       credentialId,
-      query: searchQuery, 
-      city, 
-      niche, 
+      query: searchQuery,
+      city,
+      niche,
       limit,
       lat,
       lng,
@@ -481,42 +482,110 @@ router.post('/collect', async (req, res, next) => {
       language,
       region,
       extractEmailsAndContacts,
-      verifyWhatsAppExists
+      verifyWhatsAppExists,
+      forceRefresh
     } = req.body;
-    
+
     if (!credentialId) {
       return res.status(400).json({ error: 'credentialId é obrigatório' });
     }
 
-    const { collectLeads } = await import('../../services/scraperCollector.mjs');
-    const { saveLeadsWithDeduplication } = await import('../../services/localBusinessDataCollector.mjs');
-    let verifyLeadPhonesOnWhatsApp = null;
-
-    if (verifyWhatsAppExists) {
-      ({ verifyLeadPhonesOnWhatsApp } = await import('../../services/whatsapp/whatsappService.mjs'));
-      // Valida conexão antes de consumir cota do scraper.
-      await verifyLeadPhonesOnWhatsApp(req.user.id, []);
-    }
-
-    // Coletar da API (o provedor é determinado pelo tipo da credencial)
-    const collection = await collectLeads(req.user.id, {
+    const normalizedLimit = limit || 20;
+    const cacheInput = {
       credentialId,
       query: searchQuery,
       city,
       niche,
-      limit: limit || 20,
+      limit: normalizedLimit,
       lat,
       lng,
       zoom,
       language,
       region,
       extractEmailsAndContacts,
-      verifyWhatsAppExists
-    });    
-    let leadsToSave = collection.leads;
+      verifyWhatsAppExists,
+      params: { lat, lng, zoom, language, region, extractEmailsAndContacts, verifyWhatsAppExists }
+    };
+    const cacheKey = buildCollectionCacheKey(cacheInput);
+
+    run = await createCollectionRun(req.user.id, {
+      ...cacheInput,
+      cacheKey
+    });
+
+    await addCollectionRunLog(run.id, req.user.id, 'info', 'collection_started', 'Coleta iniciada', {
+      query: searchQuery,
+      city,
+      niche,
+      limit: normalizedLimit,
+      forceRefresh: Boolean(forceRefresh)
+    });
+
+    const { collectLeads } = await import('../../services/scraperCollector.mjs');
+    const { saveLeadsWithDeduplication } = await import('../../services/localBusinessDataCollector.mjs');
+    let verifyLeadPhonesOnWhatsApp = null;
+    let collection = null;
+    let cacheHit = false;
+
+    if (!forceRefresh) {
+      const cached = await getCollectionCache(req.user.id, cacheKey);
+      if (cached?.response_json) {
+        collection = cached.response_json;
+        cacheHit = true;
+        await addCollectionRunLog(run.id, req.user.id, 'info', 'cache_hit', 'Resultado reaproveitado do cache de coleta', {
+          cacheId: cached.id,
+          expiresAt: cached.expires_at
+        });
+      }
+    }
+
+    if (!collection) {
+      await addCollectionRunLog(run.id, req.user.id, 'info', 'cache_miss', 'Nenhum cache válido encontrado; chamando provider', {
+        forceRefresh: Boolean(forceRefresh)
+      });
+
+      if (verifyWhatsAppExists) {
+        ({ verifyLeadPhonesOnWhatsApp } = await import('../../services/whatsapp/whatsappService.mjs'));
+        await verifyLeadPhonesOnWhatsApp(req.user.id, []);
+        await addCollectionRunLog(run.id, req.user.id, 'info', 'whatsapp_connection_ok', 'Instância WhatsApp validada antes da coleta');
+      }
+
+      collection = await collectLeads(req.user.id, {
+        credentialId,
+        query: searchQuery,
+        city,
+        niche,
+        limit: normalizedLimit,
+        lat,
+        lng,
+        zoom,
+        language,
+        region,
+        extractEmailsAndContacts,
+        verifyWhatsAppExists
+      });
+
+      await saveCollectionCache(req.user.id, {
+        ...cacheInput,
+        cacheKey,
+        sourceType: collection.sourceType
+      }, collection);
+
+      await addCollectionRunLog(run.id, req.user.id, 'info', 'provider_collected', 'Provider retornou leads para normalização', {
+        total: collection.total,
+        sourceType: collection.sourceType,
+        credentialId: collection.credentialUsed
+      });
+    }
+
+    let leadsToSave = collection.leads || [];
     let whatsappVerification = { enabled: false };
 
     if (verifyWhatsAppExists) {
+      if (!verifyLeadPhonesOnWhatsApp) {
+        ({ verifyLeadPhonesOnWhatsApp } = await import('../../services/whatsapp/whatsappService.mjs'));
+      }
+
       const verification = await verifyLeadPhonesOnWhatsApp(
         req.user.id,
         leadsToSave.map((lead) => lead.telefone).filter(Boolean)
@@ -543,29 +612,66 @@ router.post('/collect', async (req, res, next) => {
         rejected,
         withoutPhone,
       };
+
+      await addCollectionRunLog(run.id, req.user.id, 'info', 'whatsapp_verified', 'Verificação WhatsApp concluída', whatsappVerification);
     }
 
-    // Salvar no banco com deduplicação
     const { saved, duplicates, errors } = await saveLeadsWithDeduplication(req.user.id, leadsToSave);
-    
+
+    for (const error of errors) {
+      await addCollectionRunLog(run.id, req.user.id, 'error', 'lead_save_failed', 'Falha ao salvar lead coletado', error);
+    }
+
+    await addCollectionRunLog(run.id, req.user.id, 'info', 'database_saved', 'Coleta persistida no banco com deduplicação', {
+      saved: saved.length,
+      duplicates: duplicates.length,
+      errors: errors.length
+    });
+
+    const finishedRun = await finishCollectionRun(run.id, req.user.id, {
+      sourceType: collection.sourceType,
+      totalFound: collection.total || leadsToSave.length,
+      savedCount: saved.length,
+      duplicateCount: duplicates.length,
+      errorCount: errors.length,
+      whatsappVerifiedCount: whatsappVerification.enabled ? whatsappVerification.verified : 0,
+      whatsappRejectedCount: whatsappVerification.enabled ? whatsappVerification.rejected : 0,
+      withoutPhoneCount: whatsappVerification.enabled ? whatsappVerification.withoutPhone : 0,
+      cacheHit,
+      status: errors.length > 0 ? 'completed_with_errors' : 'completed'
+    });
+
+    const credentialPayload = collection.credentialUsed ? {
+      id: collection.credentialUsed,
+      used: collection.usedToday,
+      limit: collection.dailyLimit,
+      remaining: collection.dailyLimit - collection.usedToday
+    } : null;
+
     res.json({
-      message: 'Coleta concluída',
+      message: cacheHit ? 'Coleta concluída usando cache' : 'Coleta concluída',
       total: collection.total,
       saved: saved.length,
       duplicates: duplicates.length,
       errors: errors.length,
+      cache: { hit: cacheHit, key: cacheKey },
+      collectionRun: finishedRun ? { id: finishedRun.id, status: finishedRun.status, cacheHit: finishedRun.cache_hit } : null,
       whatsappVerification,
-      credential: {
-        id: collection.credentialUsed,
-        used: collection.usedToday,
-        limit: collection.dailyLimit,
-        remaining: collection.dailyLimit - collection.usedToday
-      },
+      credential: credentialPayload,
       leads: saved,
       duplicateDetails: duplicates,
       errorDetails: errors
     });
   } catch (error) {
+    if (run?.id) {
+      await addCollectionRunLog(run.id, req.user.id, 'error', 'collection_failed', error.message, {
+        name: error.name
+      });
+      await finishCollectionRun(run.id, req.user.id, {
+        status: 'failed',
+        errorMessage: error.message
+      });
+    }
     next(error);
   }
 });
@@ -574,30 +680,28 @@ router.post('/collect', async (req, res, next) => {
 router.post('/analyze', async (req, res, next) => {
   try {
     const { leadIds } = req.body;
-    
+
     if (!Array.isArray(leadIds) || leadIds.length === 0) {
-      return res.status(400).json({ 
-        error: 'Informe um array de IDs de leads para analisar' 
+      return res.status(400).json({
+        error: 'Informe um array de IDs de leads para analisar'
       });
     }
-    
+
     const { analyzeLead } = await import('../../services/analyzer.mjs');
-    
-    // Buscar leads do banco
+
     const placeholders = leadIds.map((_, i) => `$${i + 2}`).join(',');
     const leadsResult = await query(
       `SELECT id, nome_empresa, site, telefone, cidade, nicho, categoria, fonte, observacoes,
               rating, total_avaliacoes
-       FROM leads 
+       FROM leads
        WHERE id IN (${placeholders}) AND user_id = $1`,
       [req.user.id, ...leadIds]
     );
-    
+
     if (leadsResult.rows.length === 0) {
       return res.status(404).json({ error: 'Nenhum lead encontrado' });
     }
-    
-    // Analisar cada lead
+
     const results = [];
     for (const lead of leadsResult.rows) {
       try {
@@ -614,8 +718,7 @@ router.post('/analyze', async (req, res, next) => {
           rating: lead.rating,
           total_avaliacoes: lead.total_avaliacoes
         });
-        
-        // Atualizar no banco
+
         await query(
           `UPDATE leads SET
             tem_site = $1,
@@ -682,7 +785,7 @@ router.post('/analyze', async (req, res, next) => {
             lead.id
           ]
         );
-        
+
         results.push({
           id: lead.id,
           nome_empresa: lead.nome_empresa,
@@ -699,10 +802,10 @@ router.post('/analyze', async (req, res, next) => {
         });
       }
     }
-    
+
     const successful = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
-    
+
     res.json({
       message: 'Análise concluída',
       total: results.length,
@@ -719,13 +822,13 @@ router.post('/analyze', async (req, res, next) => {
 router.post('/:id/merge/:duplicateId', async (req, res, next) => {
   try {
     const { id, duplicateId } = req.params;
-    
+
     const result = await mergeLeads(
       req.user.id,
       parseInt(id),
       parseInt(duplicateId)
     );
-    
+
     res.json({
       message: 'Leads mesclados com sucesso',
       ...result
@@ -739,7 +842,7 @@ router.post('/:id/merge/:duplicateId', async (req, res, next) => {
 router.post('/normalize', async (req, res, next) => {
   try {
     const result = await normalizeAllLeads(req.user.id);
-    
+
     res.json({
       message: 'Normalização concluída',
       ...result
