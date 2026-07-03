@@ -12,7 +12,9 @@ import {
   Radar,
   Moon,
   Sun,
-  Columns3
+  Columns3,
+  History,
+  User
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,10 +28,12 @@ export default function Layout({ children }) {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Coletar', href: '/collect', icon: Radar },
+    { name: 'Histórico', href: '/collections', icon: History },
     { name: 'Leads', href: '/leads', icon: Users },
     { name: 'CRM Kanban', href: '/crm', icon: Columns3 },
     { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
     { name: 'Credenciais', href: '/credentials', icon: Key },
+    { name: 'Perfil', href: '/profile', icon: User },
   ];
 
   const handleLogout = () => {
