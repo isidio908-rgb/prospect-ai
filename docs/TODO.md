@@ -2,35 +2,38 @@
 
 **Atualizado em:** 03/07/2026
 
-Este arquivo substitui listas antigas de proximas acoes que ja foram executadas. A prioridade aqui considera o estado real atual do codigo e a validacao registrada no PR #6.
+Este arquivo substitui listas antigas de proximas acoes que ja foram executadas. A prioridade aqui considera o estado real atual do codigo depois da validacao pos-merge em `main`.
 
 ## Prioridade Alta
 
-### 1. Validar verificacao WhatsApp em uso real
+### 1. Avaliar vulnerabilidades do backend
 
-Objetivo: confirmar resposta real do endpoint Evolution usado para checar existencia de numeros durante a coleta.
-
-Checklist:
-
-- Conectar uma instancia WhatsApp real.
-- Coletar leads com telefones conhecidos.
-- Ativar `Verificar se o telefone existe no WhatsApp antes de salvar`.
-- Confirmar que leads sem WhatsApp nao sao salvos.
-- Confirmar que `whatsapp` e preenchido nos leads aprovados.
-- Confirmar que a execucao aparece em Historico com contadores de confirmados, rejeitados e sem telefone.
-- Ajustar parser de resposta se a Evolution retornar shape diferente.
-
-### 2. Revalidar providers no frontend apos merge
-
-Objetivo: confirmar, na interface final, que as credenciais reais do usuario continuam apontando para o provider correto depois do merge do PR #6.
+Objetivo: tratar as 2 vulnerabilidades altas reportadas pelo `npm audit` do backend sem aplicar mudancas automaticas que possam quebrar dependencias.
 
 Checklist:
 
-- Serper: executar coleta pequena e confirmar leads salvos.
-- Apify: executar coleta pequena e confirmar input `{ language, location, max_results, query }`.
-- RapidAPI: executar teste de credencial e coleta pequena com a API assinada na conta correta.
-- RapidAPI: se retornar `You are not subscribed to this API`, conferir API assinada, projeto/API key e `x-rapidapi-host`.
-- Confirmar que nenhum token, key, header sensivel ou segredo aparece em logs, cache, CSV ou JSON.
+- Rodar `npm audit` no backend.
+- Identificar pacotes afetados e cadeia de dependencia.
+- Conferir se existe patch seguro sem breaking change.
+- Atualizar dependencias de forma controlada.
+- Rodar `backend npm test`.
+- Rodar `frontend npm run build` se houver impacto indireto.
+- Rodar `docker compose build backend frontend`.
+- Registrar decisao se alguma vulnerabilidade precisar ficar aceita temporariamente.
+
+### 2. Preparar operacao controlada de prospeccao real
+
+Objetivo: iniciar uso operacional com volume baixo e rastreavel.
+
+Checklist:
+
+- Definir nicho inicial.
+- Definir cidade/regiao inicial.
+- Coletar lote pequeno por provider ativo.
+- Revisar duplicados e qualidade dos contatos.
+- Usar CRM Kanban para acompanhar abordagem.
+- Medir respostas, reunioes e clientes fechados.
+- Ajustar mensagens por nicho a partir dos resultados reais.
 
 ## Prioridade Media
 
@@ -55,7 +58,7 @@ Cobrir proximas camadas:
 - Rotas `/api/ai/*`.
 - Personalizacao profissional dos prompts de IA em fluxo HTTP.
 - CRM Kanban e mudanca de status via frontend.
-- Verificacao WhatsApp na coleta.
+- Verificacao WhatsApp na coleta com mocks mais completos da Evolution API.
 - Salvamento do campo `whatsapp`.
 - Exportacao JSON de leads.
 - Deduplicacao com `place_id`, `business_id`, `google_id`, telefone, dominio e nome+cidade.
@@ -112,8 +115,24 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
-- Validacao local do PR #6: backend `npm test`, frontend `npm run build` e `docker compose build backend frontend`.
-- Validacao local das rotas `/health`, `/collections`, `/profile`, `/leads` e `/dashboard`.
+- Validacao pos-merge em `main` com `git pull origin main`.
+- Backend `npm test`: 32 testes passando.
+- Frontend `npm run build`: passando.
+- `docker compose build backend frontend`: passando.
+- Stack local saudavel com backend, frontend, postgres, redis e evolution-api.
+- Frontend HTTP 200 em `/`, `/collections`, `/profile`, `/leads` e `/dashboard`.
+- Credenciais reais Serper, RapidAPI e Apify testadas com statusCode 200.
+- WhatsApp conectado via Evolution API.
+- Envio real de mensagem para lead de teste validado.
+- Historico de mensagens atualizado apos envio real.
+- Coleta real Serper com verificacao WhatsApp ligada: run 17.
+- Coleta real Apify com verificacao WhatsApp ligada: run 18.
+- Coleta real RapidAPI com verificacao WhatsApp ligada: run 19.
+- Cache hit validado ao repetir Serper sem `forceRefresh`: run 20.
+- `/api/collections` lista os runs novos.
+- CRM/Kanban validado com status `contato_enviado`.
+- Backend rejeita corretamente status antigo invalido como `em_contato`.
+- Logs dos runs sem `api_key`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou `token`.
 - Historico persistente de coletas com tabela `collection_runs`.
 - Logs persistentes de execucao com tabela `collection_run_logs`.
 - Cache de busca/coleta com tabela `collection_cache`.
@@ -124,7 +143,7 @@ Usar IA para sugerir:
 - Teste unitario da assinatura de cache de coleta.
 - Serper validado com coleta real pequena.
 - Apify validado com coleta real pequena e input `{ language, location, max_results, query }`.
-- RapidAPI validado com coleta real pequena no ambiente do PR.
+- RapidAPI validado com coleta real pequena.
 - Mensagem amigavel para RapidAPI 403 `not subscribed`.
 - Mensagem amigavel para Apify `full-permission-actor-not-approved`.
 - Edicao posterior do perfil profissional em `/profile` e `PATCH /api/auth/me`.
