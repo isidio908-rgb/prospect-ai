@@ -161,8 +161,8 @@ export default function Leads() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Leads</h1>
-          <p className="text-gray-600">Gerencie seus leads de prospecção</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Leads</h1>
+          <p className="text-gray-600 dark:text-gray-400">Gerencie seus leads de prospecção</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -200,7 +200,7 @@ export default function Leads() {
       {/* Formulário de novo lead */}
       {showNewLeadForm && (
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Adicionar Lead Manualmente</h2>
+          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Adicionar Lead Manualmente</h2>
           <form onSubmit={handleCreateLead} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nome da empresa *</label>
@@ -355,7 +355,7 @@ export default function Leads() {
       <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
               <tr>
                 <th className="px-4 py-3 text-left">
                   <input
@@ -379,22 +379,22 @@ export default function Leads() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Carregando...
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Nenhum lead encontrado
                   </td>
                 </tr>
               ) : (
                 data.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-gray-50">
+                  <tr key={lead.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
@@ -403,13 +403,13 @@ export default function Leads() {
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-gray-900">{lead.nome_empresa}</div>
-                      <div className="text-xs text-gray-500">{lead.site}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{lead.nome_empresa}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{lead.site}</div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{lead.cidade}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{lead.nicho}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-200">{lead.cidade}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-200">{lead.nicho}</td>
                     <td className="px-4 py-3">
-                      <span className="text-lg font-bold text-gray-900">{lead.score || '-'}</span>
+                      <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{lead.score || '-'}</span>
                     </td>
                     <td className="px-4 py-3">
                       {lead.prioridade && (

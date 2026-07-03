@@ -176,7 +176,7 @@ export default function LeadDetails() {
     <div className="space-y-6">
       <button
         onClick={() => navigate('/leads')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
       >
         <ArrowLeft className="w-5 h-5" />
         Voltar para Leads
@@ -186,8 +186,8 @@ export default function LeadDetails() {
       <div className="card">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{lead.nome_empresa}</h1>
-            <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{lead.nome_empresa}</h1>
+            <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
               <span>{lead.cidade}</span>
               <span>•</span>
               <span>{lead.nicho}</span>
@@ -314,8 +314,8 @@ export default function LeadDetails() {
       {/* Diagnóstico */}
       {lead.diagnostico && (
         <div className="card">
-          <h2 className="text-lg font-semibold mb-3">📋 Diagnóstico Completo</h2>
-          <p className="text-gray-700 leading-relaxed">{lead.diagnostico}</p>
+          <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">📋 Diagnóstico Completo</h2>
+          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{lead.diagnostico}</p>
         </div>
       )}
 
