@@ -11,7 +11,10 @@ const router = express.Router();
 const registerSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
-  name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres').optional()
+  name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres').optional(),
+  profession: z.string().min(2).max(255).optional(),
+  primary_niche: z.string().max(255).optional(),
+  internal_context: z.string().max(3000).optional()
 });
 
 const loginSchema = z.object({
@@ -19,10 +22,28 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Senha é obrigatória')
 });
 
+function toUserPayload(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    profession: user.profession || 'Gestor de Tráfego',
+    primary_niche: user.primary_niche || '',
+    internal_context: user.internal_context || ''
+  };
+}
+
 // POST /api/auth/register - Criar conta
 router.post('/register', async (req, res, next) => {
   try {
-    const { email, password, name } = registerSchema.parse(req.body);
+    const {
+      email,
+      password,
+      name,
+      profession = 'Gestor de Tráfego',
+      primary_niche,
+      internal_context
+    } = registerSchema.parse(req.body);
     
     // Verificar se email já existe
     const existing = await query(
@@ -41,10 +62,10 @@ router.post('/register', async (req, res, next) => {
     
     // Criar usuário
     const result = await query(
-      `INSERT INTO users (email, password_hash, name) 
-       VALUES ($1, $2, $3) 
-       RETURNING id, email, name, created_at`,
-      [email, passwordHash, name || null]
+      `INSERT INTO users (email, password_hash, name, profession, primary_niche, internal_context) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
+       RETURNING id, email, name, profession, primary_niche, internal_context, created_at`,
+      [email, passwordHash, name || null, profession || 'Gestor de Tráfego', primary_niche || null, internal_context || null]
     );
     
     const user = result.rows[0];
@@ -58,11 +79,7 @@ router.post('/register', async (req, res, next) => {
     
     res.status(201).json({
       message: 'Conta criada com sucesso',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name
-      },
+      user: toUserPayload(user),
       token
     });
   } catch (error) {
@@ -77,7 +94,9 @@ router.post('/login', async (req, res, next) => {
     
     // Buscar usuário
     const result = await query(
-      'SELECT id, email, name, password_hash FROM users WHERE email = $1',
+      `SELECT id, email, name, profession, primary_niche, internal_context, password_hash
+       FROM users
+       WHERE email = $1`,
       [email]
     );
     
@@ -107,11 +126,7 @@ router.post('/login', async (req, res, next) => {
     
     res.json({
       message: 'Login realizado com sucesso',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name
-      },
+      user: toUserPayload(user),
       token
     });
   } catch (error) {
@@ -122,7 +137,7 @@ router.post('/login', async (req, res, next) => {
 // GET /api/auth/me - Dados do usuário logado
 router.get('/me', authenticate, async (req, res) => {
   res.json({
-    user: req.user
+    user: toUserPayload(req.user)
   });
 });
 
