@@ -453,10 +453,11 @@ router.post('/collect', async (req, res, next) => {
       return res.status(400).json({ error: 'credentialId é obrigatório' });
     }
 
-    const { collectFromLocalBusinessData, saveLeadsWithDeduplication } = await import('../../services/localBusinessDataCollector.mjs');
-    
-    // Coletar da API
-    const collection = await collectFromLocalBusinessData(req.user.id, {
+    const { collectLeads } = await import('../../services/scraperCollector.mjs');
+    const { saveLeadsWithDeduplication } = await import('../../services/localBusinessDataCollector.mjs');
+
+    // Coletar da API (o provedor é determinado pelo tipo da credencial)
+    const collection = await collectLeads(req.user.id, {
       credentialId,
       query: searchQuery,
       city,

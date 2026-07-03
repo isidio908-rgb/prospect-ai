@@ -60,6 +60,7 @@ export const stats = {
 
 // Credenciais
 export const credentials = {
+  providers: () => api.get('/api/credentials/providers'),
   list: () => api.get('/api/credentials'),
   create: (data) => api.post('/api/credentials', data),
   update: (id, data) => api.put(`/api/credentials/${id}`, data),

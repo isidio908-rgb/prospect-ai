@@ -3,16 +3,18 @@ import { z } from 'zod';
 import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
 import { encrypt, decrypt, maskApiKey } from '../../services/encryption.mjs';
+import { listProviders, getProvider } from '../../services/scrapers/providers.mjs';
+import { testCredentialByType } from '../../services/scraperCollector.mjs';
 
 const router = express.Router();
 
 // Todas as rotas precisam de autenticação
 router.use(authenticate);
 
-// Schema de validação
+// Schema de validação. `type` deve ser um provedor de scraper suportado.
 const credentialSchema = z.object({
   name: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
-  type: z.string().min(1),
+  type: z.enum(['rapidapi', 'apify', 'serper']),
   provider: z.string().optional(),
   api_host: z.string().optional(),
   api_key: z.string().min(10, 'API Key inválida'),
@@ -22,6 +24,12 @@ const credentialSchema = z.object({
   daily_limit: z.number().int().positive().default(100),
   monthly_limit: z.number().int().positive().default(3000),
   notes: z.string().optional()
+});
+
+// GET /api/credentials/providers - Catálogo de provedores de scraper suportados
+// (DEVE VIR ANTES DE /:id para não ser capturado pela rota de detalhes)
+router.get('/providers', (req, res) => {
+  res.json({ providers: listProviders() });
 });
 
 // GET /api/credentials - Listar todas as credenciais do usuário
@@ -308,7 +316,7 @@ router.post('/:id/test', async (req, res, next) => {
 
     // Buscar credencial
     const result = await query(
-      `SELECT api_key_encrypted, api_host, base_url, search_endpoint
+      `SELECT type, api_key_encrypted, api_host, base_url, search_endpoint
        FROM credentials
        WHERE id = $1 AND user_id = $2`,
       [id, req.user.id]
@@ -325,22 +333,12 @@ router.post('/:id/test', async (req, res, next) => {
       return res.status(500).json({ error: 'Erro ao descriptografar API Key' });
     }
 
-    // Fazer teste simples com limite 1
-    const testUrl = `${cred.base_url}${cred.search_endpoint}?query=test&limit=1`;
-    
-    const response = await fetch(testUrl, {
-      headers: {
-        'x-rapidapi-key': apiKey,
-        'x-rapidapi-host': cred.api_host
-      }
-    });
-
-    const success = response.ok;
-    const statusCode = response.status;
+    // Teste específico por provedor (RapidAPI, Apify, Serper)
+    const { success, statusCode } = await testCredentialByType(cred.type, apiKey, cred);
 
     // Atualizar status da credencial
     const newStatus = success ? 'active' : 'error_auth';
-    
+
     await query(
       'UPDATE credentials SET status = $1, updated_at = NOW() WHERE id = $2',
       [newStatus, id]

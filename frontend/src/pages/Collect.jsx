@@ -1,55 +1,73 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Radar, Loader2, MapPin, Info } from 'lucide-react';
+import { Radar, Loader2, Info, Shuffle, ChevronDown, Lock } from 'lucide-react';
 import { leads, credentials } from '../services/api';
+import { COUNTRIES } from '../data/geoPortuguese';
+import { TIERS, MODIFICADORES } from '../data/niches';
 
-// Coordenadas de referência de algumas capitais para facilitar a busca
-// geolocalizada (a Local Business Data usa lat/lng como centro da busca).
-const CIDADES_REF = {
-  'Cuiabá': { lat: -15.6014, lng: -56.0979 },
-  'São Paulo': { lat: -23.5505, lng: -46.6333 },
-  'Rio de Janeiro': { lat: -22.9068, lng: -43.1729 },
-  'Goiânia': { lat: -16.6869, lng: -49.2648 },
-  'Brasília': { lat: -15.7939, lng: -47.8828 },
-};
+const QTY_PRESETS = [10, 25, 50, 100];
 
-const EMPTY_FORM = {
-  credentialId: '',
-  niche: '',
-  city: '',
-  query: '',
-  lat: '',
-  lng: '',
-  region: 'br',
-  language: 'pt',
-  zoom: 13,
-  limit: 20,
-  extractEmailsAndContacts: false,
+const TIER_ACTIVE = {
+  sky: 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-300',
+  purple: 'border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-300',
+  green: 'border-green-500 bg-green-500/10 text-green-600 dark:text-green-300',
 };
 
 export default function Collect() {
   const navigate = useNavigate();
   const [creds, setCreds] = useState([]);
+  const [providers, setProviders] = useState([]);
   const [loadingCreds, setLoadingCreds] = useState(true);
-  const [form, setForm] = useState(EMPTY_FORM);
   const [collecting, setCollecting] = useState(false);
   const [result, setResult] = useState(null);
 
+  // Formulário
+  const [credentialId, setCredentialId] = useState('');
+  const [niche, setNiche] = useState('');
+  const [modifier, setModifier] = useState('');
+  const [countryCode, setCountryCode] = useState('BR');
+  const [stateUf, setStateUf] = useState('');
+  const [city, setCity] = useState('');
+  const [limit, setLimit] = useState(25);
+  const [extractContacts, setExtractContacts] = useState(false);
+
+  // UI dos nichos
+  const [activeTier, setActiveTier] = useState(1);
+  const [expandedTier, setExpandedTier] = useState(false);
+  const [locks, setLocks] = useState({ niche: false, state: false, city: false, modifier: false });
+
   useEffect(() => {
+    loadProviders();
     loadCredentials();
   }, []);
+
+  const providersMap = Object.fromEntries(providers.map((p) => [p.type, p]));
+  const selectedCred = creds.find((c) => String(c.id) === String(credentialId));
+  const selectedType = selectedCred?.type;
+  const isRapidApi = selectedType === 'rapidapi';
+
+  const country = useMemo(() => COUNTRIES.find((c) => c.code === countryCode), [countryCode]);
+  const stateObj = useMemo(() => country?.states.find((s) => s.uf === stateUf), [country, stateUf]);
+  const cities = stateObj?.cidades || [];
+  const tier = TIERS[activeTier - 1];
+
+  const loadProviders = async () => {
+    try {
+      const response = await credentials.providers();
+      setProviders(response.data.providers || []);
+    } catch {
+      /* labels complementares */
+    }
+  };
 
   const loadCredentials = async () => {
     try {
       const response = await credentials.list();
       const list = response.data.credentials || [];
       setCreds(list);
-      // Pré-seleciona a primeira credencial ativa, se houver
       const firstActive = list.find((c) => c.status === 'active') || list[0];
-      if (firstActive) {
-        setForm((f) => ({ ...f, credentialId: String(firstActive.id) }));
-      }
+      if (firstActive) setCredentialId(String(firstActive.id));
     } catch {
       toast.error('Erro ao carregar credenciais');
     } finally {
@@ -57,52 +75,67 @@ export default function Collect() {
     }
   };
 
-  const handleCityChange = (city) => {
-    const ref = CIDADES_REF[city];
-    setForm((f) => ({
-      ...f,
-      city,
-      lat: ref ? ref.lat : f.lat,
-      lng: ref ? ref.lng : f.lng,
-    }));
+  const toggleLock = (field) => setLocks((l) => ({ ...l, [field]: !l[field] }));
+
+  const pickNiche = (query) => setNiche(query);
+  const pickModifier = (mod) => setModifier((m) => (m === mod ? '' : mod));
+
+  const onCountryChange = (code) => {
+    setCountryCode(code);
+    setStateUf('');
+    setCity('');
+  };
+
+  const onStateChange = (uf) => {
+    setStateUf(uf);
+    setCity('');
+  };
+
+  const randomFill = () => {
+    const allEsps = [...tier.top, ...tier.rest];
+    if (!locks.niche) setNiche(allEsps[Math.floor(Math.random() * allEsps.length)].query);
+    if (!locks.modifier) setModifier(MODIFICADORES[Math.floor(Math.random() * MODIFICADORES.length)]);
+    if (!locks.state && country?.states.length) {
+      const randState = country.states[Math.floor(Math.random() * country.states.length)];
+      setStateUf(randState.uf);
+      if (!locks.city && randState.cidades.length) {
+        setCity(randState.cidades[Math.floor(Math.random() * randState.cidades.length)]);
+      } else {
+        setCity('');
+      }
+    } else if (!locks.city && stateObj?.cidades.length) {
+      setCity(stateObj.cidades[Math.floor(Math.random() * stateObj.cidades.length)]);
+    }
   };
 
   const buildQuery = () => {
-    if (form.query.trim()) return form.query.trim();
-    const parts = [form.niche, form.city].filter(Boolean);
-    return parts.join(' em ');
+    const fullNiche = [niche.trim(), modifier.trim()].filter(Boolean).join(' ');
+    const parts = [city, stateObj?.nome, country?.name].filter(Boolean);
+    const location = parts.join(', ');
+    return { fullNiche, location, query: `${fullNiche} em ${location}` };
   };
 
   const handleCollect = async (e) => {
     e.preventDefault();
+    if (!credentialId) return toast.error('Selecione uma credencial');
+    if (!niche.trim()) return toast.error('Escolha um nicho ou digite a especialidade');
+    if (!stateUf) return toast.error('Selecione ao menos o estado/região');
 
-    if (!form.credentialId) {
-      toast.error('Selecione uma credencial');
-      return;
-    }
-    const query = buildQuery();
-    if (!query) {
-      toast.error('Informe o nicho + cidade, ou uma busca livre');
-      return;
-    }
+    const { fullNiche, query } = buildQuery();
 
     setCollecting(true);
     setResult(null);
     try {
       const payload = {
-        credentialId: Number(form.credentialId),
+        credentialId: Number(credentialId),
         query,
-        city: form.city || undefined,
-        niche: form.niche || undefined,
-        limit: Number(form.limit) || 20,
-        region: form.region || undefined,
-        language: form.language || undefined,
-        zoom: form.zoom ? Number(form.zoom) : undefined,
-        extractEmailsAndContacts: form.extractEmailsAndContacts,
-        ...(form.lat !== '' ? { lat: Number(form.lat) } : {}),
-        ...(form.lng !== '' ? { lng: Number(form.lng) } : {}),
+        niche: fullNiche,
+        city: city || undefined,
+        limit: Number(limit) || 25,
+        region: country?.gl || 'br',
+        language: 'pt',
+        extractEmailsAndContacts: isRapidApi ? extractContacts : false,
       };
-
       const response = await leads.collect(payload);
       setResult(response.data);
       toast.success(`Coleta concluída: ${response.data.saved} novos leads`);
@@ -115,13 +148,37 @@ export default function Collect() {
 
   const hasActiveCredential = creds.some((c) => c.status === 'active');
 
+  const LockButton = ({ field }) => (
+    <button
+      type="button"
+      onClick={() => toggleLock(field)}
+      title="Travar no aleatório"
+      className={`inline-flex items-center justify-center w-6 h-6 rounded-md border transition-colors ${
+        locks[field]
+          ? 'border-primary-500 bg-primary-500/15 text-primary-600 dark:text-primary-300'
+          : 'border-gray-300 dark:border-gray-600 text-gray-400 hover:text-primary-600'
+      }`}
+    >
+      <Lock className="w-3 h-3" />
+    </button>
+  );
+
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Coletar Leads</h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Busque empresas por nicho e cidade usando a Local Business Data (RapidAPI)
-        </p>
+    <div className="space-y-6 max-w-3xl">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Coletar Leads</h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Escolha o nicho e a localização — a busca é feita pela credencial selecionada
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={randomFill}
+          className="btn btn-secondary flex items-center gap-2 shrink-0"
+        >
+          <Shuffle className="w-4 h-4" /> Aleatório
+        </button>
       </div>
 
       {!loadingCreds && creds.length === 0 && (
@@ -138,155 +195,242 @@ export default function Collect() {
       {!loadingCreds && creds.length > 0 && !hasActiveCredential && (
         <div className="card bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800">
           <p className="text-orange-800 dark:text-orange-300">
-            Nenhuma credencial ativa. Ative uma credencial em{' '}
+            Nenhuma credencial ativa. Ative uma em{' '}
             <button onClick={() => navigate('/credentials')} className="underline font-medium">
               Credenciais
-            </button>{' '}
-            antes de coletar.
+            </button>.
           </p>
         </div>
       )}
 
-      <form onSubmit={handleCollect} className="card space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Credencial *</label>
-            <select
-              value={form.credentialId}
-              onChange={(e) => setForm({ ...form, credentialId: e.target.value })}
-              className="input"
-              disabled={loadingCreds}
-            >
-              <option value="">Selecione...</option>
-              {creds.map((c) => (
-                <option key={c.id} value={c.id} disabled={c.status !== 'active'}>
-                  {c.name} {c.status !== 'active' ? `(${c.status})` : ''} — {c.used_today}/{c.daily_limit} hoje
-                </option>
+      <form onSubmit={handleCollect} className="space-y-6">
+        {/* Credencial / Fonte */}
+        <div className="card space-y-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fonte de coleta (credencial) *</label>
+          <select
+            value={credentialId}
+            onChange={(e) => setCredentialId(e.target.value)}
+            className="input"
+            disabled={loadingCreds}
+          >
+            <option value="">Selecione...</option>
+            {creds.map((c) => (
+              <option key={c.id} value={c.id} disabled={c.status !== 'active'}>
+                {c.name} [{providersMap[c.type]?.label || c.type}] {c.status !== 'active' ? `(${c.status})` : ''} — {c.used_today}/{c.daily_limit} hoje
+              </option>
+            ))}
+          </select>
+          {selectedCred && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Provedor: <span className="font-medium">{providersMap[selectedType]?.label || selectedType}</span>
+            </p>
+          )}
+        </div>
+
+        {/* Nicho */}
+        <div className="card space-y-4">
+          <div className="flex items-center gap-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Especialidade / Nicho *</label>
+            <LockButton field="niche" />
+          </div>
+          <input
+            type="text"
+            value={niche}
+            onChange={(e) => setNiche(e.target.value)}
+            className="input"
+            placeholder="Selecione um nicho abaixo ou escreva manualmente..."
+          />
+
+          {/* Tabs de tier */}
+          <div className="flex gap-2">
+            {TIERS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setActiveTier(t.id); setExpandedTier(false); }}
+                className={`flex-1 py-2 px-2 rounded-lg text-xs font-semibold border transition-colors ${
+                  activeTier === t.id
+                    ? TIER_ACTIVE[t.color]
+                    : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Chips top 5 */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Top 5</p>
+            <div className="flex flex-wrap gap-2">
+              {tier.top.map((esp) => (
+                <button
+                  key={esp.query}
+                  type="button"
+                  onClick={() => pickNiche(esp.query)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    niche === esp.query
+                      ? 'border-primary-500 bg-primary-500/15 text-primary-600 dark:text-primary-300'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-primary-400'
+                  }`}
+                >
+                  {esp.nome}
+                </button>
               ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nicho</label>
-            <input
-              type="text"
-              value={form.niche}
-              onChange={(e) => setForm({ ...form, niche: e.target.value })}
-              className="input"
-              placeholder="Ex: imobiliárias"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cidade</label>
-            <input
-              type="text"
-              value={form.city}
-              onChange={(e) => handleCityChange(e.target.value)}
-              className="input"
-              placeholder="Ex: Cuiabá"
-              list="cidades-ref"
-            />
-            <datalist id="cidades-ref">
-              {Object.keys(CIDADES_REF).map((c) => <option key={c} value={c} />)}
-            </datalist>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Busca livre (opcional)
-              <span className="text-xs text-gray-400 ml-1">substitui nicho + cidade</span>
-            </label>
-            <input
-              type="text"
-              value={form.query}
-              onChange={(e) => setForm({ ...form, query: e.target.value })}
-              className="input"
-              placeholder='Ex: "clínicas de estética em Goiânia, GO"'
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              <MapPin className="w-4 h-4 inline mr-1" />Latitude
-            </label>
-            <input
-              type="number"
-              step="any"
-              value={form.lat}
-              onChange={(e) => setForm({ ...form, lat: e.target.value })}
-              className="input"
-              placeholder="-15.6014"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              <MapPin className="w-4 h-4 inline mr-1" />Longitude
-            </label>
-            <input
-              type="number"
-              step="any"
-              value={form.lng}
-              onChange={(e) => setForm({ ...form, lng: e.target.value })}
-              className="input"
-              placeholder="-56.0979"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantidade de leads</label>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={form.limit}
-              onChange={(e) => setForm({ ...form, limit: e.target.value })}
-              className="input"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Região / Idioma</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={form.region}
-                onChange={(e) => setForm({ ...form, region: e.target.value })}
-                className="input"
-                placeholder="br"
-              />
-              <input
-                type="text"
-                value={form.language}
-                onChange={(e) => setForm({ ...form, language: e.target.value })}
-                className="input"
-                placeholder="pt"
-              />
             </div>
           </div>
 
-          <div className="md:col-span-2">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <button
+            type="button"
+            onClick={() => setExpandedTier((v) => !v)}
+            className="text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-primary-600 flex items-center gap-1"
+          >
+            {expandedTier ? 'Ver menos' : `Ver mais ${tier.rest.length} nichos`}
+            <ChevronDown className={`w-3 h-3 transition-transform ${expandedTier ? 'rotate-180' : ''}`} />
+          </button>
+
+          {expandedTier && (
+            <div className="flex flex-wrap gap-2">
+              {tier.rest.map((esp) => (
+                <button
+                  key={esp.query}
+                  type="button"
+                  onClick={() => pickNiche(esp.query)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    niche === esp.query
+                      ? 'border-primary-500 bg-primary-500/15 text-primary-600 dark:text-primary-300'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-primary-400'
+                  }`}
+                >
+                  {esp.nome}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Modificador */}
+          <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Modificador</span>
+              <span className="text-xs text-gray-400">opcional — concatena ao nicho</span>
+              <div className="ml-auto"><LockButton field="modifier" /></div>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {MODIFICADORES.map((mod) => (
+                <button
+                  key={mod}
+                  type="button"
+                  onClick={() => pickModifier(mod)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    modifier === mod
+                      ? 'border-primary-500 bg-primary-500/15 text-primary-600 dark:text-primary-300'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-primary-400'
+                  }`}
+                >
+                  {mod}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={modifier}
+              onChange={(e) => setModifier(e.target.value)}
+              className="input"
+              placeholder="Ex: premium, 24h, especializado..."
+            />
+          </div>
+        </div>
+
+        {/* Localização */}
+        <div className="card space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">País *</label>
+              <select value={countryCode} onChange={(e) => onCountryChange(e.target.value)} className="input">
+                {COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Estado / Região *</label>
+                <LockButton field="state" />
+              </div>
+              <select value={stateUf} onChange={(e) => onStateChange(e.target.value)} className="input">
+                <option value="">Selecione...</option>
+                {country?.states.map((s) => (
+                  <option key={s.uf} value={s.uf}>{s.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cidade <span className="text-xs text-gray-400 font-normal">(opcional)</span></label>
+                <LockButton field="city" />
+              </div>
+              <select value={city} onChange={(e) => setCity(e.target.value)} className="input" disabled={!stateUf}>
+                <option value="">{stateUf ? 'Todas as cidades' : 'Selecione o estado primeiro'}</option>
+                {cities.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            A cidade é opcional: sem ela, a busca cobre o estado/região inteiro.
+          </p>
+        </div>
+
+        {/* Quantidade */}
+        <div className="card space-y-3">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quantidade de leads</label>
+          <div className="flex gap-2">
+            {QTY_PRESETS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setLimit(n)}
+                className={`flex-1 py-2 rounded-lg font-semibold border transition-colors ${
+                  Number(limit) === n
+                    ? 'border-primary-500 bg-primary-500/15 text-primary-600 dark:text-primary-300'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-primary-400'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <input
+            type="number"
+            min="1"
+            max="500"
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+            className="input"
+            placeholder="Quantidade personalizada..."
+          />
+
+          {isRapidApi && (
+            <label className="flex items-center gap-2 cursor-pointer pt-1">
               <input
                 type="checkbox"
-                checked={form.extractEmailsAndContacts}
-                onChange={(e) => setForm({ ...form, extractEmailsAndContacts: e.target.checked })}
+                checked={extractContacts}
+                onChange={(e) => setExtractContacts(e.target.checked)}
                 className="w-4 h-4"
               />
               <span className="text-sm text-gray-700 dark:text-gray-300">
-                Extrair e-mails e contatos (consome mais cota — use só quando necessário)
+                Extrair e-mails e contatos (consome mais cota)
               </span>
             </label>
-          </div>
+          )}
         </div>
 
         <div className="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/40 rounded-lg p-3">
           <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span>
-            Dica: informar latitude/longitude melhora a precisão da busca. Ao escolher uma cidade
-            de referência, as coordenadas são preenchidas automaticamente. Leads duplicados são
-            ignorados automaticamente.
+            Dica: use os atalhos de nicho por tier para preencher rápido. Leads duplicados são
+            ignorados automaticamente na coleta.
           </span>
         </div>
 

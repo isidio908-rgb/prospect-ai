@@ -2,14 +2,20 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { credentials as credentialsApi } from '../services/api';
 
-const EMPTY_FORM = {
+const FIELD_LABELS = {
+  api_host: 'API Host',
+  base_url: 'Base URL',
+  search_endpoint: 'Endpoint / Actor ID',
+};
+
+const BASE_FORM = {
   name: '',
   type: 'rapidapi',
-  provider: 'Local Business Data',
-  api_host: 'local-business-data.p.rapidapi.com',
+  provider: '',
+  api_host: '',
   api_key: '',
-  base_url: 'https://local-business-data.p.rapidapi.com',
-  search_endpoint: '/search',
+  base_url: '',
+  search_endpoint: '',
   daily_limit: 100,
   monthly_limit: 3000,
   notes: '',
@@ -18,16 +24,30 @@ const EMPTY_FORM = {
 const Credentials = () => {
   const navigate = useNavigate();
   const [credentials, setCredentials] = useState([]);
+  const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [testingId, setTestingId] = useState(null);
-  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [formData, setFormData] = useState(BASE_FORM);
 
   useEffect(() => {
+    loadProviders();
     loadCredentials();
   }, []);
+
+  const providersMap = Object.fromEntries(providers.map((p) => [p.type, p]));
+  const selectedProvider = providersMap[formData.type];
+
+  const loadProviders = async () => {
+    try {
+      const response = await credentialsApi.providers();
+      setProviders(response.data.providers || []);
+    } catch {
+      // Segue com a lista vazia; o formulário ainda funciona no modo manual
+    }
+  };
 
   const loadCredentials = async () => {
     try {
@@ -44,41 +64,82 @@ const Credentials = () => {
     }
   };
 
+  const applyProviderDefaults = (type, provider) => {
+    const p = provider || providersMap[type];
+    if (!p) {
+      setFormData((f) => ({ ...f, type }));
+      return;
+    }
+    setFormData((f) => ({
+      ...f,
+      type,
+      provider: p.defaults.provider || '',
+      api_host: p.defaults.api_host || '',
+      base_url: p.defaults.base_url || '',
+      search_endpoint: p.defaults.search_endpoint || '',
+      daily_limit: p.defaults.daily_limit ?? f.daily_limit,
+      monthly_limit: p.defaults.monthly_limit ?? f.monthly_limit,
+    }));
+  };
+
+  const openNewForm = () => {
+    setEditingId(null);
+    const first = providers[0];
+    const type = first?.type || 'rapidapi';
+    const seed = { ...BASE_FORM, type, name: '', api_key: '', notes: '' };
+    setFormData(seed);
+    // aplica defaults do provedor após semear os campos comuns
+    if (first) {
+      setFormData({
+        ...seed,
+        provider: first.defaults.provider || '',
+        api_host: first.defaults.api_host || '',
+        base_url: first.defaults.base_url || '',
+        search_endpoint: first.defaults.search_endpoint || '',
+        daily_limit: first.defaults.daily_limit ?? BASE_FORM.daily_limit,
+        monthly_limit: first.defaults.monthly_limit ?? BASE_FORM.monthly_limit,
+      });
+    }
+    setShowForm(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     try {
+      const payload = {
+        ...formData,
+        daily_limit: parseInt(formData.daily_limit, 10),
+        monthly_limit: parseInt(formData.monthly_limit, 10),
+      };
       if (editingId) {
-        await credentialsApi.update(editingId, formData);
+        await credentialsApi.update(editingId, payload);
       } else {
-        await credentialsApi.create(formData);
+        await credentialsApi.create(payload);
       }
 
       await loadCredentials();
-
       setShowForm(false);
       setEditingId(null);
-      setFormData(EMPTY_FORM);
+      setFormData(BASE_FORM);
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao salvar credencial');
+      const zodMsg = err.response?.data?.error?.issues?.[0]?.message;
+      setError(zodMsg || err.response?.data?.error || 'Erro ao salvar credencial');
     }
   };
 
   const handleTest = async (id) => {
     setTestingId(id);
     setError('');
-
     try {
       const response = await credentialsApi.test(id);
       const data = response.data;
-
       if (data.success) {
         alert('✅ Credencial válida!');
       } else {
-        alert(`❌ Erro: ${data.message}`);
+        alert(`❌ Erro: ${data.message} (HTTP ${data.statusCode})`);
       }
-
       await loadCredentials();
     } catch (err) {
       alert(`❌ Erro ao testar: ${err.response?.data?.message || err.message}`);
@@ -91,18 +152,17 @@ const Credentials = () => {
     try {
       await credentialsApi.updateStatus(id, newStatus);
       await loadCredentials();
-    } catch (err) {
+    } catch {
       setError('Erro ao alterar status');
     }
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Tem certeza que deseja deletar esta credencial?')) return;
-
     try {
       await credentialsApi.remove(id);
       await loadCredentials();
-    } catch (err) {
+    } catch {
       setError('Erro ao deletar credencial');
     }
   };
@@ -116,7 +176,7 @@ const Credentials = () => {
       api_host: credential.api_host || '',
       api_key: '',
       base_url: credential.base_url || '',
-      search_endpoint: credential.search_endpoint || '/search',
+      search_endpoint: credential.search_endpoint || '',
       daily_limit: credential.daily_limit,
       monthly_limit: credential.monthly_limit,
       notes: credential.notes || '',
@@ -138,24 +198,16 @@ const Credentials = () => {
 
   const getStatusIcon = (status) => {
     const icons = {
-      active: '🟢',
-      inactive: '⚫',
-      limit_reached: '🔴',
-      error_auth: '🟠',
-      error_provider: '🔴',
-      paused: '🟡',
+      active: '🟢', inactive: '⚫', limit_reached: '🔴',
+      error_auth: '🟠', error_provider: '🔴', paused: '🟡',
     };
     return icons[status] || '⚪';
   };
 
   const getStatusLabel = (status) => {
     const labels = {
-      active: 'Ativa',
-      inactive: 'Inativa',
-      limit_reached: 'Limite Atingido',
-      error_auth: 'Erro de Autenticação',
-      error_provider: 'Erro do Provedor',
-      paused: 'Pausada',
+      active: 'Ativa', inactive: 'Inativa', limit_reached: 'Limite Atingido',
+      error_auth: 'Erro de Autenticação', error_provider: 'Erro do Provedor', paused: 'Pausada',
     };
     return labels[status] || status;
   };
@@ -173,39 +225,29 @@ const Credentials = () => {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">🔑 Credenciais</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">🔑 Credenciais de Scraper</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Gerencie suas chaves de API para coleta de leads
+          Cadastre chaves de API de diferentes provedores (RapidAPI, Apify, Serper) para coletar leads
         </p>
       </div>
 
-      {/* Error Alert */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300 px-4 py-3 rounded-lg relative">
           <span className="block sm:inline">{error}</span>
-          <button
-            onClick={() => setError('')}
-            className="absolute top-0 bottom-0 right-0 px-4 py-3"
-          >
+          <button onClick={() => setError('')} className="absolute top-0 bottom-0 right-0 px-4 py-3">
             <span className="text-2xl">&times;</span>
           </button>
         </div>
       )}
 
-      {/* Add Button */}
       {!showForm && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="btn btn-primary flex items-center gap-2"
-        >
+        <button onClick={openNewForm} className="btn btn-primary flex items-center gap-2">
           <span className="text-xl leading-none">+</span>
           Nova Credencial
         </button>
       )}
 
-      {/* Form */}
       {showForm && (
         <div className="card">
           <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
@@ -213,65 +255,55 @@ const Credentials = () => {
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Seleção de provedor */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Provedor de Scraper *
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) => applyProviderDefaults(e.target.value)}
+                className="input"
+                disabled={!!editingId}
+              >
+                {providers.length === 0 && <option value={formData.type}>{formData.type}</option>}
+                {providers.map((p) => (
+                  <option key={p.type} value={p.type}>{p.label}</option>
+                ))}
+              </select>
+              {selectedProvider && (
+                <div className="flex items-center flex-wrap gap-3 mt-2 text-xs">
+                  {selectedProvider.freeCredits && (
+                    <span className="badge badge-success">✨ Oferece créditos gratuitos</span>
+                  )}
+                  <a
+                    href={selectedProvider.docs}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-600 dark:text-primary-400 hover:underline"
+                  >
+                    Ver documentação →
+                  </a>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Nome *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome *</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="input"
-                  placeholder="Ex: Local Business Data - Prod"
+                  placeholder="Ex: Minha conta Apify"
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Provedor
-                </label>
-                <input
-                  type="text"
-                  value={formData.provider}
-                  onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
-                  className="input"
-                  placeholder="Ex: Local Business Data"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  API Host *
-                </label>
-                <input
-                  type="text"
-                  value={formData.api_host}
-                  onChange={(e) => setFormData({ ...formData, api_host: e.target.value })}
-                  className="input"
-                  placeholder="Ex: local-business-data.p.rapidapi.com"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Base URL *
-                </label>
-                <input
-                  type="url"
-                  value={formData.base_url}
-                  onChange={(e) => setFormData({ ...formData, base_url: e.target.value })}
-                  className="input"
-                  placeholder="https://..."
-                  required
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  API Key * {editingId && <span className="text-xs text-gray-500 dark:text-gray-400">(deixe em branco para não alterar)</span>}
+                  API Key / Token * {editingId && <span className="text-xs text-gray-500 dark:text-gray-400">(em branco = não alterar)</span>}
                 </label>
                 <input
                   type="password"
@@ -283,14 +315,32 @@ const Credentials = () => {
                 />
               </div>
 
+              {/* Campos técnicos dinâmicos por provedor */}
+              {(selectedProvider?.fields || ['api_host', 'base_url', 'search_endpoint']).map((field) => (
+                <div key={field} className={field === 'base_url' ? 'md:col-span-2' : ''}>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {FIELD_LABELS[field] || field}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData[field] || ''}
+                    onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+                    className="input"
+                  />
+                  {selectedProvider?.fieldHints?.[field] && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {selectedProvider.fieldHints[field]}
+                    </p>
+                  )}
+                </div>
+              ))}
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Limite Diário *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limite Diário *</label>
                 <input
                   type="number"
                   value={formData.daily_limit}
-                  onChange={(e) => setFormData({ ...formData, daily_limit: parseInt(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, daily_limit: e.target.value })}
                   className="input"
                   min="1"
                   required
@@ -298,13 +348,11 @@ const Credentials = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Limite Mensal *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Limite Mensal *</label>
                 <input
                   type="number"
                   value={formData.monthly_limit}
-                  onChange={(e) => setFormData({ ...formData, monthly_limit: parseInt(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, monthly_limit: e.target.value })}
                   className="input"
                   min="1"
                   required
@@ -312,9 +360,7 @@ const Credentials = () => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Notas
-                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notas</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
@@ -331,11 +377,7 @@ const Credentials = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingId(null);
-                  setFormData(EMPTY_FORM);
-                }}
+                onClick={() => { setShowForm(false); setEditingId(null); setFormData(BASE_FORM); }}
                 className="btn btn-secondary"
               >
                 Cancelar
@@ -345,7 +387,6 @@ const Credentials = () => {
         </div>
       )}
 
-      {/* Credentials List */}
       {credentials.length === 0 ? (
         <div className="card text-center py-12">
           <div className="text-6xl mb-4">🔑</div>
@@ -353,11 +394,9 @@ const Credentials = () => {
             Nenhuma credencial cadastrada
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Adicione sua primeira credencial para começar a coletar leads
+            Adicione uma credencial de scraper para começar a coletar leads
           </p>
-          <button onClick={() => setShowForm(true)} className="btn btn-primary">
-            + Adicionar Credencial
-          </button>
+          <button onClick={openNewForm} className="btn btn-primary">+ Adicionar Credencial</button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -365,10 +404,9 @@ const Credentials = () => {
             <div key={cred.id} className="card">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                      {cred.name}
-                    </h3>
+                  <div className="flex items-center flex-wrap gap-3 mb-2">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{cred.name}</h3>
+                    <span className="badge badge-info">{providersMap[cred.type]?.label || cred.type}</span>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(cred.status)}`}>
                       {getStatusIcon(cred.status)} {getStatusLabel(cred.status)}
                     </span>
@@ -395,8 +433,7 @@ const Credentials = () => {
                         <div
                           className={`h-2 rounded-full ${
                             (cred.used_today / cred.daily_limit) >= 0.9 ? 'bg-red-500' :
-                            (cred.used_today / cred.daily_limit) >= 0.7 ? 'bg-yellow-500' :
-                            'bg-green-500'
+                            (cred.used_today / cred.daily_limit) >= 0.7 ? 'bg-yellow-500' : 'bg-green-500'
                           }`}
                           style={{ width: `${Math.min((cred.used_today / cred.daily_limit) * 100, 100)}%` }}
                         />
@@ -414,8 +451,7 @@ const Credentials = () => {
                         <div
                           className={`h-2 rounded-full ${
                             (cred.used_month / cred.monthly_limit) >= 0.9 ? 'bg-red-500' :
-                            (cred.used_month / cred.monthly_limit) >= 0.7 ? 'bg-yellow-500' :
-                            'bg-green-500'
+                            (cred.used_month / cred.monthly_limit) >= 0.7 ? 'bg-yellow-500' : 'bg-green-500'
                           }`}
                           style={{ width: `${Math.min((cred.used_month / cred.monthly_limit) * 100, 100)}%` }}
                         />
@@ -424,9 +460,7 @@ const Credentials = () => {
                     <div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Último Uso</p>
                       <p className="text-sm text-gray-900 dark:text-gray-100">
-                        {cred.last_used_at
-                          ? new Date(cred.last_used_at).toLocaleString('pt-BR')
-                          : 'Nunca usado'}
+                        {cred.last_used_at ? new Date(cred.last_used_at).toLocaleString('pt-BR') : 'Nunca usado'}
                       </p>
                     </div>
                   </div>
