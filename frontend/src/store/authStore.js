@@ -31,6 +31,15 @@ export const useAuthStore = create((set) => ({
     set({ user, token, isAuthenticated: true });
     return response.data;
   },
+
+  updateProfile: async (data) => {
+    const response = await auth.updateMe(data);
+    const { user } = response.data;
+
+    localStorage.setItem('user', JSON.stringify(user));
+    set({ user });
+    return response.data;
+  },
   
   logout: () => {
     localStorage.removeItem('user');
