@@ -6,66 +6,21 @@ Este arquivo substitui listas antigas de proximas acoes que ja foram executadas.
 
 ## Prioridade Alta
 
-### 1. Historico persistente de coletas
+### 1. Validar em ambiente local atualizado
 
-Objetivo: registrar cada execucao de coleta para auditoria operacional e futura tela de historico.
+Objetivo: confirmar no Docker/local a sprint de historico, logs, cache, perfil e dashboard.
 
-Tabela sugerida: `collection_runs`.
+Checklist:
 
-Campos sugeridos:
+- Rodar `backend npm test`.
+- Rodar `frontend npm run build`.
+- Rodar `docker compose build backend frontend`.
+- Subir stack e validar `/health`.
+- Validar `PATCH /api/auth/me`.
+- Validar `/api/collections`.
+- Fazer uma coleta pequena e conferir historico/logs/cache.
 
-- `id`
-- `user_id`
-- `credential_id`
-- `source_type`
-- `query`
-- `niche`
-- `city`
-- `region`
-- `limit_requested`
-- `total_found`
-- `saved_count`
-- `duplicate_count`
-- `error_count`
-- `whatsapp_check_enabled`
-- `whatsapp_verified_count`
-- `whatsapp_rejected_count`
-- `without_phone_count`
-- `status`
-- `error_message`
-- `started_at`
-- `finished_at`
-
-Arquivos provaveis:
-
-- `backend/src/database/init.mjs`
-- `backend/src/api/routes/leads.mjs`
-- `frontend/src/pages/Collect.jsx`
-- futura pagina `frontend/src/pages/CollectionHistory.jsx`
-
-### 2. Logs persistentes de execucao
-
-Objetivo: registrar erros e eventos importantes de coleta sem depender apenas de console/log Docker.
-
-Escopo sugerido:
-
-- Criar tabela `collection_run_logs` ou campo JSON em `collection_runs`.
-- Registrar erros por lead quando salvar falhar.
-- Registrar falhas de provedor e falhas de verificacao WhatsApp.
-- Exibir detalhes no frontend apenas para o usuario dono da coleta.
-
-### 3. Cache de coleta
-
-Objetivo: evitar chamadas repetidas desnecessarias para o mesmo nicho/local/fonte.
-
-Escopo sugerido:
-
-- Criar assinatura da busca com `source + query + city + region + limit + params`.
-- Reusar resultado recente por periodo configuravel.
-- Permitir forcar nova coleta quando necessario.
-- Nao usar cache para burlar limite de provedor; usar para reduzir custo.
-
-### 4. Validar verificacao WhatsApp em uso real
+### 2. Validar verificacao WhatsApp em uso real
 
 Objetivo: confirmar resposta real do endpoint Evolution usado para checar existencia de numeros.
 
@@ -76,25 +31,28 @@ Checklist:
 - Ativar `Verificar se o telefone existe no WhatsApp antes de salvar`.
 - Confirmar que leads sem WhatsApp nao sao salvos.
 - Confirmar que `whatsapp` e preenchido nos leads aprovados.
+- Confirmar que a execucao aparece em Historico com contadores de confirmados, rejeitados e sem telefone.
 - Ajustar parser de resposta se a Evolution retornar shape diferente.
 
-### 5. Perfil profissional editavel
+### 3. Melhorar controle visual de cache
 
-Objetivo: permitir alterar depois do cadastro a profissao, nicho foco e instrucoes internas usadas pela IA.
+O backend ja possui cache de coleta por assinatura de busca e historico indica `cache_hit`.
 
-Escopo sugerido:
+Melhorias futuras:
 
-- Criar rota `GET /api/auth/me` ja existente como fonte de dados.
-- Criar rota `PATCH /api/auth/me` para atualizar `name`, `profession`, `primary_niche` e `internal_context`.
-- Criar pagina `Perfil` ou secao em Configuracoes.
-- Atualizar `authStore` e `localStorage` depois de salvar.
+- Mostrar toggle `Forcar nova coleta` na pagina de coleta.
+- Mostrar TTL restante do cache no historico.
+- Permitir limpar cache manualmente por busca.
 
 ## Prioridade Media
 
-### 6. Testes automatizados dos modulos novos
+### 4. Testes automatizados complementares
 
 Cobrir:
 
+- Rotas `/api/collections`.
+- Persistencia real de `collection_runs` e `collection_run_logs`.
+- Cache hit/cache miss com banco de teste.
 - Credenciais LLM.
 - Rotas `/api/ai/*`.
 - Personalizacao profissional dos prompts de IA.
@@ -104,7 +62,7 @@ Cobrir:
 - Exportacao JSON de leads.
 - Deduplicacao com `place_id`, `business_id`, `google_id`, telefone, dominio e nome+cidade.
 
-### 7. Kanban comercial avancado
+### 5. Kanban comercial avancado
 
 O Kanban basico ja existe em `/crm`. Melhorias futuras:
 
@@ -114,20 +72,19 @@ O Kanban basico ja existe em `/crm`. Melhorias futuras:
 - Edicao rapida de proxima acao.
 - Registro automatico de follow-up ao mover card.
 
-### 8. Dashboard comercial avancado
+### 6. Dashboard comercial avancado - proxima camada
 
-Adicionar:
+O dashboard ja mostra funil, resposta, valor fechado, presenca digital, fontes, conversao por nicho e conversao por cidade.
 
-- Taxa de resposta.
-- Reunioes marcadas.
-- Propostas enviadas.
-- Clientes fechados.
-- Conversao por nicho.
-- Conversao por cidade.
-- Leads com WhatsApp confirmado.
-- Leads por fonte de coleta.
+Melhorias futuras:
 
-### 9. Documentacao operacional especifica
+- Filtro por periodo.
+- Filtro por fonte.
+- Comparativo semanal/mensal.
+- Custo por fonte de coleta.
+- Receita potencial por nicho/cidade.
+
+### 7. Documentacao operacional especifica
 
 Criar guias separados:
 
@@ -138,15 +95,15 @@ Criar guias separados:
 
 ## Prioridade Baixa
 
-### 10. Exportacao PDF
+### 8. Exportacao PDF
 
 Gerar PDF com diagnostico por lead para enviar em conversa comercial.
 
-### 11. Templates comerciais por nicho
+### 9. Templates comerciais por nicho
 
 Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
 
-### 12. Priorizacao inteligente avancada
+### 10. Priorizacao inteligente avancada
 
 Usar IA para sugerir:
 
@@ -157,6 +114,14 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Historico persistente de coletas com tabela `collection_runs`.
+- Logs persistentes de execucao com tabela `collection_run_logs`.
+- Cache de busca/coleta com tabela `collection_cache`.
+- Rotas `/api/collections` e `/api/collections/:id/logs`.
+- Pagina `Historico` em `/collections`.
+- Edicao posterior do perfil profissional em `/profile` e `PATCH /api/auth/me`.
+- Dashboard comercial com funil, fontes, WhatsApp confirmado e conversao por nicho/cidade.
+- Teste unitario da assinatura de cache de coleta.
 - Cadastro com contexto profissional do usuario (`profession`, `primary_niche`, `internal_context`).
 - Prompts internos de IA ajustados pela profissao/nicho/instrucoes do usuario.
 - Pagina CRM Kanban basica em `/crm`.
