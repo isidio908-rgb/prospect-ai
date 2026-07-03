@@ -62,6 +62,28 @@ describe('Prospect AI API - Testes de Integração', () => {
     assert.strictEqual(response.status, 401);
   });
   
+  test('Coleta com credencial inexistente retorna erro claro sem expor segredo', async () => {
+    const response = await fetch(`${API_URL}/api/leads/collect`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({
+        credentialId: 999999999,
+        query: 'clinicas odontologicas cuiaba',
+        limit: 1
+      })
+    });
+
+    const data = await response.json();
+    const serialized = JSON.stringify(data);
+
+    assert.strictEqual(response.status, 404);
+    assert.strictEqual(data.error, 'Credencial de coleta não encontrada');
+    assert.ok(!/api_key|apiKey|api_key_encrypted|secret|Bearer/i.test(serialized));
+  });
+  
   test('Importar lead manualmente', async () => {
     const response = await fetch(`${API_URL}/api/leads/import`, {
       method: 'POST',
