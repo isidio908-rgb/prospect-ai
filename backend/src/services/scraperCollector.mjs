@@ -84,6 +84,7 @@ export async function collectLeads(userId, options) {
   return {
     leads,
     total: leads.length,
+    sourceType: credential.type,
     credentialUsed: credential.id,
     usedToday: credential.used_today + 1,
     dailyLimit: credential.daily_limit,
