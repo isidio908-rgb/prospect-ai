@@ -1,6 +1,10 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.mjs';
-import { listCollectionRunLogs, listCollectionRuns } from '../../services/collectionRunService.mjs';
+import {
+  clearCollectionCacheForRun,
+  listCollectionRunLogs,
+  listCollectionRuns,
+} from '../../services/collectionRunService.mjs';
 
 const router = express.Router();
 
@@ -14,6 +18,24 @@ router.get('/', async (req, res, next) => {
     });
 
     res.json({ runs });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id/cache', async (req, res, next) => {
+  try {
+    const result = await clearCollectionCacheForRun(req.user.id, req.params.id);
+
+    if (!result) {
+      return res.status(404).json({ error: 'Execução de coleta não encontrada' });
+    }
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      hadCacheKey: result.hadCacheKey,
+    });
   } catch (error) {
     next(error);
   }
