@@ -11,7 +11,8 @@ import {
   MessageCircle,
   Radar,
   Moon,
-  Sun
+  Sun,
+  Columns3
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,6 +27,7 @@ export default function Layout({ children }) {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Coletar', href: '/collect', icon: Radar },
     { name: 'Leads', href: '/leads', icon: Users },
+    { name: 'CRM Kanban', href: '/crm', icon: Columns3 },
     { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
     { name: 'Credenciais', href: '/credentials', icon: Key },
   ];
@@ -53,6 +55,9 @@ export default function Layout({ children }) {
     }
   `;
 
+  const profession = user?.profession || 'Gestor de Tráfego';
+  const profileLine = user?.primary_niche ? `${profession} • ${user.primary_niche}` : profession;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar Desktop */}
@@ -78,10 +83,10 @@ export default function Layout({ children }) {
           </div>
           <div className="flex-shrink-0 flex border-t border-gray-200 dark:border-gray-700 p-4">
             <div className="flex-shrink-0 w-full group block">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name || user?.email}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Gestor de Tráfego</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">{user?.name || user?.email}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{profileLine}</p>
                 </div>
                 <button
                   onClick={handleLogout}
@@ -132,10 +137,10 @@ export default function Layout({ children }) {
             })}
           </nav>
           <div className="pt-4 pb-3 border-t border-gray-200 dark:border-gray-700 px-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-base font-medium text-gray-700 dark:text-gray-200">{user?.name || user?.email}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Gestor de Tráfego</p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-base font-medium text-gray-700 dark:text-gray-200 truncate">{user?.name || user?.email}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{profileLine}</p>
               </div>
               <button
                 onClick={() => {
