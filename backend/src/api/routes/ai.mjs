@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth.mjs';
 import { decrypt } from '../../services/encryption.mjs';
 import { listLlmProviders, isLlmType } from '../../services/llm/providers.mjs';
 import { chatComplete } from '../../services/llm/client.mjs';
-import { listTasks, getTask } from '../../services/llm/tasks.mjs';
+import { listTasks, getTask, buildSystemPrompt } from '../../services/llm/tasks.mjs';
 
 const router = express.Router();
 router.use(authenticate);
@@ -104,9 +104,9 @@ router.post('/run', async (req, res, next) => {
       return res.status(500).json({ error: 'Erro ao descriptografar a chave de IA' });
     }
 
-    // Executa a chamada ao LLM
+    // Executa a chamada ao LLM com prompt-base ajustado pela profissão/nicho/instruções internas do usuário.
     const text = await chatComplete(credential, apiKey, {
-      system: task.system,
+      system: buildSystemPrompt(task, req.user),
       user: task.buildUser(lead),
     });
 
