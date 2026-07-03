@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Clock, Database, FileText, RefreshCw } from 'lucide-react';
+import { Clock, Database, FileText, RefreshCw, Trash2 } from 'lucide-react';
 import { collections } from '../services/api';
 
 const STATUS_LABELS = {
@@ -23,6 +23,7 @@ export default function CollectionHistory() {
   const [selectedRun, setSelectedRun] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [clearingRunId, setClearingRunId] = useState(null);
 
   useEffect(() => {
     loadRuns();
@@ -50,6 +51,32 @@ export default function CollectionHistory() {
       toast.error('Erro ao carregar logs da coleta');
     } finally {
       setLoadingLogs(false);
+    }
+  };
+
+  const clearRunCache = async (run) => {
+    const confirmed = window.confirm(
+      'Limpar o cache desta busca? A próxima coleta com os mesmos parâmetros chamará o provider novamente.'
+    );
+
+    if (!confirmed) return;
+
+    setClearingRunId(run.id);
+    try {
+      const response = await collections.clearCache(run.id);
+      const deletedCount = response.data.deletedCount || 0;
+
+      if (deletedCount > 0) {
+        toast.success('Cache limpo com sucesso');
+      } else {
+        toast('Nenhum cache ativo encontrado para esta execução');
+      }
+
+      await loadRuns();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao limpar cache da coleta');
+    } finally {
+      setClearingRunId(null);
     }
   };
 
@@ -126,7 +153,15 @@ export default function CollectionHistory() {
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         {run.duplicate_count || 0} duplicados • {run.error_count || 0} erros
                       </div>
-                      {run.cache_hit && <span className="badge badge-info mt-1">cache</span>}
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        {run.cache_hit && <span className="badge badge-info">cache hit</span>}
+                        {!run.cache_hit && run.cache_expires_at && <span className="badge badge-secondary">provider</span>}
+                        {run.cache_expires_at && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            Cache expira em {formatCacheTtl(run.cache_ttl_seconds)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`badge ${STATUS_BADGES[run.status] || 'badge-info'}`}>
@@ -137,9 +172,23 @@ export default function CollectionHistory() {
                       {formatDate(run.started_at)}
                     </td>
                     <td className="px-4 py-3">
-                      <button type="button" onClick={() => openLogs(run)} className="btn btn-secondary text-xs py-1 px-2">
-                        Ver logs
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button type="button" onClick={() => openLogs(run)} className="btn btn-secondary text-xs py-1 px-2">
+                          Ver logs
+                        </button>
+                        {run.cache_expires_at && (
+                          <button
+                            type="button"
+                            onClick={() => clearRunCache(run)}
+                            disabled={clearingRunId === run.id}
+                            className="btn btn-secondary text-xs py-1 px-2 flex items-center justify-center gap-1"
+                            title="Limpar cache desta busca"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            {clearingRunId === run.id ? 'Limpando...' : 'Limpar cache'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -218,4 +267,20 @@ function formatDate(value) {
 function formatTime(value) {
   if (!value) return '-';
   return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatCacheTtl(value) {
+  if (value === null || value === undefined) return '-';
+
+  const totalSeconds = Math.max(Number(value || 0), 0);
+  if (totalSeconds === 0) return 'expirado';
+
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}min`;
+  if (minutes > 0) return `${minutes}min`;
+  return 'menos de 1min';
 }
