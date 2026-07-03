@@ -2,7 +2,7 @@
 
 **Atualizado em:** 03/07/2026
 
-Este arquivo substitui listas antigas de proximas acoes que ja foram executadas. A prioridade aqui considera o estado real atual do codigo depois da validacao pos-merge em `main`.
+Este arquivo substitui listas antigas de proximas acoes que ja foram executadas. A prioridade aqui considera o estado real atual do codigo depois da validacao pos-merge em `main` e das melhorias recentes de operacao.
 
 ## Prioridade Alta
 
@@ -22,15 +22,17 @@ Checklist:
 
 ## Prioridade Media
 
-### 2. Melhorar controle visual de cache
+### 2. Dashboard comercial avancado - proxima camada
 
-O backend ja possui cache de coleta por assinatura de busca, historico indica `cache_hit` e a tela de coleta ja possui toggle para forcar nova coleta.
+O dashboard ja mostra funil, resposta, valor fechado, presenca digital, fontes, conversao por nicho e conversao por cidade.
 
 Melhorias futuras:
 
-- Mostrar TTL restante do cache no historico.
-- Permitir limpar cache manualmente por busca.
-- Indicar visualmente quando o lead veio de cache versus provider real.
+- Filtro por periodo.
+- Filtro por fonte.
+- Comparativo semanal/mensal.
+- Custo por fonte de coleta.
+- Receita potencial por nicho/cidade.
 
 ### 3. Testes automatizados complementares
 
@@ -48,39 +50,17 @@ Cobrir proximas camadas:
 - Exportacao JSON de leads.
 - Deduplicacao com `place_id`, `business_id`, `google_id`, telefone, dominio e nome+cidade.
 
-### 4. Kanban comercial avancado
-
-O Kanban basico ja existe em `/crm`. Melhorias futuras:
-
-- Drag-and-drop.
-- Filtros por responsavel, nicho, cidade e prioridade.
-- Contagem de valor potencial por coluna.
-- Edicao rapida de proxima acao.
-- Registro automatico de follow-up ao mover card.
-
-### 5. Dashboard comercial avancado - proxima camada
-
-O dashboard ja mostra funil, resposta, valor fechado, presenca digital, fontes, conversao por nicho e conversao por cidade.
-
-Melhorias futuras:
-
-- Filtro por periodo.
-- Filtro por fonte.
-- Comparativo semanal/mensal.
-- Custo por fonte de coleta.
-- Receita potencial por nicho/cidade.
-
 ## Prioridade Baixa
 
-### 6. Exportacao PDF
+### 4. Exportacao PDF
 
 Gerar PDF com diagnostico por lead para enviar em conversa comercial.
 
-### 7. Templates comerciais por nicho
+### 5. Templates comerciais por nicho
 
 Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
 
-### 8. Priorizacao inteligente avancada
+### 6. Priorizacao inteligente avancada
 
 Usar IA para sugerir:
 
@@ -91,6 +71,13 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Kanban comercial avancado em `/crm`:
+  - drag-and-drop nativo entre colunas;
+  - filtros por status, prioridade, cidade, nicho, responsavel e busca livre;
+  - contagem de valor potencial por coluna;
+  - edicao rapida de responsavel, proxima acao e valor potencial;
+  - manutencao do botao de avanco rapido de status.
+- TTL visual e limpeza manual de cache em `/collections`.
 - Documentacao operacional criada:
   - `docs/WHATSAPP-EVOLUTION.md`
   - `docs/IA-LLM.md`

@@ -2,6 +2,24 @@
 
 Este arquivo consolida o historico operacional do projeto. Documentos antigos de sprint continuam no repositorio, mas este passa a ser o registro principal e atualizado.
 
+## 03/07/2026 - Kanban Comercial Avancado
+
+### Implementado
+
+- Atualizada pagina `/crm` com drag-and-drop nativo entre colunas do pipeline.
+- Adicionados filtros por status, prioridade, cidade, nicho, responsavel e busca livre.
+- Adicionada contagem de valor potencial por coluna e no resumo geral.
+- Adicionada edicao rapida de responsavel, proxima acao e valor potencial direto no card.
+- Mantido botao de avanco rapido para a proxima etapa do funil.
+- Mantido link para detalhe completo do lead.
+- Mantido uso do enum atual de status para evitar reintroduzir status legado invalido.
+
+### Observacoes
+
+- A mudanca usa o `PATCH /api/leads/:id` ja existente.
+- Nao adiciona dependencia nova.
+- Precisa de validacao local com `frontend npm run build` e teste manual em `/crm` antes do merge.
+
 ## 03/07/2026 - Validacao Pos-Merge Em Main
 
 ### Validado
@@ -125,8 +143,8 @@ O projeto esta pronto para uso interno controlado, desde que:
 
 ## Proximos Marcos
 
-1. Avaliar e corrigir as 2 vulnerabilidades altas do `npm audit` do backend.
-2. Iniciar operacao controlada de prospeccao real com baixo volume.
-3. Kanban comercial avancado com drag-and-drop, filtros e edicao rapida.
-4. Dashboard comercial com filtros por periodo/fonte.
-5. Documentacao operacional especifica para WhatsApp, IA, coleta e credenciais.
+1. Dashboard comercial com filtros por periodo/fonte.
+2. Testes automatizados complementares para fluxos novos.
+3. Exportacao PDF com diagnostico por lead.
+4. Templates comerciais por nicho.
+5. Priorizacao inteligente avancada.
