@@ -22,6 +22,13 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Senha é obrigatória')
 });
 
+export const updateMeSchema = z.object({
+  name: z.string().min(2).max(255).optional().or(z.literal('')),
+  profession: z.string().min(2).max(255).optional(),
+  primary_niche: z.string().max(255).optional(),
+  internal_context: z.string().max(3000).optional()
+});
+
 function toUserPayload(user) {
   return {
     id: user.id,
@@ -139,6 +146,38 @@ router.get('/me', authenticate, async (req, res) => {
   res.json({
     user: toUserPayload(req.user)
   });
+});
+
+// PATCH /api/auth/me - Editar perfil profissional usado pelos prompts internos de IA
+router.patch('/me', authenticate, async (req, res, next) => {
+  try {
+    const data = updateMeSchema.parse(req.body);
+
+    const result = await query(
+      `UPDATE users SET
+        name = COALESCE($1, name),
+        profession = COALESCE($2, profession),
+        primary_niche = $3,
+        internal_context = $4,
+        updated_at = NOW()
+       WHERE id = $5
+       RETURNING id, email, name, profession, primary_niche, internal_context`,
+      [
+        data.name === '' ? null : data.name,
+        data.profession || null,
+        data.primary_niche || null,
+        data.internal_context || null,
+        req.user.id
+      ]
+    );
+
+    res.json({
+      message: 'Perfil atualizado com sucesso',
+      user: toUserPayload(result.rows[0])
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;
