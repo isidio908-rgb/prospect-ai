@@ -7,7 +7,7 @@ O objetivo inicial e uso proprio, separado do Performance Hub. A arquitetura ja 
 ## Status Atual
 
 **Atualizado em:** 03/07/2026  
-**Estado:** funcional para uso interno local, com PR #6 validado em ambiente local.
+**Estado:** funcional em `main` pos-merge, validado com credenciais reais e WhatsApp conectado.
 
 Stack local validada com Docker:
 
@@ -49,33 +49,57 @@ Documentacao principal:
 - Pagina CRM Kanban para mover leads pelo pipeline comercial.
 - Historico de follow-up.
 - WhatsApp via Evolution API com chat no lead, envio de texto/midia/audio e webhook.
-- Verificacao opcional de existencia de WhatsApp na coleta.
+- Verificacao de existencia de WhatsApp durante a coleta.
 - IA/LLM com tarefas comerciais dentro do detalhe do lead.
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
 - Dashboard comercial com funil, fontes, WhatsApp confirmado e conversao por nicho/cidade.
 - Dark mode.
 
-## Validacao Do PR #6
+## Validacao Pos-Merge No Main
 
-Validadacoes registradas no PR:
+Validacao executada em `main` apos merge do PR #6:
 
+- `git checkout main` e `git pull origin main`: ok.
 - Backend `npm test`: 32 testes passando.
 - Frontend `npm run build`: passando.
 - `docker compose build backend frontend`: passando.
-- Stack local com backend/frontend saudaveis.
+- `docker compose up -d backend frontend`: passando.
+- Stack final saudavel: backend, frontend, postgres, redis e evolution-api.
 - `GET /health`: ok.
-- `/collections`, `/profile`, `/leads`, `/dashboard`: HTTP 200.
-- `PATCH /api/auth/me`: validado.
-- `GET /api/collections` e logs por run: validados.
+- Frontend servido com HTTP 200 em `/`, `/collections`, `/profile`, `/leads` e `/dashboard`.
 
-Providers validados:
+Credenciais reais validadas no banco:
 
-- Serper: coleta real pequena passou, com leads salvos.
-- Apify: coleta real passou usando input `{ language, location, max_results, query }`.
-- RapidAPI: coleta real pequena passou no ambiente de validacao.
-- RapidAPI 403 `not subscribed`: mensagem amigavel implementada e testada.
+- Serper: teste de credencial ok, statusCode 200.
+- RapidAPI: teste de credencial ok, statusCode 200.
+- Apify: teste de credencial ok, statusCode 200.
+- Chaves retornam mascaradas; nenhuma chave completa encontrada nas respostas/logs validados.
 
-Observacao operacional: quando RapidAPI retornar `You are not subscribed to this API`, o problema esperado e assinatura/projeto/API key/host da conta RapidAPI, nao o fluxo principal do Prospect AI.
+WhatsApp validado:
+
+- Evolution API conectada.
+- Envio real de mensagem para lead de teste executado com sucesso.
+- Historico de mensagens atualizado.
+- Respostas e historico sem padroes de segredo.
+
+Coletas reais com verificacao WhatsApp ligada:
+
+- Serper: run 17, total 3, duplicates 2, wa_verified 2, wa_rejected 1.
+- Apify: run 18, total 1, wa_verified 0, wa_rejected 1.
+- RapidAPI: run 19, total 5, duplicates 3, wa_verified 3, wa_rejected 2.
+- Logs dos runs: `collection_started`, `cache_miss`, `whatsapp_connection_ok`, `provider_collected`, `whatsapp_verified`, `database_saved`.
+- Logs sem `api_key`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou `token`.
+
+Cache, historico e CRM:
+
+- Cache hit confirmado ao repetir Serper sem `forceRefresh`: run 20.
+- `/api/collections` lista os runs novos.
+- Atualizacao de status no CRM/Kanban validada com status `contato_enviado`.
+- Backend rejeita corretamente status antigo invalido como `em_contato`.
+
+Observacao restante:
+
+- `npm install` do backend ainda reporta 2 vulnerabilidades altas no audit. Nao foi aplicado `npm audit fix` para evitar mudancas de dependencias fora do escopo.
 
 ## Fluxo Principal
 
@@ -202,7 +226,7 @@ Cada card permite abrir o detalhe do lead e mover rapidamente para a proxima eta
 
 O modulo WhatsApp usa Evolution API.
 
-Implementado:
+Implementado e validado:
 
 - Conexao por QR code.
 - Status da instancia.
@@ -212,8 +236,8 @@ Implementado:
 - Webhook de mensagens.
 - Historico de mensagens.
 - Verificacao de existencia de WhatsApp durante a coleta.
-
-Pendente: teste real da verificacao de existencia em coleta com instancia conectada.
+- Envio real para lead de teste.
+- Coletas reais com verificacao WhatsApp ligada nos providers Serper, Apify e RapidAPI.
 
 ## IA
 
@@ -273,10 +297,10 @@ npm run dev
 
 Principais proximos passos:
 
-1. Teste real da verificacao WhatsApp em coleta com instancia conectada.
-2. Revalidar Serper, Apify e RapidAPI no frontend apos merge usando credenciais reais do usuario.
-3. Kanban com drag-and-drop, filtros e edicao rapida.
-4. Filtros por periodo/fonte no dashboard comercial.
+1. Avaliar e corrigir as 2 vulnerabilidades altas apontadas pelo `npm audit` do backend.
+2. Kanban com drag-and-drop, filtros e edicao rapida.
+3. Filtros por periodo/fonte no dashboard comercial.
+4. TTL visual e limpeza manual de cache.
 5. Documentacao operacional especifica para WhatsApp, IA, coleta e credenciais.
 
 Lista completa em `docs/TODO.md`.
