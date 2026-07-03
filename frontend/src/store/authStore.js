@@ -17,8 +17,12 @@ export const useAuthStore = create((set) => ({
     return response.data;
   },
   
-  register: async (email, password, name) => {
-    const response = await auth.register({ email, password, name });
+  register: async (dataOrEmail, password, name) => {
+    const payload = typeof dataOrEmail === 'object'
+      ? dataOrEmail
+      : { email: dataOrEmail, password, name };
+
+    const response = await auth.register(payload);
     const { user, token } = response.data;
     
     localStorage.setItem('user', JSON.stringify(user));
