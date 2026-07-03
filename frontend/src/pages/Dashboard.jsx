@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { stats } from '../services/api';
-import { TrendingUp, Users, Target, Award } from 'lucide-react';
+import { TrendingUp, Users, Target, Award, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Dashboard() {
@@ -40,6 +40,7 @@ export default function Dashboard() {
       color: 'bg-orange-500',
     },
     { title: 'Com Oportunidades', value: data?.comOportunidades || 0, icon: Award, color: 'bg-purple-500' },
+    { title: 'WhatsApp Confirmado', value: data?.presenca?.comWhatsappConfirmado || 0, icon: MessageCircle, color: 'bg-emerald-500' },
   ];
 
   return (
@@ -50,7 +51,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
         {statsCards.map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -122,35 +123,8 @@ export default function Dashboard() {
 
       {/* Top Cidades e Nichos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Top Cidades</h2>
-          <div className="space-y-2">
-            {data?.topCidades?.slice(0, 5).map((item, index) => (
-              <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                <span className="text-gray-700 dark:text-gray-300">{item.cidade}</span>
-                <span className="badge badge-info">{item.count} leads</span>
-              </div>
-            ))}
-            {data?.topCidades?.length === 0 && (
-              <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhum dado disponível</p>
-            )}
-          </div>
-        </div>
-
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Top Nichos</h2>
-          <div className="space-y-2">
-            {data?.topNichos?.slice(0, 5).map((item, index) => (
-              <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                <span className="text-gray-700 dark:text-gray-300">{item.nicho}</span>
-                <span className="badge badge-info">{item.count} leads</span>
-              </div>
-            ))}
-            {data?.topNichos?.length === 0 && (
-              <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhum dado disponível</p>
-            )}
-          </div>
-        </div>
+        <TopList title="Top Cidades" items={data?.topCidades || []} labelKey="cidade" valueSuffix="leads" />
+        <TopList title="Top Nichos" items={data?.topNichos || []} labelKey="nicho" valueSuffix="leads" />
       </div>
 
       {/* Presença técnica */}
@@ -161,6 +135,7 @@ export default function Dashboard() {
             { label: 'Sem site', value: data?.presenca?.semSite },
             { label: 'Com site', value: data?.presenca?.comSite },
             { label: 'Com telefone', value: data?.presenca?.comTelefone },
+            { label: 'WhatsApp confirmado', value: data?.presenca?.comWhatsappConfirmado },
             { label: 'Sem Pixel Meta', value: data?.presenca?.semPixel },
             { label: 'Sem GTM', value: data?.presenca?.semGtm },
             { label: 'Sem GA4', value: data?.presenca?.semGa4 },
@@ -173,7 +148,7 @@ export default function Dashboard() {
           ))}
         </div>
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
-          Métricas de presença técnica consideram apenas leads já analisados.
+          Métricas de presença técnica consideram apenas leads já analisados quando dependem da auditoria do site.
         </p>
       </div>
 
@@ -198,6 +173,52 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <ConversionTable
+          title="Fontes de Coleta"
+          rows={data?.porFonte || []}
+          labelKey="fonte"
+          metricLabel="Oportunidades"
+          metricKey="oportunidades"
+          rateKey="taxaOportunidade"
+        />
+        <ConversionTable
+          title="Conversão por Nicho"
+          rows={data?.conversaoPorNicho || []}
+          labelKey="nicho"
+          metricLabel="Avançados"
+          metricKey="avancados"
+          rateKey="taxaAvanco"
+        />
+        <ConversionTable
+          title="Conversão por Cidade"
+          rows={data?.conversaoPorCidade || []}
+          labelKey="cidade"
+          metricLabel="Avançados"
+          metricKey="avancados"
+          rateKey="taxaAvanco"
+        />
+      </div>
+    </div>
+  );
+}
+
+function TopList({ title, items, labelKey, valueSuffix }) {
+  return (
+    <div className="card">
+      <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{title}</h2>
+      <div className="space-y-2">
+        {items.slice(0, 5).map((item, index) => (
+          <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+            <span className="text-gray-700 dark:text-gray-300">{item[labelKey]}</span>
+            <span className="badge badge-info">{item.count} {valueSuffix}</span>
+          </div>
+        ))}
+        {items.length === 0 && (
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Nenhum dado disponível</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -215,6 +236,33 @@ function FunnelBox({ label, value, tone }) {
     <div className={`text-center p-3 rounded-lg ${tones[tone]}`}>
       <div className="text-2xl font-bold">{value ?? 0}</div>
       <div className="text-xs opacity-80 mt-1">{label}</div>
+    </div>
+  );
+}
+
+function ConversionTable({ title, rows, labelKey, metricLabel, metricKey, rateKey }) {
+  return (
+    <div className="card">
+      <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{title}</h2>
+      <div className="space-y-3">
+        {rows.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum dado disponível</p>
+        ) : rows.map((row) => (
+          <div key={row[labelKey]} className="border-b border-gray-100 dark:border-gray-700 last:border-0 pb-3 last:pb-0">
+            <div className="flex justify-between gap-3 text-sm mb-1">
+              <span className="font-medium text-gray-800 dark:text-gray-200 truncate">{row[labelKey]}</span>
+              <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">{row.total} leads</span>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+              <span>{metricLabel}: {row[metricKey]}</span>
+              <span>{row[rateKey]}%</span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div className="bg-primary-500 h-2 rounded-full" style={{ width: `${Math.min(row[rateKey] || 0, 100)}%` }}></div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
