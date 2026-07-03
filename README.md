@@ -23,6 +23,10 @@ Documentacao principal:
 - `docs/TODO.md`
 - `docs/HISTORICO.md`
 - `docs/README.md`
+- `docs/WHATSAPP-EVOLUTION.md`
+- `docs/IA-LLM.md`
+- `docs/COLETA-LEADS.md`
+- `docs/CREDENCIAIS.md`
 
 ## O Que O Sistema Faz Hoje
 
@@ -53,6 +57,7 @@ Documentacao principal:
 - IA/LLM com tarefas comerciais dentro do detalhe do lead.
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
 - Dashboard comercial com funil, fontes, WhatsApp confirmado e conversao por nicho/cidade.
+- Documentacao operacional para WhatsApp, IA, coleta e credenciais.
 - Dark mode.
 
 ## Validacao Pos-Merge No Main
@@ -97,9 +102,13 @@ Cache, historico e CRM:
 - Atualizacao de status no CRM/Kanban validada com status `contato_enviado`.
 - Backend rejeita corretamente status antigo invalido como `em_contato`.
 
-Observacao restante:
+Auditoria de dependencias:
 
-- `npm install` do backend ainda reporta 2 vulnerabilidades altas no audit. Nao foi aplicado `npm audit fix` para evitar mudancas de dependencias fora do escopo.
+- `npm audit --json` do backend foi avaliado sem `npm audit fix`.
+- O audit apontava 2 vulnerabilidades altas em `tar`, via `@mapbox/node-pre-gyp`, puxado por `bcrypt@5.1.1`.
+- Correcao aplicada: atualizacao direcionada de `bcrypt` para `^6.0.0`, removendo `@mapbox/node-pre-gyp` e `tar` da arvore de dependencias.
+- Resultado final: `npm audit --json` do backend com 0 vulnerabilidades.
+- `backend npm test`, `frontend npm run build` e `docker compose build backend frontend` passaram apos a atualizacao.
 
 ## Fluxo Principal
 
@@ -239,6 +248,8 @@ Implementado e validado:
 - Envio real para lead de teste.
 - Coletas reais com verificacao WhatsApp ligada nos providers Serper, Apify e RapidAPI.
 
+Guia operacional: `docs/WHATSAPP-EVOLUTION.md`.
+
 ## IA
 
 O Assistente IA aparece no detalhe do lead.
@@ -254,6 +265,8 @@ Tarefas atuais:
 - Estrutura de proposta.
 
 Todas as tarefas usam o contexto profissional cadastrado pelo usuario.
+
+Guia operacional: `docs/IA-LLM.md`.
 
 ## Rodar Localmente
 
@@ -297,11 +310,9 @@ npm run dev
 
 Principais proximos passos:
 
-1. Avaliar e corrigir as 2 vulnerabilidades altas apontadas pelo `npm audit` do backend.
-2. Kanban com drag-and-drop, filtros e edicao rapida.
-3. Filtros por periodo/fonte no dashboard comercial.
-4. TTL visual e limpeza manual de cache.
-5. Documentacao operacional especifica para WhatsApp, IA, coleta e credenciais.
+1. Kanban com drag-and-drop, filtros e edicao rapida.
+2. Filtros por periodo/fonte no dashboard comercial.
+3. TTL visual e limpeza manual de cache.
 
 Lista completa em `docs/TODO.md`.
 
