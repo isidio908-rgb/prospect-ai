@@ -31,6 +31,7 @@ export default function Collect() {
   const [city, setCity] = useState('');
   const [limit, setLimit] = useState(25);
   const [extractContacts, setExtractContacts] = useState(false);
+  const [verifyWhatsAppExists, setVerifyWhatsAppExists] = useState(false);
 
   // UI dos nichos
   const [activeTier, setActiveTier] = useState(1);
@@ -64,7 +65,7 @@ export default function Collect() {
   const loadCredentials = async () => {
     try {
       const response = await credentials.list();
-      const list = response.data.credentials || [];
+      const list = (response.data.credentials || []).filter((credential) => credential.category !== 'llm');
       setCreds(list);
       const firstActive = list.find((c) => c.status === 'active') || list[0];
       if (firstActive) setCredentialId(String(firstActive.id));
@@ -135,6 +136,7 @@ export default function Collect() {
         region: country?.gl || 'br',
         language: 'pt',
         extractEmailsAndContacts: isRapidApi ? extractContacts : false,
+        verifyWhatsAppExists,
       };
       const response = await leads.collect(payload);
       setResult(response.data);
@@ -424,8 +426,22 @@ export default function Collect() {
               </span>
             </label>
           )}
-        </div>
 
+          <label className="flex items-start gap-2 cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              checked={verifyWhatsAppExists}
+              onChange={(e) => setVerifyWhatsAppExists(e.target.checked)}
+              className="w-4 h-4 mt-0.5"
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              Verificar se o telefone existe no WhatsApp antes de salvar
+              <span className="block text-xs text-gray-500 dark:text-gray-400">
+                Requer WhatsApp conectado. Quando ativo, só salva leads com WhatsApp confirmado.
+              </span>
+            </span>
+          </label>
+        </div>
         <div className="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/40 rounded-lg p-3">
           <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span>
@@ -452,7 +468,18 @@ export default function Collect() {
             <ResultStat label="Novos salvos" value={result.saved} color="text-green-600 dark:text-green-400" />
             <ResultStat label="Duplicados" value={result.duplicates} color="text-yellow-600 dark:text-yellow-400" />
             <ResultStat label="Erros" value={result.errors} color="text-red-600 dark:text-red-400" />
+            {result.whatsappVerification?.enabled && (
+              <ResultStat label="WhatsApp OK" value={result.whatsappVerification.verified} color="text-green-600 dark:text-green-400" />
+            )}
           </div>
+
+          {result.whatsappVerification?.enabled && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Verificação WhatsApp: {result.whatsappVerification.verified} confirmados,{' '}
+              {result.whatsappVerification.rejected} rejeitados e{' '}
+              {result.whatsappVerification.withoutPhone} sem telefone.
+            </p>
+          )}
 
           {result.credential && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">

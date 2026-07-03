@@ -5,7 +5,7 @@ import { authenticate } from '../middleware/auth.mjs';
 import { encrypt, decrypt, maskApiKey } from '../../services/encryption.mjs';
 import { listProviders, getProvider } from '../../services/scrapers/providers.mjs';
 import { testCredentialByType } from '../../services/scraperCollector.mjs';
-import { isLlmType } from '../../services/llm/providers.mjs';
+import { isLlmType, listLlmProviders } from '../../services/llm/providers.mjs';
 import { testLlm } from '../../services/llm/client.mjs';
 
 const router = express.Router();
@@ -40,7 +40,7 @@ const credentialSchema = z.object({
 // GET /api/credentials/providers - Catálogo de provedores de scraper suportados
 // (DEVE VIR ANTES DE /:id para não ser capturado pela rota de detalhes)
 router.get('/providers', (req, res) => {
-  res.json({ providers: listProviders() });
+  res.json({ providers: [...listProviders(), ...listLlmProviders()] });
 });
 
 // GET /api/credentials - Listar todas as credenciais do usuário

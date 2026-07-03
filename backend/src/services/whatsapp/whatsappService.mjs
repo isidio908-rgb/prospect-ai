@@ -217,6 +217,40 @@ async function getInstanceRow(userId) {
  * Desconecta (logout) a instância, mantendo a configuração salva para
  * facilitar reconexão futura via novo QR code.
  */
+/**
+ * Verifica existência de WhatsApp para uma lista de telefones usando a
+ * instância conectada do usuário. Retorna Map telefoneOriginal -> boolean.
+ */
+export async function verifyLeadPhonesOnWhatsApp(userId, phones) {
+  const instanceRow = await getInstanceRow(userId);
+  if (!instanceRow) throw new Error('Conecte o WhatsApp antes de verificar números na coleta.');
+  if (instanceRow.status !== 'open') throw new Error('WhatsApp desconectado. Reconecte antes de verificar números na coleta.');
+
+  const normalizedItems = phones
+    .map((phone) => ({ raw: phone, number: toWhatsAppNumber(phone) }))
+    .filter((item) => item.raw && item.number);
+
+  const resultMap = new Map(phones.map((phone) => [phone, false]));
+  if (normalizedItems.length === 0) return resultMap;
+
+  const uniqueNumbers = Array.from(new Set(normalizedItems.map((item) => item.number)));
+  const instanceToken = decrypt(instanceRow.instance_token_encrypted);
+  const response = await evolution.checkWhatsAppNumbers(instanceToken, instanceRow.instance_name, uniqueNumbers);
+  const rows = Array.isArray(response) ? response : response?.data || response?.numbers || [];
+
+  const existsByNumber = new Map();
+  for (const row of rows) {
+    const number = String(row?.number || row?.jid || row?.existsJid || row?.id || '').split('@')[0].replace(/\D/g, '');
+    const exists = Boolean(row?.exists ?? row?.isWhatsapp ?? row?.isWhatsApp ?? row?.jid ?? row?.existsJid);
+    if (number) existsByNumber.set(number, exists);
+  }
+
+  for (const item of normalizedItems) {
+    resultMap.set(item.raw, Boolean(existsByNumber.get(item.number)));
+  }
+
+  return resultMap;
+}
 export async function disconnectInstance(userId) {
   const instanceRow = await getInstanceRow(userId);
   if (!instanceRow) throw new Error('Nenhuma instância WhatsApp encontrada');

@@ -6,6 +6,7 @@ const FIELD_LABELS = {
   api_host: 'API Host',
   base_url: 'Base URL',
   search_endpoint: 'Endpoint / Actor ID',
+  model: 'Modelo',
 };
 
 const BASE_FORM = {
@@ -16,6 +17,7 @@ const BASE_FORM = {
   api_key: '',
   base_url: '',
   search_endpoint: '',
+  model: '',
   daily_limit: 100,
   monthly_limit: 3000,
   notes: '',
@@ -77,6 +79,7 @@ const Credentials = () => {
       api_host: p.defaults.api_host || '',
       base_url: p.defaults.base_url || '',
       search_endpoint: p.defaults.search_endpoint || '',
+      model: p.defaults.model || '',
       daily_limit: p.defaults.daily_limit ?? f.daily_limit,
       monthly_limit: p.defaults.monthly_limit ?? f.monthly_limit,
     }));
@@ -96,6 +99,7 @@ const Credentials = () => {
         api_host: first.defaults.api_host || '',
         base_url: first.defaults.base_url || '',
         search_endpoint: first.defaults.search_endpoint || '',
+        model: first.defaults.model || '',
         daily_limit: first.defaults.daily_limit ?? BASE_FORM.daily_limit,
         monthly_limit: first.defaults.monthly_limit ?? BASE_FORM.monthly_limit,
       });
@@ -177,6 +181,7 @@ const Credentials = () => {
       api_key: '',
       base_url: credential.base_url || '',
       search_endpoint: credential.search_endpoint || '',
+      model: credential.model || '',
       daily_limit: credential.daily_limit,
       monthly_limit: credential.monthly_limit,
       notes: credential.notes || '',
@@ -212,6 +217,13 @@ const Credentials = () => {
     return labels[status] || status;
   };
 
+  const scraperCredentials = credentials.filter((cred) => cred.category !== 'llm');
+  const llmCredentials = credentials.filter((cred) => cred.category === 'llm');
+  const credentialSections = [
+    { title: 'Scrapers de Leads', items: scraperCredentials },
+    { title: 'Inteligência Artificial', items: llmCredentials },
+  ].filter((section) => section.items.length > 0);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -226,9 +238,9 @@ const Credentials = () => {
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">🔑 Credenciais de Scraper</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">🔑 Credenciais</h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Cadastre chaves de API de diferentes provedores (RapidAPI, Apify, Serper) para coletar leads
+          Cadastre chaves de API para scrapers de leads e provedores de IA/LLM
         </p>
       </div>
 
@@ -258,7 +270,7 @@ const Credentials = () => {
             {/* Seleção de provedor */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Provedor de Scraper *
+                Provedor *
               </label>
               <select
                 value={formData.type}
@@ -399,8 +411,11 @@ const Credentials = () => {
           <button onClick={openNewForm} className="btn btn-primary">+ Adicionar Credencial</button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {credentials.map((cred) => (
+        <div className="space-y-6">
+          {credentialSections.map((section) => (
+            <section key={section.title} className="space-y-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{section.title}</h2>
+              {section.items.map((cred) => (
             <div key={cred.id} className="card">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -510,6 +525,8 @@ const Credentials = () => {
                 </button>
               </div>
             </div>
+              ))}
+            </section>
           ))}
         </div>
       )}

@@ -84,15 +84,16 @@ export async function saveLeadsWithDeduplication(userId, leads) {
       // Inserir lead
       const result = await query(
         `INSERT INTO leads (
-          user_id, nome_empresa, site, telefone, cidade, nicho, categoria, fonte, observacoes,
+          user_id, nome_empresa, site, telefone, whatsapp, cidade, nicho, categoria, fonte, observacoes,
           place_id, business_id, google_id, rating, total_avaliacoes, google_maps_url, data_coleta
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
         RETURNING id, nome_empresa, site, cidade, nicho`,
         [
           userId,
           lead.nome_empresa,
           lead.site,
           lead.telefone,
+          lead.whatsapp || null,
           lead.cidade,
           lead.nicho,
           lead.categoria,

@@ -446,7 +446,8 @@ router.post('/collect', async (req, res, next) => {
       zoom,
       language,
       region,
-      extractEmailsAndContacts
+      extractEmailsAndContacts,
+      verifyWhatsAppExists
     } = req.body;
     
     if (!credentialId) {
@@ -455,6 +456,13 @@ router.post('/collect', async (req, res, next) => {
 
     const { collectLeads } = await import('../../services/scraperCollector.mjs');
     const { saveLeadsWithDeduplication } = await import('../../services/localBusinessDataCollector.mjs');
+    let verifyLeadPhonesOnWhatsApp = null;
+
+    if (verifyWhatsAppExists) {
+      ({ verifyLeadPhonesOnWhatsApp } = await import('../../services/whatsapp/whatsappService.mjs'));
+      // Valida conexão antes de consumir cota do scraper.
+      await verifyLeadPhonesOnWhatsApp(req.user.id, []);
+    }
 
     // Coletar da API (o provedor é determinado pelo tipo da credencial)
     const collection = await collectLeads(req.user.id, {
@@ -468,11 +476,43 @@ router.post('/collect', async (req, res, next) => {
       zoom,
       language,
       region,
-      extractEmailsAndContacts
-    });
-    
+      extractEmailsAndContacts,
+      verifyWhatsAppExists
+    });    
+    let leadsToSave = collection.leads;
+    let whatsappVerification = { enabled: false };
+
+    if (verifyWhatsAppExists) {
+      const verification = await verifyLeadPhonesOnWhatsApp(
+        req.user.id,
+        leadsToSave.map((lead) => lead.telefone).filter(Boolean)
+      );
+
+      let rejected = 0;
+      let withoutPhone = 0;
+      leadsToSave = leadsToSave.reduce((acc, lead) => {
+        if (!lead.telefone) {
+          withoutPhone += 1;
+          return acc;
+        }
+        if (verification.get(lead.telefone)) {
+          acc.push({ ...lead, whatsapp: lead.telefone });
+        } else {
+          rejected += 1;
+        }
+        return acc;
+      }, []);
+
+      whatsappVerification = {
+        enabled: true,
+        verified: leadsToSave.length,
+        rejected,
+        withoutPhone,
+      };
+    }
+
     // Salvar no banco com deduplicação
-    const { saved, duplicates, errors } = await saveLeadsWithDeduplication(req.user.id, collection.leads);
+    const { saved, duplicates, errors } = await saveLeadsWithDeduplication(req.user.id, leadsToSave);
     
     res.json({
       message: 'Coleta concluída',
@@ -480,6 +520,7 @@ router.post('/collect', async (req, res, next) => {
       saved: saved.length,
       duplicates: duplicates.length,
       errors: errors.length,
+      whatsappVerification,
       credential: {
         id: collection.credentialUsed,
         used: collection.usedToday,

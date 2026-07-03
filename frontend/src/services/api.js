@@ -70,6 +70,14 @@ export const credentials = {
   usage: (id) => api.get(`/api/credentials/${id}/usage`),
 };
 
+// IA (LLM)
+export const ai = {
+  providers: () => api.get('/api/ai/providers'),
+  tasks: () => api.get('/api/ai/tasks'),
+  status: () => api.get('/api/ai/status'),
+  run: (data) => api.post('/api/ai/run', data),
+};
+
 // WhatsApp (Evolution API)
 export const whatsapp = {
   connect: (securityOptions) => api.post('/api/whatsapp/connect', securityOptions || {}),

@@ -12,6 +12,7 @@ import {
   Clock
 } from 'lucide-react';
 import WhatsAppChat from '../components/whatsapp/WhatsAppChat';
+import AiAssistant from '../components/AiAssistant';
 
 const CRM_STATUSES = [
   { value: 'novo', label: 'Novo' },
@@ -367,6 +368,8 @@ export default function LeadDetails() {
           </div>
         </div>
       )}
+
+      <AiAssistant leadId={id} onLeadUpdated={loadLead} />
 
       {/* Chat WhatsApp */}
       <div className="card">
