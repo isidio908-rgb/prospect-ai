@@ -1,13 +1,13 @@
 # Prospect AI - Status Atual do Projeto
 
 **Data:** 03/07/2026  
-**Estado:** stack local funcional em Docker, produto interno em fase de validacao operacional.
+**Estado:** produto interno em fase de validacao operacional, com historico de coleta, logs, cache, CRM e dashboard comercial.
 
 ## Resumo Executivo
 
 O Prospect AI ja funciona como uma maquina de prospeccao comercial, nao apenas como scraper. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens de WhatsApp, gerencia credenciais de scraper e LLM, conversa via WhatsApp/Evolution API e usa IA para melhorar textos e diagnosticos.
 
-A versao atual tambem inclui contexto profissional do usuario no cadastro, prompts internos de IA ajustados por profissao/nicho/instrucoes e uma pagina CRM Kanban para acompanhar os leads no pipeline comercial.
+A versao atual inclui contexto profissional do usuario no cadastro e na pagina de perfil, prompts internos de IA ajustados por profissao/nicho/instrucoes, pagina CRM Kanban, historico persistente de coletas, logs de execucao, cache de busca/coleta e dashboard comercial ampliado.
 
 ## Stack Atual
 
@@ -26,6 +26,7 @@ A versao atual tambem inclui contexto profissional do usuario no cadastro, promp
 - Registro, login e JWT.
 - Middleware de autenticacao aplicado nas rotas protegidas.
 - Cadastro com campos profissionais: `profession`, `primary_niche` e `internal_context`.
+- Edicao posterior do perfil em `/profile` via `PATCH /api/auth/me`.
 - Layout exibe profissao e nicho foco do usuario.
 - Prompts internos de IA usam esses campos para adaptar diagnosticos, mensagens, e-mails, roteiros e propostas ao ponto de vista do usuario.
 
@@ -35,6 +36,7 @@ Arquivos principais:
 - `backend/src/api/middleware/auth.mjs`
 - `backend/src/database/init.mjs`
 - `frontend/src/pages/Login.jsx`
+- `frontend/src/pages/Profile.jsx`
 - `frontend/src/store/authStore.js`
 - `frontend/src/components/Layout.jsx`
 
@@ -59,7 +61,7 @@ Arquivos principais:
 - `frontend/src/pages/LeadDetails.jsx`
 - `frontend/src/pages/CrmKanban.jsx`
 
-### Coleta de Leads
+### Coleta, Historico, Logs e Cache
 
 Fontes suportadas:
 
@@ -77,13 +79,26 @@ A coleta permite selecionar:
 - Extracao adicional de contatos no RapidAPI.
 - Verificacao opcional de existencia de WhatsApp antes de salvar.
 
+Persistencia operacional implementada:
+
+- `collection_runs`: uma linha por execucao de coleta.
+- `collection_run_logs`: eventos, erros e etapas da execucao.
+- `collection_cache`: cache por assinatura de busca para evitar chamadas repetidas ao provider.
+- Rota `GET /api/collections` para listar execucoes.
+- Rota `GET /api/collections/:id/logs` para ver logs da execucao.
+- Pagina `/collections` para visualizar historico, cache hit, totais e logs.
+
 Arquivos principais:
 
+- `backend/src/api/routes/leads.mjs`
+- `backend/src/api/routes/collectionRuns.mjs`
+- `backend/src/services/collectionRunService.mjs`
 - `backend/src/services/scraperCollector.mjs`
 - `backend/src/services/scrapers/rapidApiLocalBusiness.mjs`
 - `backend/src/services/scrapers/apifyGoogleMaps.mjs`
 - `backend/src/services/scrapers/serper.mjs`
 - `frontend/src/pages/Collect.jsx`
+- `frontend/src/pages/CollectionHistory.jsx`
 
 ### Verificacao de WhatsApp na Coleta
 
@@ -99,6 +114,7 @@ Comportamento:
 - Salva apenas leads com WhatsApp confirmado.
 - Preenche o campo `whatsapp` do lead com o telefone validado.
 - Retorna estatisticas de confirmados, rejeitados e sem telefone.
+- Registra os contadores no historico da coleta.
 
 Arquivos principais:
 
@@ -134,14 +150,6 @@ LLMs suportados:
 - Cerebras.
 - Mistral AI.
 
-Arquivos principais:
-
-- `backend/src/api/routes/credentials.mjs`
-- `backend/src/services/encryption.mjs`
-- `backend/src/services/scrapers/providers.mjs`
-- `backend/src/services/llm/providers.mjs`
-- `frontend/src/pages/Credentials.jsx`
-
 ### Deduplicacao
 
 Deduplicacao ativa antes de salvar leads.
@@ -157,87 +165,9 @@ Prioridade atual:
 
 Tambem existem endpoints para listar duplicatas, mesclar leads e normalizar dados.
 
-Arquivos principais:
-
-- `backend/src/services/deduplicator.mjs`
-- `backend/src/database/migrations/add-normalized-fields.mjs`
-- `backend/src/api/routes/leads.mjs`
-
 ### Auditoria de Site
 
-A auditoria detecta:
-
-- Site online.
-- HTTPS.
-- Tempo de carregamento.
-- Tamanho da pagina.
-- Meta Pixel.
-- Google Tag Manager.
-- GA4.
-- Google Ads Tag.
-- WhatsApp no site.
-- Formularios.
-- Instagram, Facebook e LinkedIn.
-- WordPress.
-- Elementor.
-- Shopify.
-- Pagina de contato.
-- CTA visivel.
-- Links placeholder/basicos quebrados.
-- Telefones e e-mails encontrados.
-
-Arquivos principais:
-
-- `backend/src/services/analyzer.mjs`
-- `backend/src/lib/analysis/auditor.mjs`
-- `backend/src/lib/analysis/extractors.mjs`
-
-### Lead Score e Mensagens
-
-O score calcula oportunidade comercial com base em lacunas digitais e reputacao local.
-
-Saidas geradas:
-
-- `score`
-- `prioridade`
-- `oportunidades`
-- `pontos_positivos`
-- `diagnostico`
-- `mensagem_whatsapp`
-- `mensagem_whatsapp_followup`
-
-Arquivos principais:
-
-- `backend/src/lib/analysis/scoring.mjs`
-- `backend/src/lib/analysis/messages.mjs`
-- `backend/src/services/analyzer.mjs`
-
-### WhatsApp Evolution API
-
-Implementado:
-
-- Criacao/conexao de instancia.
-- QR code.
-- Status de conexao.
-- Desconectar/remover instancia.
-- Opcoes anti-bloqueio.
-- Chat por lead.
-- Envio de texto, midia e audio.
-- Webhook publico.
-- Armazenamento de mensagens recebidas e enviadas.
-- Vinculo de mensagens recebidas por telefone normalizado.
-- Marcacao de leitura apenas ao responder.
-- Verificacao de numero WhatsApp para a coleta.
-
-Arquivos principais:
-
-- `backend/src/api/routes/whatsapp.mjs`
-- `backend/src/api/routes/whatsappWebhook.mjs`
-- `backend/src/services/whatsapp/evolutionClient.mjs`
-- `backend/src/services/whatsapp/whatsappService.mjs`
-- `backend/src/services/whatsapp/mediaStorage.mjs`
-- `frontend/src/pages/WhatsAppSettings.jsx`
-- `frontend/src/components/whatsapp/WhatsAppChat.jsx`
+A auditoria detecta site online, HTTPS, tempo de carregamento, Meta Pixel, GTM, GA4, Google Ads Tag, WhatsApp no site, formularios, redes sociais, tecnologias e pontos basicos de conversao.
 
 ### IA / LLM
 
@@ -263,27 +193,23 @@ Tarefas atuais:
 - Resumo e posicionamento.
 - Estrutura de proposta.
 
-Arquivos principais:
-
-- `backend/src/api/routes/ai.mjs`
-- `backend/src/services/llm/providers.mjs`
-- `backend/src/services/llm/client.mjs`
-- `backend/src/services/llm/tasks.mjs`
-- `frontend/src/components/AiAssistant.jsx`
-- `frontend/src/services/api.js`
-
 ### Dashboard
 
-Implementado dashboard basico com metricas gerais:
+Implementado dashboard comercial com:
 
 - Total de leads.
-- Leads analisados.
-- Oportunidades.
 - Score medio.
+- Oportunidades.
+- WhatsApp confirmado.
 - Distribuicao por prioridade.
 - Distribuicao por status.
 - Presenca digital.
-- Funil comercial basico.
+- Funil comercial.
+- Taxa de resposta.
+- Valor fechado.
+- Fontes de coleta.
+- Conversao por nicho.
+- Conversao por cidade.
 
 Arquivos principais:
 
@@ -299,6 +225,9 @@ Tabelas principais:
 - `rapidapi_usage` legado
 - `credentials`
 - `credential_usage`
+- `collection_runs`
+- `collection_run_logs`
+- `collection_cache`
 - `leads`
 - `lead_followups`
 - `whatsapp_instances`
@@ -311,44 +240,24 @@ Migracoes idempotentes relevantes:
 - `users.internal_context`
 - `credentials.category`
 - `credentials.model`
+- tabelas de historico/log/cache de coleta
 - campos normalizados em `leads`
 - indices de deduplicacao
-
-## Docker Local
-
-Servicos atuais:
-
-- `postgres`
-- `redis`
-- `evolution-api`
-- `backend`
-- `frontend`
-
-Status validado em 03/07/2026:
-
-- backend healthy
-- frontend healthy
-- postgres healthy
-- redis healthy
-- evolution-api healthy
 
 ## O Que Ainda Falta
 
 Prioridade alta:
 
-1. Historico persistente de coletas (`collection_runs`).
-2. Logs persistentes de execucao de coleta.
-3. Cache/controle para evitar recoletar a mesma busca em curto intervalo.
-4. Teste real da verificacao WhatsApp em coleta com instancia conectada.
-5. Perfil profissional editavel depois do cadastro.
-6. Testes automatizados para IA, WhatsApp, Kanban e coleta.
+1. Validar build/test desta sprint no ambiente local atualizado.
+2. Teste real da verificacao WhatsApp em coleta com instancia conectada.
+3. Toggle visual para forcar nova coleta ignorando cache.
+4. Testes automatizados com banco para historico/logs/cache.
 
 Prioridade media:
 
 1. Kanban comercial avancado com drag-and-drop e filtros.
-2. Dashboard comercial avancado.
-3. Filtros adicionais no dashboard.
-4. Documentacao especifica de operacao WhatsApp/IA.
+2. Filtros por periodo/fonte no dashboard comercial.
+3. Documentacao especifica de operacao WhatsApp/IA/coleta.
 
 Prioridade baixa:
 
@@ -361,9 +270,9 @@ Prioridade baixa:
 
 Estimativa pragmatica:
 
-- Core de prospeccao: 88% pronto.
-- Operacao interna local: 84% pronta.
-- Produto comercial: 48% pronto.
+- Core de prospeccao: 92% pronto.
+- Operacao interna local: 89% pronta.
+- Produto comercial: 52% pronto.
 - Documentacao: em atualizacao.
 
 O sistema ja pode ser usado internamente para coletar, analisar, priorizar e abordar leads, desde que as credenciais estejam configuradas e o WhatsApp esteja conectado quando a verificacao de existencia for usada.
