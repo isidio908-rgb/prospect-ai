@@ -1,0 +1,81 @@
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Interceptor para adicionar token em todas as requisições
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Interceptor para tratar erros
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Auth
+export const auth = {
+  register: (data) => api.post('/api/auth/register', data),
+  login: (data) => api.post('/api/auth/login', data),
+  me: () => api.get('/api/auth/me'),
+};
+
+// Leads
+export const leads = {
+  list: (params) => api.get('/api/leads', { params }),
+  get: (id) => api.get(`/api/leads/${id}`),
+  import: (data) => api.post('/api/leads/import', data),
+  importCSV: (csvContent) => api.post('/api/leads/import-csv', { csvContent }),
+  export: (params) => api.get('/api/leads/export', { params, responseType: 'blob' }),
+  collect: (data) => api.post('/api/leads/collect', data),
+  analyze: (leadIds) => api.post('/api/leads/analyze', { leadIds }),
+  update: (id, data) => api.patch(`/api/leads/${id}`, data),
+  delete: (id) => api.delete(`/api/leads/${id}`),
+  getFollowups: (id) => api.get(`/api/leads/${id}/followups`),
+  addFollowup: (id, mensagem) => api.post(`/api/leads/${id}/followups`, { mensagem }),
+};
+
+// Stats
+export const stats = {
+  get: () => api.get('/api/stats'),
+};
+
+// WhatsApp (Evolution API)
+export const whatsapp = {
+  connect: (securityOptions) => api.post('/api/whatsapp/connect', securityOptions || {}),
+  status: () => api.get('/api/whatsapp/status'),
+  disconnect: () => api.post('/api/whatsapp/disconnect'),
+  remove: () => api.delete('/api/whatsapp'),
+  getLeadMessages: (leadId) => api.get(`/api/whatsapp/leads/${leadId}/messages`),
+  sendText: (leadId, text) => api.post(`/api/whatsapp/leads/${leadId}/messages/text`, { text }),
+  sendMedia: (leadId, data) => api.post(`/api/whatsapp/leads/${leadId}/messages/media`, data),
+  sendAudio: (leadId, data) => api.post(`/api/whatsapp/leads/${leadId}/messages/audio`, data),
+  // Busca a mídia como blob autenticado (evita colocar o token JWT na URL,
+  // já que <img>/<audio> não enviam headers customizados).
+  getMediaBlobUrl: async (messageId) => {
+    const response = await api.get(`/api/whatsapp/messages/${messageId}/media`, {
+      responseType: 'blob',
+    });
+    return URL.createObjectURL(response.data);
+  },
+};
+
+export default api;

@@ -58,6 +58,12 @@ if (command === "analyze") {
       rapidapiHost: args.rapidapiHost,
       searchUrl: args.searchUrl,
       dailyLimit: args.dailyLimit,
+      lat: args.lat,
+      lng: args.lng,
+      zoom: args.zoom,
+      region: args.region,
+      language: args.language,
+      extractEmailsAndContacts: args.extractEmailsAndContacts,
     });
 
     console.log("");
@@ -76,11 +82,23 @@ if (command === "analyze") {
   console.log(`Prospect AI
 
 Comandos:
-  npm run collect -- --query "imobiliarias Cuiaba" --city Cuiaba --niche imobiliarias --limit 20
+  npm run collect -- --query "imobiliarias em Cuiaba, MT" --city "Cuiaba" --niche "imobiliarias" --lat -15.6014 --lng -56.0979 --zoom 13 --region br --language pt --extractEmailsAndContacts false --limit 20
   npm run analyze -- --input data/inputs/example-leads.csv --city Cuiaba --niche imobiliarias
   npm run discover -- --url https://diretorio-publico.com/categoria --city Cuiaba --niche imobiliarias
   npm run discover -- --html data/inputs/pagina-salva.html --city Cuiaba --niche imobiliarias
   npm run demo
+
+Parametros do collect (Local Business Data):
+  --query         termo de busca, ex: "imobiliarias em Cuiaba, MT"
+  --city          cidade (fallback quando a API nao retornar city)
+  --niche         nicho do lead
+  --limit         quantidade de resultados (padrao 20)
+  --lat           latitude do centro da busca (obrigatorio se o template usar {lat})
+  --lng           longitude do centro da busca (obrigatorio se o template usar {lng})
+  --zoom          nivel de aproximacao (padrao 13)
+  --region        pais/regiao (padrao br)
+  --language      idioma da resposta (padrao pt)
+  --extractEmailsAndContacts  true/false (padrao false)
 
 Formato do CSV de entrada:
   nome_empresa,site,telefone,cidade,nicho,categoria,fonte,observacoes

@@ -1,0 +1,135 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: prospect-ai-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prospect_user
+      POSTGRES_PASSWORD: prospect_pass
+      POSTGRES_DB: prospect_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prospect_user -d prospect_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (armazena sessão/estado das instâncias WhatsApp da Evolution API)
+  redis:
+    image: redis:7-alpine
+    container_name: prospect-ai-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Evolution API (gateway WhatsApp via Baileys, evoapicloud/evolution-api)
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    container_name: prospect-ai-evolution
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_GLOBAL_KEY:-change-this-in-production}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://prospect_user:prospect_pass@postgres:5432/evolution_api
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_LOCAL_ENABLED: "false"
+      # Webhook global desabilitado: cada instância registra seu próprio webhook via API
+      # (feito pelo backend ao criar a instância), apontando para EVOLUTION_WEBHOOK_URL.
+      WEBHOOK_GLOBAL_ENABLED: "false"
+      # Reduz volume de eventos desnecessários (sincronização inicial de histórico)
+      WEBHOOK_EVENTS_MESSAGES_SET: "false"
+      WEBHOOK_EVENTS_CONTACTS_SET: "false"
+      WEBHOOK_EVENTS_CHATS_SET: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution-instances:/evolution/instances
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: prospect-ai-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      evolution-api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://prospect_user:prospect_pass@postgres:5432/prospect_ai
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-this-in-production}
+      PORT: 3001
+      NODE_ENV: production
+      FRONTEND_URL: http://localhost:5173
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_GLOBAL_KEY: ${EVOLUTION_API_GLOBAL_KEY:-change-this-in-production}
+      EVOLUTION_WEBHOOK_URL: ${EVOLUTION_WEBHOOK_URL:-https://your-public-domain.com/api/whatsapp/webhook}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-change-this-in-production}
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend (React) 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # VITE_API_URL é "assada" no bundle JS durante o build (Vite não lê
+        # variáveis de ambiente em runtime), por isso vai como build arg.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+    container_name: prospect-ai-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  evolution-instances:
+    driver: local
+
+networks:
+  default:
+    name: prospect-ai-network
