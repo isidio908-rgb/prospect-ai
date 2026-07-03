@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Save, UserRound } from 'lucide-react';
+import { Save, User } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 const DEFAULT_CONTEXT = 'Atuar como gestor de tráfego consultivo, focado em prospecção, diagnóstico comercial, qualidade do lead, WhatsApp e geração de reuniões.';
@@ -45,7 +45,7 @@ export default function Profile() {
       <form onSubmit={handleSubmit} className="card space-y-5">
         <div className="flex items-center gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
           <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300">
-            <UserRound className="w-5 h-5" />
+            <User className="w-5 h-5" />
           </div>
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-gray-100">Contexto usado nos prompts internos</h2>
