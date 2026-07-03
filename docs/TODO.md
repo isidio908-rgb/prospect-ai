@@ -70,26 +70,17 @@ Melhorias futuras:
 - Custo por fonte de coleta.
 - Receita potencial por nicho/cidade.
 
-### 6. Documentacao operacional especifica
-
-Criar guias separados:
-
-- `docs/WHATSAPP-EVOLUTION.md`
-- `docs/IA-LLM.md`
-- `docs/COLETA-LEADS.md`
-- `docs/CREDENCIAIS.md`
-
 ## Prioridade Baixa
 
-### 7. Exportacao PDF
+### 6. Exportacao PDF
 
 Gerar PDF com diagnostico por lead para enviar em conversa comercial.
 
-### 8. Templates comerciais por nicho
+### 7. Templates comerciais por nicho
 
 Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
 
-### 9. Priorizacao inteligente avancada
+### 8. Priorizacao inteligente avancada
 
 Usar IA para sugerir:
 
@@ -100,6 +91,11 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Documentacao operacional criada:
+  - `docs/WHATSAPP-EVOLUTION.md`
+  - `docs/IA-LLM.md`
+  - `docs/COLETA-LEADS.md`
+  - `docs/CREDENCIAIS.md`
 - Avaliacao manual de `npm audit --json` do backend sem `npm audit fix`.
 - Atualizacao segura de `bcrypt` de `^5.1.1` para `^6.0.0`, removendo a cadeia vulneravel `@mapbox/node-pre-gyp` -> `tar`.
 - `npm audit --json` do backend limpo: 0 vulnerabilidades.
