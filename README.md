@@ -17,14 +17,6 @@ Stack local validada com Docker:
 - Backend Node.js/Express
 - Frontend React/Vite
 
-Servicos validados como saudaveis:
-
-- `backend`
-- `frontend`
-- `postgres`
-- `redis`
-- `evolution-api`
-
 Documentacao principal:
 
 - `docs/STATUS-ATUAL.md`
@@ -36,10 +28,14 @@ Documentacao principal:
 
 - Autenticacao com JWT.
 - Cadastro com contexto profissional do usuario: profissao, nicho foco e instrucoes internas para IA.
+- Edicao posterior do perfil profissional em `/profile`.
 - Cadastro, listagem, edicao e exclusao de leads.
 - Importacao manual e CSV.
 - Exportacao CSV e JSON.
 - Coleta por RapidAPI Local Business Data, Apify e Serper.
+- Historico persistente de coletas em `/collections`.
+- Logs persistentes de execucao por coleta.
+- Cache de busca/coleta para evitar chamadas repetidas ao mesmo provider.
 - Cadastro de credenciais de scraper e IA/LLM.
 - Criptografia e mascara de API keys.
 - Controle de uso diario/mensal por credencial.
@@ -55,7 +51,7 @@ Documentacao principal:
 - Verificacao opcional de existencia de WhatsApp na coleta.
 - IA/LLM com tarefas comerciais dentro do detalhe do lead.
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
-- Dashboard basico.
+- Dashboard comercial com funil, fontes, WhatsApp confirmado e conversao por nicho/cidade.
 - Dark mode.
 
 ## Fluxo Principal
@@ -63,7 +59,11 @@ Documentacao principal:
 ```text
 Nicho + Localizacao + Fonte + Credencial
       ↓
-Coleta empresas locais
+Cria execucao de coleta
+      ↓
+Verifica cache da busca
+      ↓
+Coleta empresas locais quando nao ha cache valido
       ↓
 Opcional: verifica se telefone existe no WhatsApp
       ↓
@@ -72,6 +72,8 @@ Normaliza dados
 Remove duplicados
       ↓
 Salva leads
+      ↓
+Grava logs e resumo da execucao
       ↓
 Audita sites
       ↓
@@ -88,6 +90,27 @@ Usa CRM Kanban, WhatsApp e IA para abordagem
 - Apify Google Maps Scraper.
 - Serper.dev Google Places.
 - CSV/manual.
+
+## Historico, Logs e Cache
+
+A coleta possui persistencia operacional:
+
+- `collection_runs`: uma linha por execucao.
+- `collection_run_logs`: eventos e erros por execucao.
+- `collection_cache`: resposta recente por assinatura de busca.
+
+A assinatura de cache considera credencial, query, cidade, nicho, regiao, idioma, limite, coordenadas e opcoes como extracao de contatos e verificacao WhatsApp.
+
+A tela `/collections` mostra:
+
+- Busca executada.
+- Credencial/fonte.
+- Total encontrado.
+- Leads salvos.
+- Duplicados.
+- Erros.
+- Cache hit.
+- Logs detalhados da execucao.
 
 ## Credenciais
 
@@ -121,7 +144,7 @@ Regras:
 
 ## Personalizacao Interna
 
-No cadastro, o usuario informa:
+No cadastro e na pagina `/profile`, o usuario informa:
 
 - Profissao/função.
 - Nicho foco.
@@ -225,13 +248,12 @@ npm run dev
 
 Principais proximos passos:
 
-1. Historico persistente de coletas.
-2. Logs persistentes de execucao.
-3. Cache de busca/coleta.
-4. Teste real da verificacao WhatsApp em coleta com instancia conectada.
-5. Testes automatizados dos modulos novos.
-6. Edicao posterior do perfil profissional do usuario.
-7. Dashboard comercial avancado.
+1. Validar build/test desta sprint no ambiente local atualizado.
+2. Teste real da verificacao WhatsApp em coleta com instancia conectada.
+3. Toggle visual para forcar nova coleta ignorando cache.
+4. Testes automatizados com banco para historico/logs/cache.
+5. Kanban com drag-and-drop e edicao rapida.
+6. Filtros por periodo/fonte no dashboard comercial.
 
 Lista completa em `docs/TODO.md`.
 
