@@ -93,6 +93,7 @@ router.get('/', async (req, res, next) => {
         COUNT(CASE WHEN tem_site = FALSE OR site IS NULL OR site = '' THEN 1 END) as sem_site,
         COUNT(CASE WHEN site IS NOT NULL AND site != '' THEN 1 END) as com_site,
         COUNT(CASE WHEN telefone IS NOT NULL AND telefone != '' THEN 1 END) as com_telefone,
+        COUNT(CASE WHEN whatsapp IS NOT NULL AND whatsapp != '' THEN 1 END) as com_whatsapp_confirmado,
         COUNT(CASE WHEN data_analise IS NOT NULL AND tem_pixel_meta = FALSE THEN 1 END) as sem_pixel,
         COUNT(CASE WHEN data_analise IS NOT NULL AND tem_gtm = FALSE THEN 1 END) as sem_gtm,
         COUNT(CASE WHEN data_analise IS NOT NULL AND tem_ga4 = FALSE THEN 1 END) as sem_ga4,
@@ -125,12 +126,58 @@ router.get('/', async (req, res, next) => {
       [userId]
     );
 
+    const fonteResult = await query(
+      `SELECT COALESCE(fonte, 'indefinida') as fonte, COUNT(*) as total,
+        COUNT(CASE WHEN score >= 60 THEN 1 END) as oportunidades,
+        COUNT(CASE WHEN status = 'cliente_fechado' THEN 1 END) as clientes
+       FROM leads
+       WHERE user_id = $1
+       GROUP BY COALESCE(fonte, 'indefinida')
+       ORDER BY total DESC
+       LIMIT 10`,
+      [userId]
+    );
+
+    const conversaoNichoResult = await query(
+      `SELECT COALESCE(nicho, 'indefinido') as nicho,
+        COUNT(*) as total,
+        COUNT(CASE WHEN status IN ('respondeu', 'reuniao_marcada', 'proposta_enviada', 'cliente_fechado') THEN 1 END) as avancados,
+        COUNT(CASE WHEN status = 'cliente_fechado' THEN 1 END) as clientes
+       FROM leads
+       WHERE user_id = $1
+       GROUP BY COALESCE(nicho, 'indefinido')
+       HAVING COUNT(*) > 0
+       ORDER BY avancados DESC, total DESC
+       LIMIT 8`,
+      [userId]
+    );
+
+    const conversaoCidadeResult = await query(
+      `SELECT COALESCE(cidade, 'indefinida') as cidade,
+        COUNT(*) as total,
+        COUNT(CASE WHEN status IN ('respondeu', 'reuniao_marcada', 'proposta_enviada', 'cliente_fechado') THEN 1 END) as avancados,
+        COUNT(CASE WHEN status = 'cliente_fechado' THEN 1 END) as clientes
+       FROM leads
+       WHERE user_id = $1
+       GROUP BY COALESCE(cidade, 'indefinida')
+       HAVING COUNT(*) > 0
+       ORDER BY avancados DESC, total DESC
+       LIMIT 8`,
+      [userId]
+    );
+
     const funil = funilResult.rows[0];
     const totalContatados = parseInt(funil.total_contatados);
     const totalRespondeuOuAvancou = parseInt(funil.total_respondeu_ou_avancou);
     const taxaResposta = totalContatados > 0
       ? parseFloat(((totalRespondeuOuAvancou / totalContatados) * 100).toFixed(1))
       : 0;
+
+    const withRate = (row, key) => {
+      const total = parseInt(row.total || 0);
+      const value = parseInt(row[key] || 0);
+      return total > 0 ? parseFloat(((value / total) * 100).toFixed(1)) : 0;
+    };
     
     res.json({
       total: parseInt(totalResult.rows[0].total),
@@ -162,6 +209,7 @@ router.get('/', async (req, res, next) => {
         semSite: parseInt(presencaResult.rows[0].sem_site),
         comSite: parseInt(presencaResult.rows[0].com_site),
         comTelefone: parseInt(presencaResult.rows[0].com_telefone),
+        comWhatsappConfirmado: parseInt(presencaResult.rows[0].com_whatsapp_confirmado),
         semPixel: parseInt(presencaResult.rows[0].sem_pixel),
         semGtm: parseInt(presencaResult.rows[0].sem_gtm),
         semGa4: parseInt(presencaResult.rows[0].sem_ga4),
@@ -177,7 +225,28 @@ router.get('/', async (req, res, next) => {
         naoRespondeu: parseInt(funil.nao_respondeu),
         taxaResposta,
         valorFechado: parseFloat(funil.valor_fechado || 0)
-      }
+      },
+      porFonte: fonteResult.rows.map((row) => ({
+        fonte: row.fonte,
+        total: parseInt(row.total),
+        oportunidades: parseInt(row.oportunidades),
+        clientes: parseInt(row.clientes),
+        taxaOportunidade: withRate(row, 'oportunidades')
+      })),
+      conversaoPorNicho: conversaoNichoResult.rows.map((row) => ({
+        nicho: row.nicho,
+        total: parseInt(row.total),
+        avancados: parseInt(row.avancados),
+        clientes: parseInt(row.clientes),
+        taxaAvanco: withRate(row, 'avancados')
+      })),
+      conversaoPorCidade: conversaoCidadeResult.rows.map((row) => ({
+        cidade: row.cidade,
+        total: parseInt(row.total),
+        avancados: parseInt(row.avancados),
+        clientes: parseInt(row.clientes),
+        taxaAvanco: withRate(row, 'avancados')
+      }))
     });
   } catch (error) {
     next(error);
