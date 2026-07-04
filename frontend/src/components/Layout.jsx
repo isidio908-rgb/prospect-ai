@@ -15,7 +15,8 @@ import {
   Columns3,
   History,
   User,
-  Bot
+  Bot,
+  Inbox
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -33,6 +34,7 @@ export default function Layout({ children }) {
     { name: 'Leads', href: '/leads', icon: Users },
     { name: 'CRM Kanban', href: '/crm', icon: Columns3 },
     { name: 'Autopilot', href: '/autopilot', icon: Bot },
+    { name: 'Respostas', href: '/autopilot/replies', icon: Inbox },
     { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
     { name: 'Credenciais', href: '/credentials', icon: Key },
     { name: 'Perfil', href: '/profile', icon: User },
