@@ -20,6 +20,16 @@ function PrivateRoute({ children }) {
   return isAuthenticated ? children : <Navigate to="/login" />;
 }
 
+function DashboardRoute() {
+  return (
+    <PrivateRoute>
+      <Layout>
+        <Dashboard />
+      </Layout>
+    </PrivateRoute>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -50,17 +60,8 @@ function App() {
       
       <Routes>
         <Route path="/login" element={<Login />} />
-        
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Layout>
-                <Dashboard />
-              </Layout>
-            </PrivateRoute>
-          }
-        />
+        <Route path="/" element={<DashboardRoute />} />
+        <Route path="/dashboard" element={<DashboardRoute />} />
         
         <Route
           path="/collect"
