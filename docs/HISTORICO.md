@@ -2,6 +2,25 @@
 
 Este arquivo consolida o historico operacional do projeto. Documentos antigos de sprint continuam no repositorio, mas este passa a ser o registro principal e atualizado.
 
+## 03/07/2026 - Dashboard Comercial Com Filtros
+
+### Implementado
+
+- Adicionados filtros por periodo e fonte no endpoint `/api/stats`.
+- Mantido periodo padrao `all` para preservar as metricas historicas ja exibidas no dashboard.
+- Adicionados periodos rapidos: hoje, ultimos 7 dias, ultimos 30 dias, ultimos 90 dias e mes atual.
+- Adicionado periodo personalizado com `dateFrom` e `dateTo`.
+- Adicionada listagem de fontes disponiveis para selecao no dashboard.
+- Atualizada pagina `/dashboard` com filtros comerciais, badges do recorte aplicado e botao de atualizacao manual.
+- Adicionado teste unitario para normalizacao dos filtros e montagem parametrizada do `WHERE` SQL.
+
+### Observacoes
+
+- O filtro usa `data_coleta` como base temporal.
+- A fonte e filtrada por `fonte`, tratando valores vazios como `indefinida`.
+- A montagem do SQL continua parametrizada; valores de filtro nao sao interpolados diretamente.
+- Precisa de validacao local com `backend npm test`, `frontend npm run build`, Docker build/up e teste HTTP em `/dashboard` e `/api/stats` antes do merge.
+
 ## 03/07/2026 - Kanban Comercial Avancado
 
 ### Implementado
@@ -18,7 +37,7 @@ Este arquivo consolida o historico operacional do projeto. Documentos antigos de
 
 - A mudanca usa o `PATCH /api/leads/:id` ja existente.
 - Nao adiciona dependencia nova.
-- Precisa de validacao local com `frontend npm run build` e teste manual em `/crm` antes do merge.
+- Validado localmente antes do merge: backend tests, frontend build, Docker build/up, `/crm`, `/leads/27`, filtros, drag-and-drop funcional por contrato, edicao rapida e scan de segredos.
 
 ## 03/07/2026 - Validacao Pos-Merge Em Main
 
@@ -143,8 +162,8 @@ O projeto esta pronto para uso interno controlado, desde que:
 
 ## Proximos Marcos
 
-1. Dashboard comercial com filtros por periodo/fonte.
-2. Testes automatizados complementares para fluxos novos.
-3. Exportacao PDF com diagnostico por lead.
-4. Templates comerciais por nicho.
-5. Priorizacao inteligente avancada.
+1. Testes automatizados complementares para fluxos novos.
+2. Exportacao PDF com diagnostico por lead.
+3. Templates comerciais por nicho.
+4. Priorizacao inteligente avancada.
+5. Comparativos semanais/mensais e custo por fonte no dashboard.
