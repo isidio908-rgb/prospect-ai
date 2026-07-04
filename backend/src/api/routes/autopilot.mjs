@@ -8,6 +8,7 @@ import {
   getApprovalBatch,
   listApprovalBatches,
   markApprovalBatchRequested,
+  processApprovalReply,
   sendTextToApprovalNumber,
 } from '../../services/autopilot/approvalBatchService.mjs';
 
@@ -47,6 +48,11 @@ const createApprovalBatchSchema = z.object({
   source_type: z.string().max(100).optional().or(z.literal('')),
   expires_in_minutes: z.number().int().min(10).max(1440).optional().default(120),
   send_approval_request: z.boolean().optional().default(true),
+});
+
+const processApprovalCommandSchema = z.object({
+  text: z.string().min(1).max(500),
+  from_phone: z.string().max(50).optional().or(z.literal('')),
 });
 
 function nullIfBlank(value) {
@@ -264,6 +270,28 @@ router.post('/approval-batches', async (req, res, next) => {
     res.status(201).json({ ...result, sent });
   } catch (error) {
     handleServiceError(error, res, next);
+  }
+});
+
+router.post('/approval-batches/process-command', async (req, res, next) => {
+  try {
+    const data = processApprovalCommandSchema.parse(req.body || {});
+    const result = await processApprovalReply({
+      userId: req.user.id,
+      fromPhone: data.from_phone || req.user.approval_whatsapp,
+      text: data.text,
+    });
+
+    if (!result.handled) {
+      return res.status(400).json({
+        error: 'Comando de aprovação não processado',
+        reason: result.reason,
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
   }
 });
 
