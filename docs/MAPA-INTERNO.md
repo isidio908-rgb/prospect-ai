@@ -1,7 +1,7 @@
 # Mapa Interno - Prospect AI
 
 **Atualizado em:** 04/07/2026  
-**Estado atual:** produto interno operacional em `main`, com Autopilot SDR controlado e central `/autopilot` mergeada no PR #17.
+**Estado atual:** produto interno operacional em `main`, com Autopilot SDR controlado e guia de uso mergeados. PR #19 prepara a central comercial de respostas.
 
 Este documento e a bussola curta do projeto. Use ele para nao perder o fio entre prospeccao real, manutencao tecnica e proximas PRs.
 
@@ -17,7 +17,8 @@ A ferramenta deve:
 4. Gerar diagnosticos e mensagens com IA.
 5. Organizar o funil no CRM/Kanban.
 6. Apoiar disparos e follow-ups pelo WhatsApp com controle humano.
-7. Ajudar o usuario a marcar reunioes e vender servicos digitais.
+7. Tratar respostas recebidas e sugerir proxima acao comercial.
+8. Ajudar o usuario a marcar reunioes e vender servicos digitais.
 
 ## Fonte De Verdade
 
@@ -49,24 +50,32 @@ Documentos antigos de sprint continuam no repositorio como historico, mas nao de
 | Autopilot API | Concluido | CRUD de regras, fila, lotes e comandos. |
 | Aprovacao em lote | Concluido | WhatsApp pessoal aprovou lote real via webhook. |
 | Autopilot completo controlado | Concluido | PR #17: central `/autopilot`, scheduler, worker controlado, stop-on-reply, follow-ups, classificacao, agendamento e diagnostico base. |
+| Guia operacional do Autopilot | Concluido | PR #18: documenta como usar `/autopilot` com seguranca. |
 
-## Marco Mais Recente
+## Em Producao Agora - PR #19
 
-PR #17 foi validado e mergeado.
+Objetivo: criar a central de respostas comerciais em `/autopilot/replies`.
 
-Resultado:
+Entregas previstas:
 
-- Pagina `/autopilot` refinada como central operacional comercial.
-- Fluxo visual 1 a 11 corrigido.
-- Operacao diaria separada de modo avancado/tecnico.
-- Scheduler e follow-ups mantem `dry_run=true` por padrao.
-- Worker so envia com `dry_run=false` e `confirm_send=true`.
-- Lotes recentes permitem ver lote, reenviar solicitacao e cancelar lote.
-- Agendamento e diagnostico usam busca/selecao de lead por nome.
-- Validacao final reportada: backend 60/60, frontend build, audit, Docker e `/health` ok.
-- Merge commit: `78e62b205445d63a3b4dc768dc8de6794d8b302b`.
+- Inbox de respostas recentes vindas do WhatsApp.
+- Classificacao heuristica da intencao: interesse, preco, reuniao, pergunta, sem interesse, neutro.
+- Resposta sugerida para copiar.
+- Proxima acao recomendada.
+- Acoes seguras para atualizar CRM: respondeu, reuniao, sem interesse, criar acao/tratar preco.
+- Registro em `lead_followups`.
+- Isolamento por `user_id`.
+- Nenhum envio automatico de resposta para lead.
 
-Conclusao: o Autopilot ja pode ser usado como central assistida, mantendo controle humano antes de qualquer envio real.
+Papel no fluxo comercial:
+
+```mermaid
+flowchart TD
+  A[Lead responde] --> B[Central de respostas]
+  B --> C[Classificar intencao]
+  C --> D[Copiar resposta ou registrar acao]
+  D --> E[CRM atualizado]
+```
 
 ## Estado Operacional Atual
 
@@ -81,14 +90,16 @@ O sistema pode ser usado hoje para:
 - simular envios antes de disparar;
 - enviar mensagens aprovadas somente com confirmacao avancada;
 - cancelar follow-ups quando houver resposta;
-- registrar reunioes e diagnosticos base.
+- registrar reunioes e diagnosticos base;
+- apos PR #19, tratar respostas em `/autopilot/replies`.
 
 O sistema ainda nao deve:
 
 - rodar cron automatico em background sem uma decisao explicita;
 - disparar em volume alto sem acompanhamento diario;
 - agendar reunioes em calendario externo sem confirmacao;
-- usar classificacao por LLM paga em background sem limites/custos claros.
+- usar classificacao por LLM paga em background sem limites/custos claros;
+- responder leads automaticamente sem aprovacao e configuracao explicita.
 
 ## Mapa Dos Modulos
 
@@ -104,6 +115,7 @@ O sistema ainda nao deve:
 | WhatsApp | `/whatsapp` | `/api/whatsapp` | Operacional |
 | IA | Detalhe do lead | `/api/ai` | Operacional |
 | Autopilot | `/autopilot` | `/api/autopilot` | Operacional controlado |
+| Respostas | `/autopilot/replies` | `/api/autopilot/replies/inbox` | PR #19 |
 
 ## Como Usar O Autopilot
 
@@ -122,6 +134,7 @@ Resumo operacional:
 9. Criar/classificar follow-ups com cuidado.
 10. Registrar reunioes.
 11. Gerar diagnostico base.
+12. Tratar respostas em `/autopilot/replies`.
 
 ## V2 Comercial - Sequencia De PRs
 
@@ -147,6 +160,7 @@ A V2 comercial deve melhorar conversao, nao apenas adicionar automacao.
 8. Dados de usuario, fila e lotes devem permanecer isolados por `user_id`.
 9. Provider externo deve respeitar cota/cache; nao usar rotacao abusiva de credenciais.
 10. Toda PR precisa terminar com validacao de testes, build, Docker e scan basico de segredos.
+11. Central de respostas pode sugerir e copiar textos, mas nao deve enviar resposta automatica sem confirmacao explicita.
 
 ## Operacao Comercial Enquanto Desenvolve
 
@@ -155,8 +169,9 @@ A V2 comercial deve melhorar conversao, nao apenas adicionar automacao.
 3. Usar CRM Kanban para status e proxima acao.
 4. Usar IA para ajustar mensagem por nicho.
 5. Usar `/autopilot` para aprovar, simular e enviar com controle.
-6. Medir respostas, reunioes e clientes fechados.
-7. Ajustar criterios de score e mensagens com base nas respostas reais.
+6. Usar `/autopilot/replies` para tratar respostas e marcar proximas acoes.
+7. Medir respostas, reunioes e clientes fechados.
+8. Ajustar criterios de score e mensagens com base nas respostas reais.
 
 ## Prompt De Validacao Padrao
 
@@ -181,6 +196,6 @@ Atualize o corpo do PR com resultados completos.
 
 ## Proxima Decisao
 
-Comecar a V2 comercial pelo PR #19: central de respostas e proxima acao recomendada.
+Validar PR #19 e, depois, seguir para PR #20: templates comerciais por nicho e profissao.
 
-Motivo: depois que a operacao de envio esta controlada, o maior ganho comercial vem de responder melhor e mais rapido quem demonstrou interesse.
+Motivo: apos organizar respostas, o maior ganho vem de melhorar qualidade das mensagens por segmento.
