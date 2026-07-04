@@ -76,7 +76,7 @@ describe('autopilot foundation', () => {
 
   test('aprova lead compatível e cria item pendente em modo assistido', () => {
     const decision = buildAutopilotDecision(baseLead, baseRule, [], {
-      now: new Date('2026-07-03T13:00:00.000Z'),
+      now: new Date('2026-07-03T13:00:00'),
       automationRunId: 99,
     });
 
@@ -96,7 +96,7 @@ describe('autopilot foundation', () => {
       mode: 'automatico',
       require_manual_approval: false,
     }, {
-      now: new Date('2026-07-03T13:00:00.000Z'),
+      now: new Date('2026-07-03T13:00:00'),
     });
 
     assert.equal(item.status, 'approved');
@@ -104,9 +104,9 @@ describe('autopilot foundation', () => {
   });
 
   test('respeita janela de envio e joga para próximo horário seguro', () => {
-    const inside = new Date('2026-07-03T13:00:00.000Z');
-    const beforeWindow = new Date('2026-07-03T07:30:00.000Z');
-    const afterWindow = new Date('2026-07-03T20:30:00.000Z');
+    const inside = new Date('2026-07-03T13:00:00');
+    const beforeWindow = new Date('2026-07-03T07:30:00');
+    const afterWindow = new Date('2026-07-03T20:30:00');
 
     assert.equal(isWithinSendWindow(inside, baseRule), true);
     assert.equal(isWithinSendWindow(beforeWindow, baseRule), false);
