@@ -90,6 +90,9 @@ export const autopilot = {
   classifyReplies: (data) => api.post('/api/autopilot/replies/classify', data),
   replyInbox: (params) => api.get('/api/autopilot/replies/inbox', { params }),
   applyReplyAction: (leadId, data) => api.post(`/api/autopilot/replies/${leadId}/action`, data),
+  templateCatalog: () => api.get('/api/autopilot/templates/catalog'),
+  previewTemplate: (data) => api.post('/api/autopilot/templates/preview', data),
+  applyTemplate: (data) => api.post('/api/autopilot/templates/apply', data),
   createAppointment: (data) => api.post('/api/autopilot/appointments', data),
   diagnostic: (leadId) => api.get(`/api/autopilot/diagnostics/${leadId}`),
 };
