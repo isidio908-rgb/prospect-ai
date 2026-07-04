@@ -35,11 +35,10 @@ Melhorias futuras:
 
 ### 3. Testes automatizados complementares
 
-Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, erro RapidAPI sem expor key, erro Apify sem expor token e filtros do dashboard comercial.
+Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, rotas HTTP de `/api/collections`, erro RapidAPI sem expor key, erro Apify sem expor token e filtros do dashboard comercial.
 
 Cobrir proximas camadas:
 
-- Rotas `/api/collections` com HTTP real.
 - Credenciais LLM.
 - Rotas `/api/ai/*`.
 - Personalizacao profissional dos prompts de IA em fluxo HTTP.
@@ -70,6 +69,12 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Teste HTTP real das rotas `/api/collections`:
+  - exige autenticação para listar histórico;
+  - lista apenas execuções do usuário autenticado;
+  - retorna logs por run sem vazar segredos;
+  - rejeita limpeza de cache de execução de outro usuário;
+  - limpa cache da execução do usuário e remove TTL visual da listagem.
 - Filtros por periodo e fonte no dashboard comercial:
   - backend `/api/stats` aceita `period`, `fonte`, `dateFrom` e `dateTo`;
   - periodo padrao `all` preserva metricas historicas existentes;
