@@ -21,14 +21,53 @@ function normalizeCommandText(value) {
     .replace(/\s+/g, ' ');
 }
 
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function resolveWebhookData(payload = {}) {
+  if (Array.isArray(payload?.data)) return payload.data[0] || {};
+  if (Array.isArray(payload?.data?.messages)) return payload.data.messages[0] || {};
+  if (Array.isArray(payload?.messages)) return payload.messages[0] || {};
+  return payload?.data?.message || payload?.data || payload?.message || payload || {};
+}
+
 function getWebhookMessageText(data = {}) {
-  const message = data?.message || {};
-  return message.conversation || message.extendedTextMessage?.text || data?.text || '';
+  const message = data?.message || data || {};
+  return firstText(
+    message.conversation,
+    message.extendedTextMessage?.text,
+    message.ephemeralMessage?.message?.conversation,
+    message.ephemeralMessage?.message?.extendedTextMessage?.text,
+    message.buttonsResponseMessage?.selectedDisplayText,
+    message.buttonsResponseMessage?.selectedButtonId,
+    message.listResponseMessage?.title,
+    message.templateButtonReplyMessage?.selectedDisplayText,
+    data?.text,
+    data?.body,
+    data?.messageText,
+    data?.pushNameText
+  );
 }
 
 function getWebhookPhone(data = {}) {
-  const remoteJid = data?.key?.remoteJid || '';
+  const remoteJid = firstText(
+    data?.key?.remoteJid,
+    data?.remoteJid,
+    data?.from,
+    data?.sender,
+    data?.chatId,
+    data?.participant
+  );
   return String(remoteJid).split('@')[0];
+}
+
+function getWebhookFromMe(data = {}) {
+  return Boolean(data?.key?.fromMe ?? data?.fromMe ?? data?.message?.key?.fromMe);
 }
 
 export function parseApprovalCommand(text) {
@@ -253,7 +292,6 @@ export async function createApprovalBatch(userId, options = {}) {
     await query(
       `UPDATE message_queue SET
         approval_batch_id = $1,
-        approval_requested_at = NOW(),
         updated_at = NOW()
        WHERE id = $2 AND user_id = $3`,
       [batch.id, row.message_queue_id, userId]
@@ -274,6 +312,13 @@ export async function markApprovalBatchRequested(userId, batchId) {
     `UPDATE approval_batches
      SET requested_at = NOW(), updated_at = NOW()
      WHERE id = $1 AND user_id = $2`,
+    [batchId, userId]
+  );
+
+  await query(
+    `UPDATE message_queue
+     SET approval_requested_at = NOW(), updated_at = NOW()
+     WHERE approval_batch_id = $1 AND user_id = $2`,
     [batchId, userId]
   );
 }
@@ -434,13 +479,16 @@ export async function processApprovalReply({ userId, fromPhone, text }) {
 }
 
 export async function processApprovalWebhookEvent(payload) {
-  const { event, instance: instanceName, data } = payload || {};
+  const event = payload?.event || payload?.type;
   if (!['MESSAGES_UPSERT', 'messages.upsert'].includes(event)) return { handled: false, reason: 'ignored_event' };
-  if (data?.key?.fromMe) return { handled: false, reason: 'from_me' };
+
+  const data = resolveWebhookData(payload);
+  if (getWebhookFromMe(data)) return { handled: false, reason: 'from_me' };
 
   const text = getWebhookMessageText(data);
   if (!text) return { handled: false, reason: 'empty_text' };
 
+  const instanceName = firstText(payload?.instance, payload?.instanceName, data?.instance, data?.instanceName);
   const instanceResult = await query(
     'SELECT user_id FROM whatsapp_instances WHERE instance_name = $1',
     [instanceName]
