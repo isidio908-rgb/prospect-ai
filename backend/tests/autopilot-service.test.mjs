@@ -8,6 +8,7 @@ import {
   normalizeAutopilotRule,
   shouldQueueInitialMessage,
 } from '../src/services/autopilot/autopilotService.mjs';
+import { approvalNumbersMatch } from '../src/services/autopilot/approvalBatchService.mjs';
 
 const baseLead = {
   id: 10,
@@ -116,4 +117,10 @@ describe('autopilot foundation', () => {
     assert.equal(next.getDate(), 4);
     assert.equal(next.getHours(), 9);
   });
+
+test('compara numero de aprovacao brasileiro com ou sem nono digito', () => {
+  assert.equal(approvalNumbersMatch('5565999062706', '556599062706'), true);
+  assert.equal(approvalNumbersMatch('55065999062706', '556599062706'), true);
+  assert.equal(approvalNumbersMatch('5565999062706', '556588887777'), false);
+});
 });

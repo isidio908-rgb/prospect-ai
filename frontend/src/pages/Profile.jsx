@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Save, User } from 'lucide-react';
+import { MessageCircle, Save, User } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 const DEFAULT_CONTEXT = 'Atuar como gestor de tráfego consultivo, focado em prospecção, diagnóstico comercial, qualidade do lead, WhatsApp e geração de reuniões.';
@@ -13,6 +13,7 @@ export default function Profile() {
     profession: user?.profession || 'Gestor de Tráfego',
     primary_niche: user?.primary_niche || '',
     internal_context: user?.internal_context || DEFAULT_CONTEXT,
+    approval_whatsapp: user?.approval_whatsapp || '',
   });
 
   const updateField = (field, value) => {
@@ -89,6 +90,26 @@ export default function Profile() {
             className="input"
             placeholder="Ex: Imobiliário, clínicas, estética..."
           />
+        </div>
+
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-2 text-gray-900 dark:text-gray-100 font-semibold">
+            <MessageCircle className="w-5 h-5 text-primary-600 dark:text-primary-300" />
+            Canal de aprovação do Autopilot
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">WhatsApp pessoal para aprovar lotes</label>
+            <input
+              type="tel"
+              value={form.approval_whatsapp}
+              onChange={(event) => updateField('approval_whatsapp', event.target.value)}
+              className="input"
+              placeholder="Ex: 5565999999999"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Esse número recebe os lotes de aprovação. Use formato com DDI e DDD; exemplo: 5565999999999.
+            </p>
+          </div>
         </div>
 
         <div>

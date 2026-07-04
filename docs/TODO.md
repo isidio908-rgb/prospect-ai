@@ -22,12 +22,12 @@ Checklist:
 
 ### 2. Autopilot SDR - proximas camadas
 
-A fundacao do Autopilot SDR ja define tabelas, regras, servico de decisao/fila e API autenticada para regras e fila. O envio automatico real ainda deve nascer controlado por configuracao explicita.
+A fundacao do Autopilot SDR ja define tabelas, regras, servico de decisao/fila, API autenticada e aprovacao em lote via WhatsApp pessoal. O envio automatico real ainda deve nascer controlado por configuracao explicita.
 
 Proximas etapas:
 
 - Tela para configurar Autopilot SDR.
-- Tela de fila de mensagens pendentes.
+- Tela de fila/lotes de aprovacao.
 - Scheduler diario para enfileirar leads elegiveis.
 - Worker de envio WhatsApp com limite diario/horario.
 - Stop-on-reply para follow-ups.
@@ -49,7 +49,7 @@ Melhorias futuras:
 
 ### 4. Testes automatizados complementares
 
-Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, rotas HTTP de `/api/collections`, erro RapidAPI sem expor key, erro Apify sem expor token, filtros do dashboard comercial, fundacao do Autopilot SDR e API HTTP do Autopilot.
+Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, rotas HTTP de `/api/collections`, erro RapidAPI sem expor key, erro Apify sem expor token, filtros do dashboard comercial, fundacao do Autopilot SDR, API HTTP do Autopilot e aprovacao em lote via WhatsApp.
 
 Cobrir proximas camadas:
 
@@ -86,6 +86,15 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Aprovacao em lote do Autopilot via WhatsApp:
+  - campo `approval_whatsapp` no perfil do usuario;
+  - tabelas `approval_batches` e `approval_batch_items`;
+  - vinculo de `message_queue` com lote de aprovacao;
+  - criacao de lote por `/api/autopilot/approval-batches`;
+  - mensagem de aprovacao com comandos `APROVAR LOTE`, `CANCELAR LOTE`, `APROVAR {id}:1,3` e `CANCELAR {id}:2`;
+  - processamento de resposta recebida pelo webhook da Evolution API;
+  - confirmacao de resultado enviada ao WhatsApp de aprovacao;
+  - nenhuma mensagem enviada automaticamente para leads nesta etapa.
 - API do Autopilot SDR:
   - rotas autenticadas em `/api/autopilot`;
   - CRUD de regras em `/api/autopilot/rules`;

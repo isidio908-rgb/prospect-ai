@@ -3,6 +3,14 @@ import { z } from 'zod';
 import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
 import { normalizeAutopilotRule } from '../../services/autopilot/autopilotService.mjs';
+import {
+  createApprovalBatch,
+  getApprovalBatch,
+  listApprovalBatches,
+  markApprovalBatchRequested,
+  processApprovalReply,
+  sendTextToApprovalNumber,
+} from '../../services/autopilot/approvalBatchService.mjs';
 
 const router = express.Router();
 
@@ -30,6 +38,21 @@ const ruleSchema = z.object({
 
 const updateRuleSchema = ruleSchema.partial().refine((data) => Object.keys(data).length > 0, {
   message: 'Informe ao menos um campo para atualizar',
+});
+
+const createApprovalBatchSchema = z.object({
+  limit: z.number().int().min(1).max(10).optional().default(5),
+  min_score: z.number().int().min(0).max(100).optional(),
+  city: z.string().max(255).optional().or(z.literal('')),
+  niche: z.string().max(255).optional().or(z.literal('')),
+  source_type: z.string().max(100).optional().or(z.literal('')),
+  expires_in_minutes: z.number().int().min(10).max(1440).optional().default(120),
+  send_approval_request: z.boolean().optional().default(true),
+});
+
+const processApprovalCommandSchema = z.object({
+  text: z.string().min(1).max(500),
+  from_phone: z.string().max(50).optional().or(z.literal('')),
 });
 
 function nullIfBlank(value) {
@@ -60,6 +83,13 @@ function mapRule(row) {
     followup_1_delay_hours: Number(row.followup_1_delay_hours || 0),
     followup_2_delay_hours: Number(row.followup_2_delay_hours || 0),
   };
+}
+
+function handleServiceError(error, res, next) {
+  if (error.status) {
+    return res.status(error.status).json({ error: error.message });
+  }
+  return next(error);
 }
 
 router.get('/rules', async (req, res, next) => {
@@ -206,6 +236,85 @@ router.delete('/rules/:id', async (req, res, next) => {
   }
 });
 
+router.get('/approval-batches', async (req, res, next) => {
+  try {
+    const batches = await listApprovalBatches(req.user.id, {
+      status: req.query.status ? String(req.query.status) : undefined,
+      limit: Number(req.query.limit || 50),
+      offset: Number(req.query.offset || 0),
+    });
+
+    res.json({ batches });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/approval-batches', async (req, res, next) => {
+  try {
+    const data = createApprovalBatchSchema.parse(req.body || {});
+    const result = await createApprovalBatch(req.user.id, {
+      ...data,
+      city: nullIfBlank(data.city),
+      niche: nullIfBlank(data.niche),
+      source_type: nullIfBlank(data.source_type),
+    });
+
+    let sent = false;
+    if (data.send_approval_request !== false) {
+      await sendTextToApprovalNumber(req.user.id, result.batch.approval_whatsapp, result.approvalText);
+      await markApprovalBatchRequested(req.user.id, result.batch.id);
+      sent = true;
+    }
+
+    res.status(201).json({ ...result, sent });
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+});
+
+router.post('/approval-batches/process-command', async (req, res, next) => {
+  try {
+    const data = processApprovalCommandSchema.parse(req.body || {});
+    const result = await processApprovalReply({
+      userId: req.user.id,
+      fromPhone: data.from_phone || req.user.approval_whatsapp,
+      text: data.text,
+    });
+
+    if (!result.handled) {
+      return res.status(400).json({
+        error: 'Comando de aprovação não processado',
+        reason: result.reason,
+      });
+    }
+
+    if (result.success === false) {
+      return res.status(400).json({
+        ...result,
+        error: 'Comando de aprovação não aplicado',
+        reason: result.reason || 'command_not_applied',
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/approval-batches/:id', async (req, res, next) => {
+  try {
+    const result = await getApprovalBatch(req.user.id, req.params.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Lote de aprovação não encontrado' });
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/queue', async (req, res, next) => {
   try {
     const status = req.query.status ? String(req.query.status) : null;
@@ -224,9 +333,10 @@ router.get('/queue', async (req, res, next) => {
     const result = await query(
       `SELECT
         mq.id, mq.lead_id, mq.automation_rule_id, mq.automation_run_id,
-        mq.channel, mq.message_type, mq.status, mq.scheduled_at,
-        mq.approved_at, mq.sent_at, mq.cancelled_at, mq.attempts,
-        mq.last_error, mq.payload_json, mq.created_at, mq.updated_at,
+        mq.approval_batch_id, mq.channel, mq.message_type, mq.status, mq.scheduled_at,
+        mq.approval_requested_at, mq.approved_at, mq.sent_at, mq.cancelled_at,
+        mq.approved_by_channel, mq.approval_response_text,
+        mq.attempts, mq.last_error, mq.payload_json, mq.created_at, mq.updated_at,
         l.nome_empresa, l.telefone, l.whatsapp, l.cidade, l.nicho, l.score, l.prioridade,
         ar.name as automation_rule_name
        FROM message_queue mq
@@ -248,7 +358,7 @@ router.patch('/queue/:id/approve', async (req, res, next) => {
   try {
     const result = await query(
       `UPDATE message_queue
-       SET status = 'approved', approved_at = NOW(), updated_at = NOW()
+       SET status = 'approved', approved_at = NOW(), approved_by_channel = 'api', updated_at = NOW()
        WHERE id = $1 AND user_id = $2 AND status = 'pending'
        RETURNING *`,
       [req.params.id, req.user.id]
@@ -268,7 +378,7 @@ router.patch('/queue/:id/cancel', async (req, res, next) => {
   try {
     const result = await query(
       `UPDATE message_queue
-       SET status = 'cancelled', cancelled_at = NOW(), updated_at = NOW()
+       SET status = 'cancelled', cancelled_at = NOW(), approval_response_text = COALESCE(approval_response_text, 'Cancelado via API'), updated_at = NOW()
        WHERE id = $1 AND user_id = $2 AND status IN ('pending', 'approved', 'queued')
        RETURNING *`,
       [req.params.id, req.user.id]

@@ -18,7 +18,7 @@ export async function authenticate(req, res, next) {
       
       // Buscar usuário no banco, incluindo contexto profissional usado pela UI e IA.
       const result = await query(
-        `SELECT id, email, name, profession, primary_niche, internal_context
+        `SELECT id, email, name, profession, primary_niche, internal_context, approval_whatsapp
          FROM users
          WHERE id = $1`,
         [decoded.userId]

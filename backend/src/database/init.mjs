@@ -24,6 +24,7 @@ export async function initDatabase() {
         profession VARCHAR(255) DEFAULT 'Gestor de Tráfego',
         primary_niche VARCHAR(255),
         internal_context TEXT,
+        approval_whatsapp VARCHAR(50),
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
@@ -33,6 +34,7 @@ export async function initDatabase() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profession VARCHAR(255) DEFAULT 'Gestor de Tráfego'`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_niche VARCHAR(255)`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS internal_context TEXT`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_whatsapp VARCHAR(50)`);
 
     // Criar tabela de configurações do usuário (credenciais RapidAPI)
     await client.query(`
