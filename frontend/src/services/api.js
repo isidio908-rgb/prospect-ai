@@ -67,6 +67,17 @@ export const stats = {
   get: (params) => api.get('/api/stats', { params }),
 };
 
+// Autopilot SDR
+export const autopilot = {
+  listRules: () => api.get('/api/autopilot/rules'),
+  createRule: (data) => api.post('/api/autopilot/rules', data),
+  updateRule: (id, data) => api.patch(`/api/autopilot/rules/${id}`, data),
+  deleteRule: (id) => api.delete(`/api/autopilot/rules/${id}`),
+  listQueue: (params) => api.get('/api/autopilot/queue', { params }),
+  approveMessage: (id) => api.patch(`/api/autopilot/queue/${id}/approve`),
+  cancelMessage: (id) => api.patch(`/api/autopilot/queue/${id}/cancel`),
+};
+
 // Credenciais
 export const credentials = {
   providers: () => api.get('/api/credentials/providers'),
