@@ -79,6 +79,7 @@ export const autopilot = {
   listApprovalBatches: (params) => api.get('/api/autopilot/approval-batches', { params }),
   createApprovalBatch: (data) => api.post('/api/autopilot/approval-batches', data),
   getApprovalBatch: (id) => api.get(`/api/autopilot/approval-batches/${id}`),
+  resendApprovalBatch: (id) => api.post(`/api/autopilot/approval-batches/${id}/resend`),
   processApprovalCommand: (data) => api.post('/api/autopilot/approval-batches/process-command', data),
   stats: () => api.get('/api/autopilot/stats'),
   runs: (params) => api.get('/api/autopilot/runs', { params }),

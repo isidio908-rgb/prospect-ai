@@ -25,12 +25,16 @@ Implementado:
 
 - pagina `/autopilot`;
 - item Autopilot no menu lateral;
-- cards de metricas;
+- central operacional comercial para uso diario;
+- cards de proxima acao: leads elegiveis, mensagens pendentes, lotes aguardando aprovacao, mensagens aprovadas, respostas recebidas e reunioes para agendar;
+- sequencia visual 1 ao 11 sem numeros duplicados;
+- separacao entre Operacao diaria e Modo avancado/tecnico;
 - gerenciamento de regras;
 - visualizacao de fila;
-- visualizacao e criacao de lotes;
+- visualizacao e criacao de lotes, com acoes Ver lote, Reenviar solicitacao e Cancelar lote;
 - detalhe de lote;
-- painel de runs e resultado da ultima acao.
+- selecao de lead por nome para agendamento assistido e diagnostico/PDF base;
+- painel de runs e resultado da ultima acao em secao avancada recolhivel.
 
 ### 2. Scheduler assistido
 
@@ -117,6 +121,7 @@ Implementado como base operacional:
 - uso de `mensagem_whatsapp` e `mensagem_whatsapp_followup` do lead quando existirem;
 - painel de regra por nicho/cidade/fonte;
 - classificacao de respostas com proxima acao.
+- tela diaria orientada por proxima acao, reduzindo dependencia de IDs manuais.
 
 ### 10. PDF / mini diagnostico
 
@@ -151,6 +156,7 @@ Implementado neste PR:
 | `POST` | `/api/autopilot/replies/classify` | Classificar respostas recentes. |
 | `POST` | `/api/autopilot/appointments` | Registrar reuniao assistida. |
 | `GET` | `/api/autopilot/diagnostics/:leadId` | Gerar diagnostico Markdown. |
+| `POST` | `/api/autopilot/approval-batches/:id/resend` | Reenviar solicitacao para o WhatsApp pessoal conectado. |
 
 ## Validacao CLI Recomendada
 
@@ -177,21 +183,23 @@ curl -s http://localhost:3001/health
 ## Validacao Funcional Recomendada
 
 1. Acessar `/autopilot`.
-2. Criar uma regra assistida.
-3. Rodar scheduler em `dry_run=true`.
-4. Rodar scheduler com `dry_run=false` para criar pendentes.
-5. Criar lote sem envio externo.
-6. Criar lote com envio para WhatsApp pessoal.
-7. Aprovar lote pelo WhatsApp.
-8. Simular worker com `dry_run=true`.
-9. Validar que nada virou `sent` no dry-run.
-10. Se for testar envio real, chamar worker com `dry_run=false` e `confirm_send=true` em lead de teste.
-11. Validar stop-on-reply.
-12. Validar follow-up em dry-run.
-13. Validar classificacao de resposta em dry-run.
-14. Validar agendamento assistido em lead de teste.
-15. Validar diagnostico Markdown de lead.
-16. Confirmar logs/respostas sem `api_key`, `apiKey`, `api_key_encrypted`, `secret`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou token real.
+2. Conferir os cards de proxima acao no topo.
+3. Criar ou revisar uma regra assistida.
+4. Rodar scheduler em `dry_run=true` pela Operacao diaria.
+5. Rodar scheduler com `dry_run=false` apenas para criar pendentes.
+6. Criar lote sem envio externo, mantendo `send_approval_request=false`.
+7. Em Lotes recentes, validar Ver lote, Reenviar solicitacao e Cancelar lote.
+8. Criar lote com envio para WhatsApp pessoal somente com instancia conectada.
+9. Aprovar lote pelo WhatsApp.
+10. Simular worker com `dry_run=true`.
+11. Validar que nada virou `sent` no dry-run.
+12. Se for testar envio real, abrir Modo avancado/tecnico e chamar worker com `dry_run=false` e `confirm_send=true` em lead de teste.
+13. Validar stop-on-reply.
+14. Validar follow-up em dry-run.
+15. Validar classificacao de resposta em dry-run.
+16. Validar agendamento assistido selecionando lead por nome.
+17. Validar diagnostico Markdown/PDF base selecionando lead por nome.
+18. Confirmar logs/respostas sem `api_key`, `apiKey`, `api_key_encrypted`, `secret`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou token real.
 
 ## Fora Do Escopo Deste PR
 

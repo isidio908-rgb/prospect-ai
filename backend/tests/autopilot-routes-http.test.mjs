@@ -338,6 +338,14 @@ describe('autopilot routes HTTP', () => {
     });
     assert.equal(foreignBatch.response.status, 404);
 
+    const resendDisconnected = await request(baseUrl, `/api/autopilot/approval-batches/${batchId}/resend`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(resendDisconnected.response.status, 400);
+    assert.match(resendDisconnected.body.error, /Conecte um numero de WhatsApp/);
+    assert.equal(hasSecretPattern(resendDisconnected.body), false);
+
     const unauthorized = await processApprovalReply({
       userId,
       fromPhone: '5565000000000',

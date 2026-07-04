@@ -4,6 +4,7 @@ import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
 import { normalizeAutopilotRule } from '../../services/autopilot/autopilotService.mjs';
 import {
+  buildApprovalBatchText,
   createApprovalBatch,
   getApprovalBatch,
   listApprovalBatches,
@@ -341,6 +342,29 @@ router.get('/approval-batches/:id', async (req, res, next) => {
     res.json(result);
   } catch (error) {
     next(error);
+  }
+});
+
+router.post('/approval-batches/:id/resend', async (req, res, next) => {
+  try {
+    await ensureApprovalRequestCanBeSent(req.user.id);
+
+    const result = await getApprovalBatch(req.user.id, req.params.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Lote de aprovação não encontrado' });
+    }
+
+    if (!['pending', 'partially_approved'].includes(result.batch.status)) {
+      return res.status(409).json({ error: 'Somente lotes pendentes ou parciais podem ser reenviados.' });
+    }
+
+    const approvalText = buildApprovalBatchText(result.batch, result.items);
+    await sendTextToApprovalNumber(req.user.id, result.batch.approval_whatsapp, approvalText);
+    await markApprovalBatchRequested(req.user.id, result.batch.id);
+
+    res.json({ ...result, approvalText, sent: true });
+  } catch (error) {
+    handleServiceError(error, res, next);
   }
 });
 
