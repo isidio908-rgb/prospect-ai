@@ -19,7 +19,7 @@ Este arquivo consolida o historico operacional do projeto. Documentos antigos de
 - O filtro usa `data_coleta` como base temporal.
 - A fonte e filtrada por `fonte`, tratando valores vazios como `indefinida`.
 - A montagem do SQL continua parametrizada; valores de filtro nao sao interpolados diretamente.
-- Precisa de validacao local com `backend npm test`, `frontend npm run build`, Docker build/up e teste HTTP em `/dashboard` e `/api/stats` antes do merge.
+- Validado localmente antes do merge: backend tests, backend audit, frontend build, Docker build/up, `/dashboard`, `/api/stats` sem filtros, periodos `7d` e `30d`, periodo customizado, filtro `fonte=serper` e scan de segredos.
 
 ## 03/07/2026 - Kanban Comercial Avancado
 
