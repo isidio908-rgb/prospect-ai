@@ -249,6 +249,42 @@ describe('autopilot routes HTTP', () => {
     });
   });
 
+  test('bloqueia lote com envio externo se WhatsApp nao estiver conectado', async () => {
+    const lead = await query(
+      `INSERT INTO leads (
+        user_id, nome_empresa, telefone, whatsapp, cidade, nicho, fonte, score, status, data_coleta, mensagem_whatsapp
+      ) VALUES ($1, 'Lead Sem WhatsApp Conectado', '+5565999988888', '+5565999988888', 'Cuiaba', 'imobiliarias', 'serper', 91, 'mensagem_pronta', NOW(), 'Mensagem pronta')
+      RETURNING id`,
+      [userId]
+    );
+
+    const queued = await query(
+      `INSERT INTO message_queue (
+        user_id, lead_id, automation_rule_id, channel, message_type, status, scheduled_at, payload_json
+      ) VALUES ($1, $2, $3, 'whatsapp', 'initial', 'pending', NOW(), $4::jsonb)
+      RETURNING id`,
+      [userId, lead.rows[0].id, ruleId, JSON.stringify({ message: 'Mensagem pronta' })]
+    );
+
+    const created = await request(baseUrl, '/api/autopilot/approval-batches', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ limit: 1, send_approval_request: true }),
+    });
+
+    assert.equal(created.response.status, 400);
+    assert.match(created.body.error, /Conecte um numero de WhatsApp/);
+    assert.equal(hasSecretPattern(created.body), false);
+
+    const queueState = await query(
+      'SELECT approval_batch_id, status FROM message_queue WHERE id = $1 AND user_id = $2',
+      [queued.rows[0].id, userId]
+    );
+
+    assert.equal(queueState.rows[0].approval_batch_id, null);
+    assert.equal(queueState.rows[0].status, 'pending');
+  });
+
   test('cria lote de aprovação sem envio externo e processa resposta autorizada', async () => {
     const queueIds = [];
     for (let index = 0; index < 3; index += 1) {
