@@ -12,6 +12,7 @@ Isso significa:
 - o sistema pode criar fila de mensagens automaticamente;
 - o sistema pode sugerir horario de envio;
 - por padrao, a mensagem fica pendente de aprovacao manual;
+- o usuario pode aprovar mensagens em lote pelo WhatsApp pessoal;
 - envio automatico real so deve ser ativado quando houver regra explicita para isso.
 
 ## Modulos Da Fundacao
@@ -69,9 +70,27 @@ Tipos iniciais:
 - `followup_1`
 - `followup_2`
 
+### `approval_batches`
+
+Representa um lote de mensagens pendentes enviado ao WhatsApp pessoal do usuario para aprovacao.
+
+Status esperados:
+
+- `pending`
+- `partially_approved`
+- `approved`
+- `cancelled`
+- `expired`
+
+### `approval_batch_items`
+
+Preserva a numeracao do lote enviada pelo WhatsApp.
+
+Exemplo: no comando `APROVAR 42:1,3`, os itens `1` e `3` sao resolvidos por esta tabela, e nao pela ordem atual da fila.
+
 ## API Atual
 
-A API atual permite operar regras e fila com autenticacao, mas ainda nao executa envio WhatsApp automatico.
+A API atual permite operar regras, fila e lotes de aprovacao com autenticacao, mas ainda nao executa envio WhatsApp automatico para leads.
 
 ### Regras
 
@@ -90,6 +109,52 @@ A API atual permite operar regras e fila com autenticacao, mas ainda nao executa
 | `PATCH` | `/api/autopilot/queue/:id/approve` | Aprova mensagem pendente para envio futuro. |
 | `PATCH` | `/api/autopilot/queue/:id/cancel` | Cancela mensagem pendente, aprovada ou enfileirada. |
 
+### Lotes De Aprovacao
+
+| Metodo | Rota | Uso |
+|---|---|---|
+| `GET` | `/api/autopilot/approval-batches` | Lista lotes do usuario autenticado. |
+| `POST` | `/api/autopilot/approval-batches` | Cria lote com mensagens `pending`. |
+| `GET` | `/api/autopilot/approval-batches/:id` | Detalha um lote e seus itens. |
+
+Payload recomendado para teste sem chamada externa:
+
+```json
+{
+  "limit": 5,
+  "send_approval_request": false
+}
+```
+
+Payload para enviar ao WhatsApp de aprovacao:
+
+```json
+{
+  "limit": 5,
+  "send_approval_request": true
+}
+```
+
+## Comandos Pelo WhatsApp
+
+O lote enviado ao WhatsApp pessoal aceita:
+
+```text
+APROVAR LOTE 42
+CANCELAR LOTE 42
+APROVAR 42:1,3,5
+CANCELAR 42:2,4
+```
+
+Regras:
+
+- somente o numero salvo em `approval_whatsapp` pode aprovar;
+- lote expirado nao pode ser aprovado;
+- item fora do lote e ignorado;
+- aprovar muda status da fila para `approved`;
+- cancelar muda status da fila para `cancelled`;
+- nenhum comando envia mensagem ao lead nesta etapa.
+
 ### Cliente Frontend
 
 O cliente `autopilot` em `frontend/src/services/api.js` centraliza:
@@ -101,6 +166,9 @@ O cliente `autopilot` em `frontend/src/services/api.js` centraliza:
 - `listQueue`
 - `approveMessage`
 - `cancelMessage`
+- `listApprovalBatches`
+- `createApprovalBatch`
+- `getApprovalBatch`
 
 ## Regras De Seguranca
 
@@ -115,9 +183,10 @@ O cliente `autopilot` em `frontend/src/services/api.js` centraliza:
 9. A fila nao deve conter credenciais, tokens ou API keys.
 10. Toda execucao precisa gerar contadores auditaveis.
 11. Todas as rotas `/api/autopilot` exigem JWT.
-12. Regras e fila sao isoladas por `user_id`.
+12. Regras, fila e lotes sao isolados por `user_id`.
 13. O modo `assistido` sempre forca aprovacao manual.
-14. Aprovar uma mensagem nao envia WhatsApp nesta etapa; apenas muda o status para envio futuro controlado.
+14. Aprovar uma mensagem nao envia WhatsApp ao lead nesta etapa; apenas muda o status para envio futuro controlado.
+15. Respostas do webhook sao aceitas apenas do `approval_whatsapp` do usuario.
 
 ## Fluxo V1
 
@@ -132,11 +201,13 @@ Sistema calcula proximo horario seguro
 ↓
 Mensagem entra como pending
 ↓
-Usuario aprova
+Sistema cria lote de aprovacao
 ↓
-Worker envia pelo WhatsApp
+Usuario aprova pelo WhatsApp pessoal
 ↓
-CRM atualiza status e historico
+Mensagem muda para approved
+↓
+Worker futuro envia pelo WhatsApp
 ```
 
 ## Fluxo Futuro
@@ -174,28 +245,37 @@ Kanban move para reuniao_marcada
 - Cliente frontend para consumo futuro.
 - Testes HTTP de rotas autenticadas.
 
-### PR 3 - UI Assistida
+### PR 3 - Aprovacao Em Lote Via WhatsApp
+
+- Campo `approval_whatsapp` no perfil.
+- Tabelas de lotes e itens.
+- Criacao/listagem/detalhe de lotes.
+- Envio de solicitacao ao WhatsApp pessoal.
+- Processamento de resposta via webhook Evolution API.
+- Confirmacao de resultado ao usuario.
+
+### PR 4 - UI Assistida
 
 - Tela de configuracao do Autopilot.
-- Tela de fila de mensagens.
+- Tela de fila e lotes de aprovacao.
 - Aprovacao/cancelamento manual pela interface.
 - Indicadores de regras ativas e mensagens pendentes.
 
-### PR 4 - Scheduler Assistido
+### PR 5 - Scheduler Assistido
 
 - Job diario para criar fila.
 - Logs de execucao.
 - Respeito a limites por dia/hora.
 - Dashboard de enfileiramento.
 
-### PR 5 - Envio Controlado
+### PR 6 - Envio Controlado
 
 - Worker de envio WhatsApp.
 - Modo automatico com limites.
 - Retry seguro.
 - Stop-on-reply.
 
-### PR 6 - Resposta IA E Agendamento
+### PR 7 - Resposta IA E Agendamento
 
 - Classificacao de resposta.
 - Sugestao de proximo passo.
