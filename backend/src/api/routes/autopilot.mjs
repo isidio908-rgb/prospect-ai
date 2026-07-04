@@ -8,8 +8,8 @@ import {
   getApprovalBatch,
   listApprovalBatches,
   markApprovalBatchRequested,
+  sendTextToApprovalNumber,
 } from '../../services/autopilot/approvalBatchService.mjs';
-import * as whatsappService from '../../services/whatsapp/whatsappService.mjs';
 
 const router = express.Router();
 
@@ -256,7 +256,7 @@ router.post('/approval-batches', async (req, res, next) => {
 
     let sent = false;
     if (data.send_approval_request !== false) {
-      await whatsappService.sendTextToApprovalNumber(req.user.id, result.batch.approval_whatsapp, result.approvalText);
+      await sendTextToApprovalNumber(req.user.id, result.batch.approval_whatsapp, result.approvalText);
       await markApprovalBatchRequested(req.user.id, result.batch.id);
       sent = true;
     }
