@@ -6,6 +6,7 @@ import autopilotRoutes from '../src/api/routes/autopilot.mjs';
 import { errorHandler } from '../src/api/middleware/errorHandler.mjs';
 import { pool, query } from '../src/database/init.mjs';
 import { ensureAutopilotTables } from '../src/database/autopilotSchema.mjs';
+import { parseApprovalCommand, processApprovalReply } from '../src/services/autopilot/approvalBatchService.mjs';
 
 function hasSecretPattern(payload) {
   return /api_key|apiKey|api_key_encrypted|secret|Bearer|x-api-key|x-rapidapi-key|token/i.test(
@@ -37,6 +38,7 @@ describe('autopilot routes HTTP', () => {
   let ruleId;
   let leadId;
   let queueId;
+  let batchId;
   const uniqueTag = Date.now();
 
   before(async () => {
@@ -44,6 +46,7 @@ describe('autopilot routes HTTP', () => {
 
     const client = await pool.connect();
     try {
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_whatsapp VARCHAR(50)`);
       await ensureAutopilotTables(client);
     } finally {
       client.release();
@@ -60,8 +63,8 @@ describe('autopilot routes HTTP', () => {
     baseUrl = `http://127.0.0.1:${port}`;
 
     const userResult = await query(
-      `INSERT INTO users (email, password_hash, name, profession, primary_niche, internal_context)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO users (email, password_hash, name, profession, primary_niche, internal_context, approval_whatsapp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
       [
         `autopilot-http-${uniqueTag}@prospect.ai`,
@@ -70,6 +73,7 @@ describe('autopilot routes HTTP', () => {
         'Gestor de Tráfego',
         'Imobiliárias',
         'Validar rotas HTTP do Autopilot SDR',
+        '5565999990000',
       ]
     );
     userId = userResult.rows[0].id;
@@ -227,5 +231,106 @@ describe('autopilot routes HTTP', () => {
     assert.equal(cancelled.body.message.status, 'cancelled');
     assert.ok(cancelled.body.message.cancelled_at);
     assert.equal(hasSecretPattern(cancelled.body), false);
+  });
+
+  test('parseia comandos de aprovação em lote', () => {
+    assert.deepEqual(parseApprovalCommand('APROVAR LOTE 42'), {
+      action: 'approve',
+      scope: 'batch',
+      batchId: 42,
+      positions: [],
+    });
+
+    assert.deepEqual(parseApprovalCommand('cancelar 42:2, 4,4'), {
+      action: 'cancel',
+      scope: 'items',
+      batchId: 42,
+      positions: [2, 4],
+    });
+  });
+
+  test('cria lote de aprovação sem envio externo e processa resposta autorizada', async () => {
+    const queueIds = [];
+    for (let index = 0; index < 3; index += 1) {
+      const lead = await query(
+        `INSERT INTO leads (
+          user_id, nome_empresa, telefone, whatsapp, cidade, nicho, fonte, score, status, data_coleta, mensagem_whatsapp
+        ) VALUES ($1, $2, $3, $4, 'Cuiaba', 'imobiliarias', 'serper', $5, 'mensagem_pronta', NOW(), $6)
+        RETURNING id`,
+        [
+          userId,
+          `Lead Lote ${index + 1}`,
+          `+55659999999${index}`,
+          `+55659999999${index}`,
+          90 - index,
+          `Mensagem comercial ${index + 1}`,
+        ]
+      );
+
+      const queued = await query(
+        `INSERT INTO message_queue (
+          user_id, lead_id, automation_rule_id, channel, message_type, status, scheduled_at, payload_json
+        ) VALUES ($1, $2, $3, 'whatsapp', 'initial', 'pending', NOW(), $4::jsonb)
+        RETURNING id`,
+        [userId, lead.rows[0].id, ruleId, JSON.stringify({ message: `Mensagem comercial ${index + 1}` })]
+      );
+      queueIds.push(queued.rows[0].id);
+    }
+
+    const created = await request(baseUrl, '/api/autopilot/approval-batches', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ limit: 3, send_approval_request: false }),
+    });
+
+    assert.equal(created.response.status, 201);
+    assert.equal(created.body.sent, false);
+    assert.equal(created.body.items.length, 3);
+    assert.match(created.body.approvalText, /APROVAR LOTE/);
+    assert.equal(hasSecretPattern(created.body), false);
+    batchId = created.body.batch.id;
+
+    const foreignBatch = await request(baseUrl, `/api/autopilot/approval-batches/${batchId}`, {
+      headers: { Authorization: `Bearer ${otherToken}` },
+    });
+    assert.equal(foreignBatch.response.status, 404);
+
+    const unauthorized = await processApprovalReply({
+      userId,
+      fromPhone: '5565000000000',
+      text: `APROVAR LOTE ${batchId}`,
+    });
+    assert.equal(unauthorized.handled, false);
+    assert.equal(unauthorized.reason, 'unauthorized_number');
+
+    const approved = await processApprovalReply({
+      userId,
+      fromPhone: '5565999990000',
+      text: `APROVAR ${batchId}:1,3`,
+    });
+    assert.equal(approved.handled, true);
+    assert.equal(approved.affectedCount, 2);
+    assert.equal(approved.batch.status, 'partially_approved');
+
+    const cancelled = await processApprovalReply({
+      userId,
+      fromPhone: '5565999990000',
+      text: `CANCELAR LOTE ${batchId}`,
+    });
+    assert.equal(cancelled.handled, true);
+    assert.equal(cancelled.affectedCount, 1);
+    assert.equal(cancelled.batch.status, 'partially_approved');
+
+    const statuses = await query(
+      `SELECT status, approved_by_channel
+       FROM message_queue
+       WHERE id = ANY($1::int[])
+       ORDER BY id ASC`,
+      [queueIds]
+    );
+
+    assert.equal(statuses.rows.filter((row) => row.status === 'approved').length, 2);
+    assert.equal(statuses.rows.filter((row) => row.status === 'cancelled').length, 1);
+    assert.equal(statuses.rows.every((row) => row.approved_by_channel === 'whatsapp_approval_batch'), true);
   });
 });
