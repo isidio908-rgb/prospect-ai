@@ -79,6 +79,17 @@ export const autopilot = {
   listApprovalBatches: (params) => api.get('/api/autopilot/approval-batches', { params }),
   createApprovalBatch: (data) => api.post('/api/autopilot/approval-batches', data),
   getApprovalBatch: (id) => api.get(`/api/autopilot/approval-batches/${id}`),
+  resendApprovalBatch: (id) => api.post(`/api/autopilot/approval-batches/${id}/resend`),
+  processApprovalCommand: (data) => api.post('/api/autopilot/approval-batches/process-command', data),
+  stats: () => api.get('/api/autopilot/stats'),
+  runs: (params) => api.get('/api/autopilot/runs', { params }),
+  runScheduler: (data) => api.post('/api/autopilot/scheduler/run', data),
+  processApproved: (data) => api.post('/api/autopilot/worker/process-approved', data),
+  queueFollowups: (data) => api.post('/api/autopilot/followups/queue', data),
+  stopOnReply: () => api.post('/api/autopilot/stop-on-reply'),
+  classifyReplies: (data) => api.post('/api/autopilot/replies/classify', data),
+  createAppointment: (data) => api.post('/api/autopilot/appointments', data),
+  diagnostic: (leadId) => api.get(`/api/autopilot/diagnostics/${leadId}`),
 };
 
 // Credenciais

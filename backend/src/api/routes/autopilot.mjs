@@ -4,6 +4,7 @@ import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
 import { normalizeAutopilotRule } from '../../services/autopilot/autopilotService.mjs';
 import {
+  buildApprovalBatchText,
   createApprovalBatch,
   getApprovalBatch,
   listApprovalBatches,
@@ -90,6 +91,30 @@ function handleServiceError(error, res, next) {
     return res.status(error.status).json({ error: error.message });
   }
   return next(error);
+}
+
+async function ensureApprovalRequestCanBeSent(userId) {
+  const result = await query(
+    `SELECT status
+     FROM whatsapp_instances
+     WHERE user_id = $1
+     ORDER BY id DESC
+     LIMIT 1`,
+    [userId]
+  );
+
+  const instance = result.rows[0];
+  if (!instance) {
+    const error = new Error('Conecte um numero de WhatsApp antes de enviar solicitacoes de aprovacao.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (instance.status !== 'open') {
+    const error = new Error('WhatsApp desconectado. Reconecte antes de enviar solicitacoes de aprovacao.');
+    error.status = 409;
+    throw error;
+  }
 }
 
 router.get('/rules', async (req, res, next) => {
@@ -253,6 +278,11 @@ router.get('/approval-batches', async (req, res, next) => {
 router.post('/approval-batches', async (req, res, next) => {
   try {
     const data = createApprovalBatchSchema.parse(req.body || {});
+
+    if (data.send_approval_request !== false) {
+      await ensureApprovalRequestCanBeSent(req.user.id);
+    }
+
     const result = await createApprovalBatch(req.user.id, {
       ...data,
       city: nullIfBlank(data.city),
@@ -312,6 +342,29 @@ router.get('/approval-batches/:id', async (req, res, next) => {
     res.json(result);
   } catch (error) {
     next(error);
+  }
+});
+
+router.post('/approval-batches/:id/resend', async (req, res, next) => {
+  try {
+    await ensureApprovalRequestCanBeSent(req.user.id);
+
+    const result = await getApprovalBatch(req.user.id, req.params.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Lote de aprovação não encontrado' });
+    }
+
+    if (!['pending', 'partially_approved'].includes(result.batch.status)) {
+      return res.status(409).json({ error: 'Somente lotes pendentes ou parciais podem ser reenviados.' });
+    }
+
+    const approvalText = buildApprovalBatchText(result.batch, result.items);
+    await sendTextToApprovalNumber(req.user.id, result.batch.approval_whatsapp, approvalText);
+    await markApprovalBatchRequested(req.user.id, result.batch.id);
+
+    res.json({ ...result, approvalText, sent: true });
+  } catch (error) {
+    handleServiceError(error, res, next);
   }
 });
 

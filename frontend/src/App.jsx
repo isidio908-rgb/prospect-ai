@@ -8,6 +8,7 @@ import Leads from './pages/Leads';
 import LeadDetails from './pages/LeadDetails';
 import CrmKanban from './pages/CrmKanban';
 import CollectionHistory from './pages/CollectionHistory';
+import Autopilot from './pages/Autopilot';
 import Profile from './pages/Profile';
 import Credentials from './pages/Credentials';
 import WhatsAppSettings from './pages/WhatsAppSettings';
@@ -17,6 +18,16 @@ import './store/themeStore';
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? children : <Navigate to="/login" />;
+}
+
+function DashboardRoute() {
+  return (
+    <PrivateRoute>
+      <Layout>
+        <Dashboard />
+      </Layout>
+    </PrivateRoute>
+  );
 }
 
 function App() {
@@ -49,17 +60,8 @@ function App() {
       
       <Routes>
         <Route path="/login" element={<Login />} />
-        
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Layout>
-                <Dashboard />
-              </Layout>
-            </PrivateRoute>
-          }
-        />
+        <Route path="/" element={<DashboardRoute />} />
+        <Route path="/dashboard" element={<DashboardRoute />} />
         
         <Route
           path="/collect"
@@ -100,6 +102,17 @@ function App() {
             <PrivateRoute>
               <Layout>
                 <CrmKanban />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/autopilot"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <Autopilot />
               </Layout>
             </PrivateRoute>
           }
