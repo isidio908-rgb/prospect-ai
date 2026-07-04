@@ -1,19 +1,54 @@
 import { useEffect, useState } from 'react';
 import { stats } from '../services/api';
-import { TrendingUp, Users, Target, Award, MessageCircle } from 'lucide-react';
+import { TrendingUp, Users, Target, Award, MessageCircle, Filter, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const PERIOD_OPTIONS = [
+  { value: 'all', label: 'Todo período' },
+  { value: 'today', label: 'Hoje' },
+  { value: '7d', label: 'Últimos 7 dias' },
+  { value: '30d', label: 'Últimos 30 dias' },
+  { value: '90d', label: 'Últimos 90 dias' },
+  { value: 'month', label: 'Mês atual' },
+  { value: 'custom', label: 'Personalizado' },
+];
+
+function buildStatsParams(filters) {
+  const params = {
+    period: filters.period,
+    fonte: filters.fonte,
+  };
+
+  if (filters.period === 'custom') {
+    if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+    if (filters.dateTo) params.dateTo = filters.dateTo;
+  }
+
+  return params;
+}
+
+function getPeriodLabel(period) {
+  return PERIOD_OPTIONS.find((option) => option.value === period)?.label || 'Todo período';
+}
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    period: 'all',
+    fonte: 'all',
+    dateFrom: '',
+    dateTo: '',
+  });
 
   useEffect(() => {
-    loadStats();
-  }, []);
+    loadStats(filters);
+  }, [filters]);
 
-  const loadStats = async () => {
+  const loadStats = async (currentFilters = filters) => {
+    setLoading(true);
     try {
-      const response = await stats.get();
+      const response = await stats.get(buildStatsParams(currentFilters));
       setData(response.data);
     } catch (error) {
       toast.error('Erro ao carregar estatísticas');
@@ -22,7 +57,15 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
+  const updateFilter = (field, value) => {
+    setFilters((current) => ({ ...current, [field]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({ period: 'all', fonte: 'all', dateFrom: '', dateTo: '' });
+  };
+
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-gray-500 dark:text-gray-400">Carregando...</div>
@@ -43,11 +86,92 @@ export default function Dashboard() {
     { title: 'WhatsApp Confirmado', value: data?.presenca?.comWhatsappConfirmado || 0, icon: MessageCircle, color: 'bg-emerald-500' },
   ];
 
+  const selectedSourceLabel = filters.fonte === 'all' ? 'Todas as fontes' : filters.fonte;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-        <p className="text-gray-600 dark:text-gray-400">Visão geral da sua prospecção</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400">Visão geral da sua prospecção</p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-400">
+          <span className="badge badge-info">{getPeriodLabel(filters.period)}</span>
+          <span className="badge badge-info">Fonte: {selectedSourceLabel}</span>
+          {loading && <span className="badge badge-warning">Atualizando...</span>}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="flex items-center gap-2 mb-4">
+          <Filter className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Filtros comerciais</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <label className="space-y-1">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Período</span>
+            <select
+              value={filters.period}
+              onChange={(event) => updateFilter('period', event.target.value)}
+              className="input w-full"
+            >
+              {PERIOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Fonte</span>
+            <select
+              value={filters.fonte}
+              onChange={(event) => updateFilter('fonte', event.target.value)}
+              className="input w-full"
+            >
+              <option value="all">Todas as fontes</option>
+              {(data?.availableSources || []).map((source) => (
+                <option key={source.fonte} value={source.fonte}>
+                  {source.fonte} ({source.total})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {filters.period === 'custom' && (
+            <>
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Início</span>
+                <input
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(event) => updateFilter('dateFrom', event.target.value)}
+                  className="input w-full"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Fim</span>
+                <input
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(event) => updateFilter('dateTo', event.target.value)}
+                  className="input w-full"
+                />
+              </label>
+            </>
+          )}
+
+          <div className="flex items-end gap-2">
+            <button type="button" onClick={clearFilters} className="btn-secondary w-full">
+              Limpar
+            </button>
+            <button type="button" onClick={() => loadStats()} className="btn-secondary px-3" title="Atualizar dashboard">
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+          Os filtros recalculam totais, funil, presença digital e conversões usando a data de coleta do lead.
+        </p>
       </div>
 
       {/* Stats Cards */}
