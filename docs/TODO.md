@@ -20,9 +20,25 @@ Checklist:
 - Medir respostas, reunioes e clientes fechados.
 - Ajustar mensagens por nicho a partir dos resultados reais.
 
+### 2. Autopilot SDR - proximas camadas
+
+A fundacao do Autopilot SDR ja define tabelas, regras e servico de decisao/fila. O envio automatico real ainda deve nascer controlado por configuracao explicita.
+
+Proximas etapas:
+
+- API para CRUD de regras de automacao.
+- Tela para configurar Autopilot SDR.
+- Tela de fila de mensagens pendentes.
+- Aprovacao/cancelamento manual de mensagens.
+- Scheduler diario para enfileirar leads elegiveis.
+- Worker de envio WhatsApp com limite diario/horario.
+- Stop-on-reply para follow-ups.
+- Classificacao de respostas por IA.
+- Agendamento via Google Calendar ou Calendly.
+
 ## Prioridade Media
 
-### 2. Dashboard comercial avancado - proxima camada
+### 3. Dashboard comercial avancado - proxima camada
 
 O dashboard ja mostra funil, resposta, valor fechado, presenca digital, fontes, conversao por nicho e conversao por cidade. Tambem ja permite filtrar metricas por periodo e fonte.
 
@@ -33,9 +49,9 @@ Melhorias futuras:
 - Receita potencial por nicho/cidade.
 - Metas comerciais por periodo.
 
-### 3. Testes automatizados complementares
+### 4. Testes automatizados complementares
 
-Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, rotas HTTP de `/api/collections`, erro RapidAPI sem expor key, erro Apify sem expor token e filtros do dashboard comercial.
+Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, rotas HTTP de `/api/collections`, erro RapidAPI sem expor key, erro Apify sem expor token, filtros do dashboard comercial e fundacao do Autopilot SDR.
 
 Cobrir proximas camadas:
 
@@ -50,15 +66,15 @@ Cobrir proximas camadas:
 
 ## Prioridade Baixa
 
-### 4. Exportacao PDF
+### 5. Exportacao PDF
 
 Gerar PDF com diagnostico por lead para enviar em conversa comercial.
 
-### 5. Templates comerciais por nicho
+### 6. Templates comerciais por nicho
 
 Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
 
-### 6. Priorizacao inteligente avancada
+### 7. Priorizacao inteligente avancada
 
 Usar IA para sugerir:
 
@@ -69,6 +85,14 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Fundacao do Autopilot SDR:
+  - tabelas `automation_rules`, `automation_runs` e `message_queue`;
+  - modo padrao assistido, com aprovacao manual;
+  - servico de decisao para elegibilidade de leads;
+  - verificacao de score, contato, status, fonte, cidade e nicho;
+  - calculo de janela segura de envio;
+  - teste unitario das regras de decisao;
+  - documentacao `docs/AUTOPILOT-SDR.md`.
 - Teste HTTP real das rotas `/api/collections`:
   - exige autenticação para listar histórico;
   - lista apenas execuções do usuário autenticado;
