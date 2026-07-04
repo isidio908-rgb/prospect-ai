@@ -1,4 +1,6 @@
 import { query } from '../../database/init.mjs';
+import { decrypt } from '../encryption.mjs';
+import * as evolution from '../whatsapp/evolutionClient.mjs';
 
 export const APPROVAL_BATCH_STATUSES = ['pending', 'partially_approved', 'approved', 'cancelled', 'expired'];
 export const APPROVAL_ITEM_STATUSES = ['pending', 'approved', 'cancelled'];
@@ -17,6 +19,16 @@ function normalizeCommandText(value) {
     .trim()
     .toUpperCase()
     .replace(/\s+/g, ' ');
+}
+
+function getWebhookMessageText(data = {}) {
+  const message = data?.message || {};
+  return message.conversation || message.extendedTextMessage?.text || data?.text || '';
+}
+
+function getWebhookPhone(data = {}) {
+  const remoteJid = data?.key?.remoteJid || '';
+  return String(remoteJid).split('@')[0];
 }
 
 export function parseApprovalCommand(text) {
@@ -266,6 +278,37 @@ export async function markApprovalBatchRequested(userId, batchId) {
   );
 }
 
+export async function sendTextToApprovalNumber(userId, approvalWhatsapp, text) {
+  const number = normalizeApprovalNumber(approvalWhatsapp);
+  if (!number) throw new Error('Numero de aprovacao invalido.');
+
+  const result = await query(
+    `SELECT * FROM whatsapp_instances
+     WHERE user_id = $1`,
+    [userId]
+  );
+  const instanceRow = result.rows[0];
+  if (!instanceRow) throw new Error('Conecte um numero de WhatsApp antes de enviar solicitacoes de aprovacao.');
+  if (instanceRow.status !== 'open') throw new Error('WhatsApp desconectado. Reconecte antes de enviar solicitacoes de aprovacao.');
+
+  const instanceToken = decrypt(instanceRow.instance_token_encrypted);
+  const response = await evolution.sendText(instanceToken, instanceRow.instance_name, {
+    number,
+    text,
+    delaySeconds: instanceRow.simulate_typing ? 2 : undefined,
+  });
+
+  await query(
+    `INSERT INTO whatsapp_messages (
+      instance_id, lead_id, user_id, whatsapp_message_id, remote_jid, from_me,
+      direction, message_type, text_content, status
+    ) VALUES ($1, NULL, $2, $3, $4, TRUE, 'sent', 'text', $5, 'sent')`,
+    [instanceRow.id, userId, response?.key?.id || null, response?.key?.remoteJid || `${number}@s.whatsapp.net`, text]
+  );
+
+  return response;
+}
+
 async function recalculateBatch(userId, batchId, responseText = null) {
   const counts = await query(
     `SELECT
@@ -388,4 +431,33 @@ export async function processApprovalReply({ userId, fromPhone, text }) {
   }
 
   return applyCommand(userId, command, text);
+}
+
+export async function processApprovalWebhookEvent(payload) {
+  const { event, instance: instanceName, data } = payload || {};
+  if (!['MESSAGES_UPSERT', 'messages.upsert'].includes(event)) return { handled: false, reason: 'ignored_event' };
+  if (data?.key?.fromMe) return { handled: false, reason: 'from_me' };
+
+  const text = getWebhookMessageText(data);
+  if (!text) return { handled: false, reason: 'empty_text' };
+
+  const instanceResult = await query(
+    'SELECT user_id FROM whatsapp_instances WHERE instance_name = $1',
+    [instanceName]
+  );
+  const userId = instanceResult.rows[0]?.user_id;
+  if (!userId) return { handled: false, reason: 'instance_not_found' };
+
+  const fromPhone = getWebhookPhone(data);
+  const result = await processApprovalReply({ userId, fromPhone, text });
+
+  if (result.handled && result.confirmationText) {
+    try {
+      await sendTextToApprovalNumber(userId, fromPhone, result.confirmationText);
+    } catch (error) {
+      console.error('Erro ao enviar confirmacao de aprovacao Autopilot:', error.message);
+    }
+  }
+
+  return result;
 }
