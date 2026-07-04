@@ -323,8 +323,7 @@ async function applyCommand(userId, command, responseText) {
   const actionStatus = command.action === 'approve' ? 'approved' : 'cancelled';
   const queueStatus = command.action === 'approve' ? 'approved' : 'cancelled';
   const timestampColumn = command.action === 'approve' ? 'approved_at' : 'cancelled_at';
-
-  const params = [command.batchId, userId];
+  const params = [command.batchId, userId, actionStatus, queueStatus, responseText];
   let positionFilter = '';
 
   if (command.scope === 'items') {
@@ -357,7 +356,7 @@ async function applyCommand(userId, command, responseText) {
      WHERE mq.id = updated_items.message_queue_id
        AND mq.user_id = $2
      RETURNING mq.id`,
-    [...params, actionStatus, queueStatus, responseText]
+    params
   );
 
   const batch = await recalculateBatch(userId, command.batchId, responseText);
