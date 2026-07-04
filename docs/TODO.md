@@ -1,188 +1,190 @@
 # TODO - Prospect AI
 
-**Atualizado em:** 03/07/2026
+**Atualizado em:** 04/07/2026
 
-Este arquivo substitui listas antigas de proximas acoes que ja foram executadas. A prioridade aqui considera o estado real atual do codigo depois da validacao pos-merge em `main` e das melhorias recentes de operacao.
+Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, estado atual e sequencia de PRs, use `docs/MAPA-INTERNO.md`.
 
 ## Prioridade Alta
 
-### 1. Preparar operacao controlada de prospeccao real
+### 1. PR #16 - UI Assistida do Autopilot SDR
 
-Objetivo: iniciar uso operacional com volume baixo e rastreavel.
+Objetivo: permitir operar o Autopilot pela interface, sem depender de chamadas manuais de API.
+
+Escopo recomendado:
+
+- Criar pagina `/autopilot`.
+- Adicionar item Autopilot no menu lateral.
+- Listar regras de automacao.
+- Criar, editar, ativar, pausar e excluir regras.
+- Listar mensagens em `message_queue`.
+- Filtrar fila por status, tipo, cidade, nicho e regra.
+- Listar lotes de aprovacao.
+- Criar lote de aprovacao pela interface.
+- Exibir detalhe do lote com itens numerados.
+- Aprovar/cancelar mensagem individual pela interface.
+- Mostrar alerta claro: aprovacao muda status para `approved`, mas ainda nao envia mensagem ao lead.
+
+Criterios de aceite:
+
+- `/autopilot` carrega autenticado.
+- Usuario consegue criar e editar uma regra.
+- Usuario consegue listar fila e lotes.
+- Usuario consegue criar lote sem envio externo.
+- Usuario consegue criar lote com solicitacao para WhatsApp de aprovacao.
+- Nenhum item vira `sent` apenas por aprovar.
+- Frontend build passa.
+- Backend tests passam.
+- Docker build/up passa.
+- Scan de logs/respostas nao encontra segredos.
+
+### 2. Operacao controlada de prospeccao real
+
+Objetivo: continuar gerando oportunidades enquanto o produto evolui.
 
 Checklist:
 
-- Definir nicho inicial.
-- Definir cidade/regiao inicial.
-- Coletar lote pequeno por provider ativo.
-- Revisar duplicados e qualidade dos contatos.
-- Usar CRM Kanban para acompanhar abordagem.
+- Definir nicho do dia.
+- Definir cidade/regiao do dia.
+- Coletar lotes pequenos por provider ativo.
+- Priorizar leads com WhatsApp confirmado e score alto.
+- Usar CRM Kanban para registrar status e proxima acao.
+- Usar IA para ajustar mensagem por nicho.
 - Medir respostas, reunioes e clientes fechados.
-- Ajustar mensagens por nicho a partir dos resultados reais.
+- Ajustar mensagens e criterios de score com base em respostas reais.
 
-### 2. Autopilot SDR - proximas camadas
+### 3. PR #17 - Scheduler assistido
 
-A fundacao do Autopilot SDR ja define tabelas, regras, servico de decisao/fila, API autenticada e aprovacao em lote via WhatsApp pessoal. O envio automatico real ainda deve nascer controlado por configuracao explicita.
+Objetivo: enfileirar leads elegiveis automaticamente, sem envio automatico.
 
-Proximas etapas:
+Escopo recomendado:
 
-- Tela para configurar Autopilot SDR.
-- Tela de fila/lotes de aprovacao.
-- Scheduler diario para enfileirar leads elegiveis.
-- Worker de envio WhatsApp com limite diario/horario.
-- Stop-on-reply para follow-ups.
-- Classificacao de respostas por IA.
-- Agendamento via Google Calendar ou Calendly.
+- Job diario configuravel.
+- Criacao de `automation_runs`.
+- Avaliacao de regras ativas.
+- Enfileiramento apenas como `pending`.
+- Respeito a score, fonte, cidade, nicho e contato.
+- Respeito a duplicidade de mensagem inicial ativa.
+- Logs de leads avaliados, enfileirados e ignorados.
+
+Regra de seguranca: scheduler nao envia WhatsApp para leads.
 
 ## Prioridade Media
 
-### 3. Dashboard comercial avancado - proxima camada
+### 4. PR #18 - Worker de envio controlado
 
-O dashboard ja mostra funil, resposta, valor fechado, presenca digital, fontes, conversao por nicho e conversao por cidade. Tambem ja permite filtrar metricas por periodo e fonte.
+Objetivo: enviar mensagens `approved` pelo WhatsApp com limites e rastreabilidade.
 
-Melhorias futuras:
+Requisitos antes de implementar:
 
-- Comparativo semanal/mensal.
-- Custo por fonte de coleta.
-- Receita potencial por nicho/cidade.
-- Metas comerciais por periodo.
+- UI do Autopilot concluida.
+- Scheduler assistido validado.
+- Aprovacao em lote funcionando em producao local.
 
-### 4. Testes automatizados complementares
+Escopo minimo:
 
-Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, rotas HTTP de `/api/collections`, erro RapidAPI sem expor key, erro Apify sem expor token, filtros do dashboard comercial, fundacao do Autopilot SDR, API HTTP do Autopilot e aprovacao em lote via WhatsApp.
+- Processar somente mensagens `approved`.
+- Respeitar `max_daily_sends`.
+- Respeitar `max_hourly_sends`.
+- Respeitar janela de envio.
+- Registrar tentativa, sucesso e falha.
+- Nunca enviar se lead respondeu recentemente.
+- Retry controlado.
 
-Cobrir proximas camadas:
+### 5. Stop-on-reply e follow-ups
 
-- Credenciais LLM.
-- Rotas `/api/ai/*`.
-- Personalizacao profissional dos prompts de IA em fluxo HTTP.
-- CRM Kanban e mudanca de status via frontend.
-- Verificacao WhatsApp na coleta com mocks mais completos da Evolution API.
-- Salvamento do campo `whatsapp`.
-- Exportacao JSON de leads.
-- Deduplicacao com `place_id`, `business_id`, `google_id`, telefone, dominio e nome+cidade.
-- Tela do Autopilot SDR.
-- Scheduler assistido do Autopilot SDR.
-- Worker de envio WhatsApp com limites e stop-on-reply.
+Objetivo: impedir follow-up automatico quando o lead responder.
+
+Escopo:
+
+- Detectar resposta recebida pelo webhook.
+- Marcar lead como `respondeu` ou status equivalente.
+- Cancelar follow-ups pendentes do lead.
+- Registrar motivo no historico.
+- Cobrir com teste.
+
+### 6. Dashboard do Autopilot
+
+Objetivo: acompanhar automacao sem misturar com dashboard comercial geral.
+
+Metricas desejadas:
+
+- Regras ativas.
+- Mensagens pendentes.
+- Mensagens aprovadas.
+- Mensagens canceladas.
+- Mensagens enviadas.
+- Taxa de resposta por regra.
+- Leads que viraram reuniao.
+- Limite diario consumido.
 
 ## Prioridade Baixa
 
-### 5. Exportacao PDF
+### 7. Exportacao PDF
 
 Gerar PDF com diagnostico por lead para enviar em conversa comercial.
 
-### 6. Templates comerciais por nicho
+### 8. Templates comerciais por nicho
 
 Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
 
-### 7. Priorizacao inteligente avancada
+### 9. Priorizacao inteligente avancada
 
 Usar IA para sugerir:
 
-- Melhor argumento comercial.
-- Oferta mais provavel.
-- Canal ideal de abordagem.
-- Urgencia do lead.
+- melhor argumento comercial;
+- oferta mais provavel;
+- canal ideal de abordagem;
+- urgencia do lead;
+- melhor horario de contato.
 
-## Itens Concluidos Recentemente
+### 10. Agendamento assistido
 
-- Aprovacao em lote do Autopilot via WhatsApp:
-  - campo `approval_whatsapp` no perfil do usuario;
-  - tabelas `approval_batches` e `approval_batch_items`;
-  - vinculo de `message_queue` com lote de aprovacao;
-  - criacao de lote por `/api/autopilot/approval-batches`;
-  - mensagem de aprovacao com comandos `APROVAR LOTE`, `CANCELAR LOTE`, `APROVAR {id}:1,3` e `CANCELAR {id}:2`;
-  - processamento de resposta recebida pelo webhook da Evolution API;
-  - confirmacao de resultado enviada ao WhatsApp de aprovacao;
-  - nenhuma mensagem enviada automaticamente para leads nesta etapa.
-- API do Autopilot SDR:
-  - rotas autenticadas em `/api/autopilot`;
-  - CRUD de regras em `/api/autopilot/rules`;
-  - listagem de fila em `/api/autopilot/queue`;
-  - aprovacao e cancelamento manual de mensagens pendentes;
-  - isolamento por usuario em regras e fila;
-  - modo `assistido` forcando aprovacao manual;
-  - cliente frontend `autopilot` em `frontend/src/services/api.js`;
-  - teste HTTP real das rotas de regras e fila;
-  - nenhum envio WhatsApp automatico ativado nesta etapa.
-- Fundacao do Autopilot SDR:
-  - tabelas `automation_rules`, `automation_runs` e `message_queue`;
-  - modo padrao assistido, com aprovacao manual;
-  - servico de decisao para elegibilidade de leads;
-  - verificacao de score, contato, status, fonte, cidade e nicho;
-  - calculo de janela segura de envio;
-  - teste unitario das regras de decisao;
-  - documentacao `docs/AUTOPILOT-SDR.md`.
-- Teste HTTP real das rotas `/api/collections`:
-  - exige autenticacao para listar historico;
-  - lista apenas execucoes do usuario autenticado;
-  - retorna logs por run sem vazar segredos;
-  - rejeita limpeza de cache de execucao de outro usuario;
-  - limpa cache da execucao do usuario e remove TTL visual da listagem.
-- Filtros por periodo e fonte no dashboard comercial:
-  - backend `/api/stats` aceita `period`, `fonte`, `dateFrom` e `dateTo`;
-  - periodo padrao `all` preserva metricas historicas existentes;
-  - periodo customizado usa datas de inicio/fim;
-  - frontend `/dashboard` mostra filtros e badges do recorte aplicado;
-  - teste unitario cobre normalizacao e montagem segura do filtro SQL.
-- Kanban comercial avancado em `/crm`:
-  - drag-and-drop nativo entre colunas;
-  - filtros por status, prioridade, cidade, nicho, responsavel e busca livre;
-  - contagem de valor potencial por coluna;
-  - edicao rapida de responsavel, proxima acao e valor potencial;
-  - manutencao do botao de avanco rapido de status.
-- TTL visual e limpeza manual de cache em `/collections`.
-- Documentacao operacional criada:
-  - `docs/WHATSAPP-EVOLUTION.md`
-  - `docs/IA-LLM.md`
-  - `docs/COLETA-LEADS.md`
-  - `docs/CREDENCIAIS.md`
-- Avaliacao manual de `npm audit --json` do backend sem `npm audit fix`.
-- Atualizacao segura de `bcrypt` de `^5.1.1` para `^6.0.0`, removendo a cadeia vulneravel `@mapbox/node-pre-gyp` -> `tar`.
-- `npm audit --json` do backend limpo: 0 vulnerabilidades.
-- `backend npm test`, `frontend npm run build` e `docker compose build backend frontend` passaram apos a atualizacao de dependencia.
-- Validacao pos-merge em `main` com `git pull origin main`.
-- Backend `npm test`: 32 testes passando.
-- Frontend `npm run build`: passando.
-- `docker compose build backend frontend`: passando.
-- Stack local saudavel com backend, frontend, postgres, redis e evolution-api.
-- Frontend HTTP 200 em `/`, `/collections`, `/profile`, `/leads` e `/dashboard`.
-- Credenciais reais Serper, RapidAPI e Apify testadas com statusCode 200.
-- WhatsApp conectado via Evolution API.
-- Envio real de mensagem para lead de teste validado.
-- Historico de mensagens atualizado apos envio real.
-- Coleta real Serper com verificacao WhatsApp ligada: run 17.
-- Coleta real Apify com verificacao WhatsApp ligada: run 18.
-- Coleta real RapidAPI com verificacao WhatsApp ligada: run 19.
-- Cache hit validado ao repetir Serper sem `forceRefresh`: run 20.
-- `/api/collections` lista os runs novos.
-- CRM/Kanban validado com status `contato_enviado`.
-- Backend rejeita corretamente status antigo invalido como `em_contato`.
-- Logs dos runs sem `api_key`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou `token`.
-- Historico persistente de coletas com tabela `collection_runs`.
-- Logs persistentes de execucao com tabela `collection_run_logs`.
-- Cache de busca/coleta com tabela `collection_cache`.
-- Rotas `/api/collections` e `/api/collections/:id/logs`.
-- Pagina `Historico` em `/collections`.
-- Toggle para forcar nova coleta ignorando cache.
-- Testes automatizados de persistencia de runs/logs/cache.
-- Teste unitario da assinatura de cache de coleta.
-- Serper validado com coleta real pequena.
-- Apify validado com coleta real pequena e input `{ language, location, max_results, query }`.
-- RapidAPI validado com coleta real pequena.
-- Mensagem amigavel para RapidAPI 403 `not subscribed`.
-- Mensagem amigavel para Apify `full-permission-actor-not-approved`.
-- Edicao posterior do perfil profissional em `/profile` e `PATCH /api/auth/me`.
-- Dashboard comercial com funil, fontes, WhatsApp confirmado e conversao por nicho/cidade.
-- Cadastro com contexto profissional do usuario (`profession`, `primary_niche`, `internal_context`).
-- Prompts internos de IA ajustados pela profissao/nicho/instrucoes do usuario.
-- Pagina CRM Kanban basica em `/crm`.
-- Menu lateral com link para CRM Kanban.
-- Exportacao JSON de leads com filtros.
-- Credenciais de scraper e LLM agrupadas na UI.
-- Campo `model` para credenciais IA/LLM.
-- Assistente IA em detalhes do lead.
-- Rotas `/api/ai/providers`, `/api/ai/tasks`, `/api/ai/status`, `/api/ai/run`.
-- Verificacao opcional de WhatsApp existente na coleta.
-- Rebuild e subida Docker local de backend/frontend.
-- Healthcheck do frontend corrigido para `127.0.0.1`.
+Objetivo futuro:
+
+- Classificar resposta do lead.
+- Sugerir horarios.
+- Integrar Google Calendar ou Calendly.
+- Confirmar agendamento pelo WhatsApp.
+- Mover lead para `reuniao_marcada`.
+
+## Concluido Recentemente
+
+### PR #15 - Aprovacao em lote via WhatsApp real
+
+Validado e mergeado.
+
+Resultado:
+
+- Lote real `#26` criado.
+- Solicitacao chegou no WhatsApp pessoal.
+- Resposta `APROVAR LOTE 26` foi processada pelo webhook real.
+- Lote virou `approved`.
+- 2 itens viraram `approved`.
+- Nenhum item virou `sent`.
+- Logs recentes sem padroes de segredo.
+- Merge commit: `3404742ca7632e30b8556b3874bc84ee45d463f7`.
+
+### Outros blocos concluidos
+
+- Fundacao do Autopilot SDR.
+- API autenticada do Autopilot SDR.
+- Historico persistente de coletas.
+- Logs persistentes de execucao.
+- Cache de busca/coleta com TTL visual e limpeza manual.
+- Validacao de Serper, Apify e RapidAPI.
+- Mensagens amigaveis para erros comuns de providers.
+- Dashboard comercial com filtros por periodo e fonte.
+- CRM Kanban com drag-and-drop, filtros e edicao rapida.
+- Documentacao operacional de WhatsApp, IA, coleta e credenciais.
+- Atualizacao de `bcrypt` para remover vulnerabilidades do backend.
+- `npm audit --json` do backend limpo com 0 vulnerabilidades.
+
+## Regras Permanentes
+
+- Nunca commitar `.env`, tokens, API keys ou dumps.
+- Nunca logar headers completos de autenticacao.
+- Nunca retornar API key completa no frontend.
+- Nunca enviar mensagem para lead apenas por aprovar lote.
+- Modo `assistido` sempre exige aprovacao manual.
+- Worker automatico so pode existir com limite diario, limite horario, janela de envio e stop-on-reply.
+- Toda PR deve terminar com testes, build, Docker e scan basico de segredos.
