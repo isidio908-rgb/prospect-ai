@@ -283,6 +283,13 @@ describe('autopilot routes HTTP', () => {
 
     assert.equal(queueState.rows[0].approval_batch_id, null);
     assert.equal(queueState.rows[0].status, 'pending');
+
+    await query(
+      `UPDATE message_queue
+       SET status = 'cancelled', cancelled_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND user_id = $2`,
+      [queued.rows[0].id, userId]
+    );
   });
 
   test('cria lote de aprovação sem envio externo e processa resposta autorizada', async () => {
