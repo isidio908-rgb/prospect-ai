@@ -2,12 +2,14 @@ import express from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.mjs';
 import {
+  applyReplyNextAction,
   applyStopOnReply,
   buildLeadDiagnosticDocument,
   classifyRecentReplies,
   createAssistedAppointment,
   getAutopilotStats,
   listAutomationRuns,
+  listCommercialReplies,
   processApprovedMessages,
   queueFollowups,
   runAssistedScheduler,
@@ -38,6 +40,12 @@ const appointmentSchema = z.object({
   lead_id: z.number().int().positive(),
   scheduled_for: z.string().max(255).optional().or(z.literal('')),
   note: z.string().max(1000).optional().or(z.literal('')),
+});
+
+const replyActionSchema = z.object({
+  action: z.enum(['mark_responded', 'mark_meeting', 'mark_not_interested', 'create_followup', 'mark_pricing']),
+  note: z.string().max(1000).optional().or(z.literal('')),
+  scheduled_for: z.string().max(255).optional().or(z.literal('')),
 });
 
 function handleServiceError(error, res, next) {
@@ -114,6 +122,30 @@ router.post('/replies/classify', async (req, res, next) => {
     res.json(result);
   } catch (error) {
     next(error);
+  }
+});
+
+router.get('/replies/inbox', async (req, res, next) => {
+  try {
+    const result = await listCommercialReplies(req.user.id, {
+      limit: Number(req.query.limit || 30),
+      intent: req.query.intent ? String(req.query.intent) : undefined,
+      status: req.query.status ? String(req.query.status) : undefined,
+      search: req.query.search ? String(req.query.search) : undefined,
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/replies/:leadId/action', async (req, res, next) => {
+  try {
+    const data = replyActionSchema.parse(req.body || {});
+    const result = await applyReplyNextAction(req.user.id, Number(req.params.leadId), data);
+    res.json(result);
+  } catch (error) {
+    handleServiceError(error, res, next);
   }
 });
 

@@ -88,6 +88,8 @@ export const autopilot = {
   queueFollowups: (data) => api.post('/api/autopilot/followups/queue', data),
   stopOnReply: () => api.post('/api/autopilot/stop-on-reply'),
   classifyReplies: (data) => api.post('/api/autopilot/replies/classify', data),
+  replyInbox: (params) => api.get('/api/autopilot/replies/inbox', { params }),
+  applyReplyAction: (leadId, data) => api.post(`/api/autopilot/replies/${leadId}/action`, data),
   createAppointment: (data) => api.post('/api/autopilot/appointments', data),
   diagnostic: (leadId) => api.get(`/api/autopilot/diagnostics/${leadId}`),
 };

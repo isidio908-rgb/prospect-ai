@@ -4,6 +4,7 @@ import { buildAutopilotDecision, getNextSendAt, normalizeAutopilotRule } from '.
 
 const INITIAL_ELIGIBLE_STATUSES = ['novo', 'analisado', 'mensagem_pronta'];
 const ACTIVE_MESSAGE_STATUSES = ['pending', 'approved', 'queued', 'sent'];
+const REPLY_ACTIONS = ['mark_responded', 'mark_meeting', 'mark_not_interested', 'create_followup', 'mark_pricing'];
 
 function asInt(value, fallback, min = 1, max = 500) {
   const parsed = Number(value);
@@ -28,7 +29,7 @@ function buildMessageText(row, type = 'initial') {
   return row.mensagem_whatsapp || `Olá, tudo bem? Analisei alguns pontos da presença digital da ${row.nome_empresa || 'sua empresa'} e encontrei oportunidades simples de melhoria. Posso te enviar um diagnóstico rápido?`;
 }
 
-function classifyReplyText(text = '') {
+export function classifyReplyText(text = '') {
   const normalized = clean(text).toLowerCase();
   if (!normalized) return { intent: 'unknown', confidence: 0.2, nextAction: 'Revisar resposta manualmente' };
 
@@ -53,6 +54,81 @@ function classifyReplyText(text = '') {
   }
 
   return { intent: 'neutral', confidence: 0.45, nextAction: 'Revisar manualmente e responder com contexto' };
+}
+
+function buildSuggestedReply(lead, classification) {
+  const company = lead.nome_empresa || 'sua empresa';
+
+  const replies = {
+    interested: `Perfeito, obrigado pelo retorno. Posso te mandar um diagnóstico rápido com os principais pontos que encontrei na ${company} e, se fizer sentido, marcamos 15 minutos para eu te mostrar?`,
+    pricing: 'Boa pergunta. O valor depende do cenário e do objetivo, para eu não te passar algo genérico. Posso primeiro te mostrar em 10 a 15 minutos os pontos que encontrei e te dizer qual plano faria sentido?',
+    meeting: 'Combinado. Tenho alguns horários disponíveis. Qual fica melhor para você: hoje no fim da tarde ou amanhã pela manhã?',
+    question: 'Claro. A ideia é te mostrar rapidamente pontos que podem estar limitando contatos pelo digital, como mensuração, site e WhatsApp. Posso te mandar um diagnóstico curto?',
+    not_interested: 'Sem problemas, obrigado pelo retorno. Vou encerrar por aqui.',
+    neutral: 'Obrigado pelo retorno. Para eu te responder melhor, posso te mandar um diagnóstico rápido com o que encontrei e você me diz se faz sentido?',
+    unknown: 'Obrigado pelo retorno. Vou revisar aqui e te respondo com mais contexto.',
+  };
+
+  return replies[classification.intent] || replies.neutral;
+}
+
+function mapIntentToStatus(intent, currentStatus) {
+  if (intent === 'not_interested') return 'sem_interesse';
+  if (intent === 'meeting') return 'reuniao_marcada';
+  if (['interested', 'pricing', 'question'].includes(intent)) return 'respondeu';
+  return currentStatus || 'respondeu';
+}
+
+function buildReplyActionPatch(lead, options = {}) {
+  const action = clean(options.action);
+  if (!REPLY_ACTIONS.includes(action)) {
+    const error = new Error('Acao de resposta invalida');
+    error.status = 400;
+    throw error;
+  }
+
+  const note = clean(options.note);
+  const scheduledFor = clean(options.scheduled_for);
+
+  if (action === 'mark_not_interested') {
+    return {
+      status: 'sem_interesse',
+      proxima_acao: note || 'Lead respondeu sem interesse. Nao enviar novos follow-ups.',
+      followupType: 'nota',
+    };
+  }
+
+  if (action === 'mark_meeting') {
+    return {
+      status: 'reuniao_marcada',
+      proxima_acao: scheduledFor
+        ? `Reuniao combinada para ${scheduledFor}. ${note || 'Confirmar detalhes antes da chamada.'}`
+        : note || 'Confirmar horario da reuniao com o lead.',
+      followupType: 'reuniao',
+    };
+  }
+
+  if (action === 'mark_pricing') {
+    return {
+      status: 'respondeu',
+      proxima_acao: note || 'Responder sobre valor com contexto e conduzir para conversa curta.',
+      followupType: 'nota',
+    };
+  }
+
+  if (action === 'create_followup') {
+    return {
+      status: lead.status === 'sem_interesse' ? lead.status : 'respondeu',
+      proxima_acao: note || 'Criar proxima resposta manual para o lead.',
+      followupType: 'nota',
+    };
+  }
+
+  return {
+    status: 'respondeu',
+    proxima_acao: note || 'Lead respondeu. Preparar resposta comercial manual.',
+    followupType: 'nota',
+  };
 }
 
 async function insertAutomationRun(userId, ruleId, type, metadata = {}) {
@@ -429,13 +505,7 @@ export async function classifyRecentReplies(userId, options = {}) {
     classifications.push({ ...row, classification });
 
     if (!dryRun) {
-      const nextStatus = classification.intent === 'not_interested'
-        ? 'sem_interesse'
-        : classification.intent === 'meeting'
-          ? 'reuniao_marcada'
-          : ['interested', 'pricing', 'question'].includes(classification.intent)
-            ? 'respondeu'
-            : row.status;
+      const nextStatus = mapIntentToStatus(classification.intent, row.status);
 
       await query(
         `UPDATE leads SET status = $1, proxima_acao = $2, updated_at = NOW()
@@ -451,6 +521,113 @@ export async function classifyRecentReplies(userId, options = {}) {
   }
 
   return { dryRun, total: classifications.length, classifications };
+}
+
+export async function listCommercialReplies(userId, options = {}) {
+  const limit = asInt(options.limit, 30, 1, 100);
+  const status = clean(options.status) || null;
+  const intent = clean(options.intent) || null;
+  const search = clean(options.search);
+  const searchPattern = search ? `%${search}%` : null;
+
+  const result = await query(
+    `SELECT DISTINCT ON (wm.lead_id)
+      wm.id as message_id,
+      wm.lead_id,
+      wm.text_content,
+      wm.created_at as received_at,
+      l.nome_empresa,
+      l.cidade,
+      l.nicho,
+      l.telefone,
+      l.whatsapp,
+      l.score,
+      l.prioridade,
+      l.status,
+      l.proxima_acao,
+      l.responsavel,
+      (
+        SELECT MAX(sent.created_at)
+        FROM whatsapp_messages sent
+        WHERE sent.user_id = wm.user_id
+          AND sent.lead_id = wm.lead_id
+          AND sent.direction = 'sent'
+      ) as last_sent_at,
+      (
+        SELECT COUNT(*)::int
+        FROM whatsapp_messages cnt
+        WHERE cnt.user_id = wm.user_id
+          AND cnt.lead_id = wm.lead_id
+          AND cnt.direction = 'received'
+      ) as reply_count
+     FROM whatsapp_messages wm
+     JOIN leads l ON l.id = wm.lead_id AND l.user_id = wm.user_id
+     WHERE wm.user_id = $1
+       AND wm.direction = 'received'
+       AND wm.lead_id IS NOT NULL
+       AND COALESCE(wm.text_content, '') <> ''
+       AND ($2::text IS NULL OR l.status = $2)
+       AND (
+         $3::text IS NULL
+         OR LOWER(l.nome_empresa) LIKE LOWER($3)
+         OR LOWER(COALESCE(l.cidade, '')) LIKE LOWER($3)
+         OR LOWER(COALESCE(l.nicho, '')) LIKE LOWER($3)
+       )
+     ORDER BY wm.lead_id, wm.created_at DESC
+     LIMIT $4`,
+    [userId, status, searchPattern, limit]
+  );
+
+  const replies = result.rows.map((row) => {
+    const classification = classifyReplyText(row.text_content);
+    return {
+      ...row,
+      classification,
+      suggested_status: mapIntentToStatus(classification.intent, row.status),
+      suggested_reply: buildSuggestedReply(row, classification),
+      next_action: classification.nextAction,
+    };
+  }).filter((reply) => !intent || reply.classification.intent === intent);
+
+  return { replies, total: replies.length };
+}
+
+export async function applyReplyNextAction(userId, leadId, options = {}) {
+  const id = Number(leadId);
+  if (!id) {
+    const error = new Error('lead_id e obrigatorio');
+    error.status = 400;
+    throw error;
+  }
+
+  const leadResult = await query(
+    'SELECT id, nome_empresa, status FROM leads WHERE id = $1 AND user_id = $2',
+    [id, userId]
+  );
+  const lead = leadResult.rows[0];
+  if (!lead) {
+    const error = new Error('Lead nao encontrado');
+    error.status = 404;
+    throw error;
+  }
+
+  const patch = buildReplyActionPatch(lead, options);
+  const message = clean(options.note) || patch.proxima_acao;
+
+  const updated = await query(
+    `UPDATE leads SET status = $1, proxima_acao = $2, updated_at = NOW()
+     WHERE id = $3 AND user_id = $4
+     RETURNING id, nome_empresa, status, proxima_acao`,
+    [patch.status, patch.proxima_acao, id, userId]
+  );
+
+  await query(
+    `INSERT INTO lead_followups (lead_id, user_id, tipo, status_anterior, status_novo, mensagem)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [id, userId, patch.followupType, lead.status, patch.status, `[Autopilot/Resposta] ${message}`]
+  );
+
+  return { lead: updated.rows[0], action: options.action };
 }
 
 export async function createAssistedAppointment(userId, options = {}) {

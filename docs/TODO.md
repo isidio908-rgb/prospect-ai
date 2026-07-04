@@ -6,48 +6,31 @@ Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, esta
 
 ## Prioridade Alta
 
-### 1. PR #18 - Guia de uso do Autopilot e mapa atualizado
-
-Objetivo: garantir que o usuario saiba operar `/autopilot` sem depender de explicacao solta na conversa.
-
-Escopo:
-
-- Criar `docs/GUIA-USO-AUTOPILOT.md`.
-- Explicar conceitos: regra, scheduler, fila, lote, aprovacao, worker, dry-run, stop-on-reply e follow-up.
-- Explicar fluxo diario seguro.
-- Explicar primeiro teste seguro.
-- Explicar diferenca entre aprovar lote e enviar para lead.
-- Atualizar `docs/MAPA-INTERNO.md` com PR #17 mergeado.
-- Atualizar `docs/TODO.md` com V2 comercial.
-- Atualizar `docs/STATUS-ATUAL.md` se necessario.
-
-Criterios de aceite:
-
-- Guia responde "como eu uso essa pagina?".
-- Mapa nao fala mais que `/autopilot` esta pendente.
-- Proximos PRs comerciais ficam claros.
-
-### 2. PR #19 - Central de respostas e proxima acao recomendada
+### 1. PR #19 - Central de respostas e proxima acao recomendada
 
 Objetivo: transformar respostas recebidas em acao comercial rapida.
 
-Escopo recomendado:
+Escopo:
 
-- Criar bloco/tela de respostas recebidas.
-- Listar leads com resposta recente.
+- Criar pagina `/autopilot/replies`.
+- Listar leads com resposta recente no WhatsApp.
 - Mostrar ultima mensagem recebida.
 - Classificar intencao: interesse, preco, reuniao, pergunta, sem interesse, neutro.
 - Sugerir proxima acao.
-- Permitir responder com IA, marcar reuniao, mover para sem interesse ou criar follow-up.
-- Manter toda acao externa com confirmacao.
+- Sugerir resposta copiavel.
+- Permitir marcar respondeu, reuniao, sem interesse ou proxima acao.
+- Registrar a acao no CRM e em `lead_followups`.
+- Manter toda resposta externa fora do automatico: a pagina copia e organiza, mas nao dispara mensagem.
 
 Criterios de aceite:
 
 - Usuario ve rapidamente quem respondeu.
 - Usuario entende qual proximo passo tomar.
+- Usuario consegue copiar uma resposta sugerida.
 - Nenhuma resposta automatica e enviada sem confirmacao.
+- Outro usuario nao acessa nem altera lead de terceiro.
 
-### 3. PR #20 - Templates comerciais por nicho e profissao
+### 2. PR #20 - Templates comerciais por nicho e profissao
 
 Objetivo: melhorar qualidade das mensagens com base no nicho do lead e na profissao/contexto interno do usuario.
 
@@ -65,7 +48,7 @@ Criterios de aceite:
 - Prompt nao inventa dados do lead.
 - Templates podem ser revisados antes de entrar em fila.
 
-### 4. PR #21 - Diagnostico comercial avancado
+### 3. PR #21 - Diagnostico comercial avancado
 
 Objetivo: transformar o diagnostico base em material de venda.
 
@@ -84,7 +67,7 @@ Criterios de aceite:
 - Diagnostico diferencia fatos observados de inferencias.
 - Nao promete resultado financeiro sem dados.
 
-### 5. PR #22 - Agendamento comercial assistido
+### 4. PR #22 - Agendamento comercial assistido
 
 Objetivo: deixar o caminho de resposta positiva ate reuniao mais curto.
 
@@ -103,7 +86,7 @@ Criterios de aceite:
 
 ## Prioridade Media
 
-### 6. Operacao controlada de prospeccao real
+### 5. Operacao controlada de prospeccao real
 
 Objetivo: continuar gerando oportunidades enquanto o produto evolui.
 
@@ -116,10 +99,11 @@ Checklist:
 - Usar CRM Kanban para registrar status e proxima acao.
 - Usar IA para ajustar mensagem por nicho.
 - Usar `/autopilot` para aprovar, simular e enviar com controle.
+- Usar `/autopilot/replies` para tratar respostas recebidas.
 - Medir respostas, reunioes e clientes fechados.
 - Ajustar mensagens e criterios de score com base em respostas reais.
 
-### 7. Cron controlado futuro
+### 6. Cron controlado futuro
 
 Objetivo: automatizar horarios diarios sem perder controle.
 
@@ -132,6 +116,18 @@ Escopo futuro:
 - Nunca enviar direto sem configuracao explicita.
 
 ## Concluido Recentemente
+
+### PR #18 - Guia de uso do Autopilot e mapa atualizado
+
+Validado e mergeado.
+
+Resultado:
+
+- Criado `docs/GUIA-USO-AUTOPILOT.md`.
+- Atualizados README, mapa interno, TODO e status.
+- Documentado fluxo diario seguro.
+- Documentada diferenca entre aprovar lote e enviar mensagem para lead.
+- Merge commit: `dc6dd77b4dd15dd602cf18e7b7876017b0d648e0`.
 
 ### PR #17 - Autopilot completo controlado
 
