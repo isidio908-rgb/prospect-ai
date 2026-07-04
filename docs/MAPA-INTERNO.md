@@ -1,7 +1,7 @@
 # Mapa Interno - Prospect AI
 
 **Atualizado em:** 04/07/2026  
-**Estado atual:** produto interno operacional em `main`, com Autopilot SDR controlado e guia de uso mergeados. PR #19 prepara a central comercial de respostas.
+**Estado atual:** produto interno operacional em `main`, com Autopilot SDR, guia de uso e central de respostas mergeados. PR #20 prepara templates comerciais por nicho e profissao.
 
 Este documento e a bussola curta do projeto. Use ele para nao perder o fio entre prospeccao real, manutencao tecnica e proximas PRs.
 
@@ -14,7 +14,7 @@ A ferramenta deve:
 1. Coletar empresas por nicho, cidade e fonte.
 2. Validar e enriquecer contatos.
 3. Priorizar leads com score comercial.
-4. Gerar diagnosticos e mensagens com IA.
+4. Gerar diagnosticos e mensagens com IA ou templates assistidos.
 5. Organizar o funil no CRM/Kanban.
 6. Apoiar disparos e follow-ups pelo WhatsApp com controle humano.
 7. Tratar respostas recebidas e sugerir proxima acao comercial.
@@ -51,30 +51,30 @@ Documentos antigos de sprint continuam no repositorio como historico, mas nao de
 | Aprovacao em lote | Concluido | WhatsApp pessoal aprovou lote real via webhook. |
 | Autopilot completo controlado | Concluido | PR #17: central `/autopilot`, scheduler, worker controlado, stop-on-reply, follow-ups, classificacao, agendamento e diagnostico base. |
 | Guia operacional do Autopilot | Concluido | PR #18: documenta como usar `/autopilot` com seguranca. |
+| Central de respostas | Concluido | PR #19: `/autopilot/replies`, intencao, resposta sugerida e acoes CRM sem envio automatico. |
 
-## Em Producao Agora - PR #19
+## Em Producao Agora - PR #20
 
-Objetivo: criar a central de respostas comerciais em `/autopilot/replies`.
+Objetivo: criar templates comerciais por nicho e profissao em `/autopilot/templates`.
 
 Entregas previstas:
 
-- Inbox de respostas recentes vindas do WhatsApp.
-- Classificacao heuristica da intencao: interesse, preco, reuniao, pergunta, sem interesse, neutro.
-- Resposta sugerida para copiar.
-- Proxima acao recomendada.
-- Acoes seguras para atualizar CRM: respondeu, reuniao, sem interesse, criar acao/tratar preco.
-- Registro em `lead_followups`.
-- Isolamento por `user_id`.
-- Nenhum envio automatico de resposta para lead.
+- Biblioteca de nichos: imobiliarias, clinicas, odontologia, estetica, advocacia, escolas, energia solar, moveis planejados e negocio local.
+- Tons: consultivo, direto, diagnostico e oportunidade.
+- Deteccao de dores observaveis no lead: sem site, sem Pixel Meta, sem GTM, sem GA4, sem WhatsApp no site, sem formulario, site lento e prova social sem tracking.
+- Geracao de mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
+- Uso de `profession`, `primary_niche` e `internal_context` do usuario.
+- Aplicar template no lead sem enviar WhatsApp.
+- Registro de historico em `lead_followups`.
 
 Papel no fluxo comercial:
 
 ```mermaid
 flowchart TD
-  A[Lead responde] --> B[Central de respostas]
-  B --> C[Classificar intencao]
-  C --> D[Copiar resposta ou registrar acao]
-  D --> E[CRM atualizado]
+  A[Lead qualificado] --> B[Templates]
+  B --> C[Mensagem por nicho]
+  C --> D[Revisar e aplicar]
+  D --> E[Autopilot ou WhatsApp manual]
 ```
 
 ## Estado Operacional Atual
@@ -91,7 +91,8 @@ O sistema pode ser usado hoje para:
 - enviar mensagens aprovadas somente com confirmacao avancada;
 - cancelar follow-ups quando houver resposta;
 - registrar reunioes e diagnosticos base;
-- apos PR #19, tratar respostas em `/autopilot/replies`.
+- tratar respostas em `/autopilot/replies`;
+- apos PR #20, gerar e aplicar templates em `/autopilot/templates`.
 
 O sistema ainda nao deve:
 
@@ -99,7 +100,8 @@ O sistema ainda nao deve:
 - disparar em volume alto sem acompanhamento diario;
 - agendar reunioes em calendario externo sem confirmacao;
 - usar classificacao por LLM paga em background sem limites/custos claros;
-- responder leads automaticamente sem aprovacao e configuracao explicita.
+- responder leads automaticamente sem aprovacao e configuracao explicita;
+- inventar informacoes comerciais ou tecnicas que nao foram observadas no lead.
 
 ## Mapa Dos Modulos
 
@@ -115,7 +117,8 @@ O sistema ainda nao deve:
 | WhatsApp | `/whatsapp` | `/api/whatsapp` | Operacional |
 | IA | Detalhe do lead | `/api/ai` | Operacional |
 | Autopilot | `/autopilot` | `/api/autopilot` | Operacional controlado |
-| Respostas | `/autopilot/replies` | `/api/autopilot/replies/inbox` | PR #19 |
+| Respostas | `/autopilot/replies` | `/api/autopilot/replies/inbox` | Operacional |
+| Templates | `/autopilot/templates` | `/api/autopilot/templates/*` | PR #20 |
 
 ## Como Usar O Autopilot
 
@@ -135,6 +138,7 @@ Resumo operacional:
 10. Registrar reunioes.
 11. Gerar diagnostico base.
 12. Tratar respostas em `/autopilot/replies`.
+13. Gerar/aplicar mensagens por nicho em `/autopilot/templates` antes de enfileirar novos contatos.
 
 ## V2 Comercial - Sequencia De PRs
 
@@ -161,13 +165,15 @@ A V2 comercial deve melhorar conversao, nao apenas adicionar automacao.
 9. Provider externo deve respeitar cota/cache; nao usar rotacao abusiva de credenciais.
 10. Toda PR precisa terminar com validacao de testes, build, Docker e scan basico de segredos.
 11. Central de respostas pode sugerir e copiar textos, mas nao deve enviar resposta automatica sem confirmacao explicita.
+12. Templates podem atualizar texto do lead, mas nao podem enviar WhatsApp automaticamente.
+13. Templates devem separar fatos observados de inferencias e nao prometer resultado financeiro.
 
 ## Operacao Comercial Enquanto Desenvolve
 
 1. Coletar pequenos lotes por cidade/nicho.
 2. Priorizar leads com WhatsApp confirmado e score alto.
 3. Usar CRM Kanban para status e proxima acao.
-4. Usar IA para ajustar mensagem por nicho.
+4. Usar `/autopilot/templates` para ajustar mensagem por nicho.
 5. Usar `/autopilot` para aprovar, simular e enviar com controle.
 6. Usar `/autopilot/replies` para tratar respostas e marcar proximas acoes.
 7. Medir respostas, reunioes e clientes fechados.
@@ -196,6 +202,6 @@ Atualize o corpo do PR com resultados completos.
 
 ## Proxima Decisao
 
-Validar PR #19 e, depois, seguir para PR #20: templates comerciais por nicho e profissao.
+Validar PR #20 e, depois, seguir para PR #21: diagnostico comercial avancado.
 
-Motivo: apos organizar respostas, o maior ganho vem de melhorar qualidade das mensagens por segmento.
+Motivo: depois que a mensagem por nicho estiver melhor, o proximo ganho vem de transformar diagnostico em material de venda.
