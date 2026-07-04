@@ -7,6 +7,14 @@ import { authenticate } from '../middleware/auth.mjs';
 
 const router = express.Router();
 
+function normalizeApprovalWhatsapp(value) {
+  if (value === undefined) return undefined;
+  let digits = String(value || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (!digits) return null;
+  if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+  return digits;
+}
+
 // Schema de validação
 export const registerSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -14,7 +22,8 @@ export const registerSchema = z.object({
   name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres').optional(),
   profession: z.string().min(2).max(255).optional(),
   primary_niche: z.string().max(255).optional(),
-  internal_context: z.string().max(3000).optional()
+  internal_context: z.string().max(3000).optional(),
+  approval_whatsapp: z.string().max(50).optional().or(z.literal(''))
 });
 
 const loginSchema = z.object({
@@ -26,7 +35,8 @@ export const updateMeSchema = z.object({
   name: z.string().min(2).max(255).optional().or(z.literal('')),
   profession: z.string().min(2).max(255).optional(),
   primary_niche: z.string().max(255).optional(),
-  internal_context: z.string().max(3000).optional()
+  internal_context: z.string().max(3000).optional(),
+  approval_whatsapp: z.string().max(50).optional().or(z.literal(''))
 });
 
 function toUserPayload(user) {
@@ -36,7 +46,8 @@ function toUserPayload(user) {
     name: user.name,
     profession: user.profession || 'Gestor de Tráfego',
     primary_niche: user.primary_niche || '',
-    internal_context: user.internal_context || ''
+    internal_context: user.internal_context || '',
+    approval_whatsapp: user.approval_whatsapp || ''
   };
 }
 
@@ -49,7 +60,8 @@ router.post('/register', async (req, res, next) => {
       name,
       profession = 'Gestor de Tráfego',
       primary_niche,
-      internal_context
+      internal_context,
+      approval_whatsapp
     } = registerSchema.parse(req.body);
     
     // Verificar se email já existe
@@ -69,10 +81,10 @@ router.post('/register', async (req, res, next) => {
     
     // Criar usuário
     const result = await query(
-      `INSERT INTO users (email, password_hash, name, profession, primary_niche, internal_context) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
-       RETURNING id, email, name, profession, primary_niche, internal_context, created_at`,
-      [email, passwordHash, name || null, profession || 'Gestor de Tráfego', primary_niche || null, internal_context || null]
+      `INSERT INTO users (email, password_hash, name, profession, primary_niche, internal_context, approval_whatsapp) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+       RETURNING id, email, name, profession, primary_niche, internal_context, approval_whatsapp, created_at`,
+      [email, passwordHash, name || null, profession || 'Gestor de Tráfego', primary_niche || null, internal_context || null, normalizeApprovalWhatsapp(approval_whatsapp)]
     );
     
     const user = result.rows[0];
@@ -101,7 +113,7 @@ router.post('/login', async (req, res, next) => {
     
     // Buscar usuário
     const result = await query(
-      `SELECT id, email, name, profession, primary_niche, internal_context, password_hash
+      `SELECT id, email, name, profession, primary_niche, internal_context, approval_whatsapp, password_hash
        FROM users
        WHERE email = $1`,
       [email]
@@ -159,14 +171,16 @@ router.patch('/me', authenticate, async (req, res, next) => {
         profession = $2,
         primary_niche = $3,
         internal_context = $4,
+        approval_whatsapp = $5,
         updated_at = NOW()
-       WHERE id = $5
-       RETURNING id, email, name, profession, primary_niche, internal_context`,
+       WHERE id = $6
+       RETURNING id, email, name, profession, primary_niche, internal_context, approval_whatsapp`,
       [
         data.name === undefined ? req.user.name : (data.name === '' ? null : data.name),
         data.profession === undefined ? req.user.profession : data.profession,
         data.primary_niche === undefined ? req.user.primary_niche : (data.primary_niche || null),
         data.internal_context === undefined ? req.user.internal_context : (data.internal_context || null),
+        data.approval_whatsapp === undefined ? req.user.approval_whatsapp : normalizeApprovalWhatsapp(data.approval_whatsapp),
         req.user.id
       ]
     );
