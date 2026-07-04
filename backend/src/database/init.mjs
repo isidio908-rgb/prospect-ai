@@ -1,5 +1,6 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { ensureAutopilotTables } from './autopilotSchema.mjs';
 
 dotenv.config();
 
@@ -294,6 +295,10 @@ export async function initDatabase() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_lead_followups_lead_id ON lead_followups(lead_id, created_at DESC)`);
+
+    // Criar tabelas do Autopilot SDR. A fundação nasce passiva: regras e fila,
+    // sem disparo automático ativo até existir configuração explícita do usuário.
+    await ensureAutopilotTables(client);
 
     // Criar tabela de instâncias WhatsApp (Evolution API)
     await client.query(`

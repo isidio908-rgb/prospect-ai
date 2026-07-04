@@ -2,6 +2,41 @@
 
 Este arquivo consolida o historico operacional do projeto. Documentos antigos de sprint continuam no repositorio, mas este passa a ser o registro principal e atualizado.
 
+## 03/07/2026 - Fundacao Do Autopilot SDR
+
+### Implementado
+
+- Criado schema do Autopilot SDR em `backend/src/database/autopilotSchema.mjs`.
+- `initDatabase()` passa a criar automaticamente as tabelas do Autopilot.
+- Adicionadas tabelas:
+  - `automation_rules`
+  - `automation_runs`
+  - `message_queue`
+- Criado servico `backend/src/services/autopilot/autopilotService.mjs`.
+- Adicionadas regras puras para decidir se um lead pode entrar na fila de primeira abordagem.
+- Adicionado calculo de janela segura de envio.
+- Modo padrao definido como `assistido`, com aprovacao manual obrigatoria.
+- Modo `automatico` existe, mas so aprova envio sem revisao quando a regra explicitamente permitir.
+- Adicionados testes unitarios em `backend/tests/autopilot-service.test.mjs`.
+- Criada documentacao operacional `docs/AUTOPILOT-SDR.md`.
+
+### Regras De Seguranca
+
+- Regra desligada nao enfileira mensagens.
+- Lead sem contato utilizavel nao entra na fila.
+- Lead abaixo do score minimo nao entra na fila.
+- Lead fora de fonte/cidade/nicho da regra nao entra na fila.
+- Mensagem inicial duplicada ativa e bloqueada.
+- Horario de envio respeita janela configurada.
+- Fila nao armazena tokens, API keys ou credenciais.
+- Envio automatico real ainda nao foi ativado nesta etapa.
+
+### Observacoes
+
+- Esta e uma fundacao passiva: cria schema, decisao e fila, mas nao dispara WhatsApp automaticamente.
+- Proximas etapas: API/UI de regras, tela de fila, scheduler assistido, worker de envio, stop-on-reply, IA de resposta e agendamento.
+- Precisa de validacao local com backend tests, audit, frontend build e Docker build/up antes do merge.
+
 ## 03/07/2026 - Testes HTTP Das Rotas De Collections
 
 ### Implementado
@@ -18,7 +53,7 @@ Este arquivo consolida o historico operacional do projeto. Documentos antigos de
 
 - O teste monta um app Express em porta aleatória e usa JWT real contra o middleware `authenticate`.
 - Não adiciona dependências novas.
-- Precisa de validação local com `backend npm test`, audit, build frontend, Docker build/up e checagem de `/collections` antes do merge.
+- Validado localmente antes do merge: backend tests, audit, frontend build, Docker build/up, `/collections`, logs, limpeza de cache e scan de segredos.
 
 ## 03/07/2026 - Dashboard Comercial Com Filtros
 
@@ -180,8 +215,8 @@ O projeto esta pronto para uso interno controlado, desde que:
 
 ## Proximos Marcos
 
-1. Testes automatizados complementares para fluxos novos.
-2. Exportacao PDF com diagnostico por lead.
-3. Templates comerciais por nicho.
-4. Priorizacao inteligente avancada.
-5. Comparativos semanais/mensais e custo por fonte no dashboard.
+1. API/UI do Autopilot SDR e fila de mensagens pendentes.
+2. Scheduler assistido para enfileirar leads elegiveis.
+3. Worker de envio WhatsApp com limites e stop-on-reply.
+4. Resposta IA e agendamento automatico.
+5. Exportacao PDF com diagnostico por lead.
