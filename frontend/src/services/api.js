@@ -76,6 +76,9 @@ export const autopilot = {
   listQueue: (params) => api.get('/api/autopilot/queue', { params }),
   approveMessage: (id) => api.patch(`/api/autopilot/queue/${id}/approve`),
   cancelMessage: (id) => api.patch(`/api/autopilot/queue/${id}/cancel`),
+  listApprovalBatches: (params) => api.get('/api/autopilot/approval-batches', { params }),
+  createApprovalBatch: (data) => api.post('/api/autopilot/approval-batches', data),
+  getApprovalBatch: (id) => api.get(`/api/autopilot/approval-batches/${id}`),
 };
 
 // Credenciais
