@@ -6,38 +6,104 @@ Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, esta
 
 ## Prioridade Alta
 
-### 1. PR #16 - UI Assistida do Autopilot SDR
+### 1. PR #18 - Guia de uso do Autopilot e mapa atualizado
 
-Objetivo: permitir operar o Autopilot pela interface, sem depender de chamadas manuais de API.
+Objetivo: garantir que o usuario saiba operar `/autopilot` sem depender de explicacao solta na conversa.
 
-Escopo recomendado:
+Escopo:
 
-- Criar pagina `/autopilot`.
-- Adicionar item Autopilot no menu lateral.
-- Listar regras de automacao.
-- Criar, editar, ativar, pausar e excluir regras.
-- Listar mensagens em `message_queue`.
-- Filtrar fila por status, tipo, cidade, nicho e regra.
-- Listar lotes de aprovacao.
-- Criar lote de aprovacao pela interface.
-- Exibir detalhe do lote com itens numerados.
-- Aprovar/cancelar mensagem individual pela interface.
-- Mostrar alerta claro: aprovacao muda status para `approved`, mas ainda nao envia mensagem ao lead.
+- Criar `docs/GUIA-USO-AUTOPILOT.md`.
+- Explicar conceitos: regra, scheduler, fila, lote, aprovacao, worker, dry-run, stop-on-reply e follow-up.
+- Explicar fluxo diario seguro.
+- Explicar primeiro teste seguro.
+- Explicar diferenca entre aprovar lote e enviar para lead.
+- Atualizar `docs/MAPA-INTERNO.md` com PR #17 mergeado.
+- Atualizar `docs/TODO.md` com V2 comercial.
+- Atualizar `docs/STATUS-ATUAL.md` se necessario.
 
 Criterios de aceite:
 
-- `/autopilot` carrega autenticado.
-- Usuario consegue criar e editar uma regra.
-- Usuario consegue listar fila e lotes.
-- Usuario consegue criar lote sem envio externo.
-- Usuario consegue criar lote com solicitacao para WhatsApp de aprovacao.
-- Nenhum item vira `sent` apenas por aprovar.
-- Frontend build passa.
-- Backend tests passam.
-- Docker build/up passa.
-- Scan de logs/respostas nao encontra segredos.
+- Guia responde "como eu uso essa pagina?".
+- Mapa nao fala mais que `/autopilot` esta pendente.
+- Proximos PRs comerciais ficam claros.
 
-### 2. Operacao controlada de prospeccao real
+### 2. PR #19 - Central de respostas e proxima acao recomendada
+
+Objetivo: transformar respostas recebidas em acao comercial rapida.
+
+Escopo recomendado:
+
+- Criar bloco/tela de respostas recebidas.
+- Listar leads com resposta recente.
+- Mostrar ultima mensagem recebida.
+- Classificar intencao: interesse, preco, reuniao, pergunta, sem interesse, neutro.
+- Sugerir proxima acao.
+- Permitir responder com IA, marcar reuniao, mover para sem interesse ou criar follow-up.
+- Manter toda acao externa com confirmacao.
+
+Criterios de aceite:
+
+- Usuario ve rapidamente quem respondeu.
+- Usuario entende qual proximo passo tomar.
+- Nenhuma resposta automatica e enviada sem confirmacao.
+
+### 3. PR #20 - Templates comerciais por nicho e profissao
+
+Objetivo: melhorar qualidade das mensagens com base no nicho do lead e na profissao/contexto interno do usuario.
+
+Escopo recomendado:
+
+- Criar biblioteca de templates por nicho.
+- Nichos iniciais: imobiliarias, clinicas, odontologia, estetica, advocacia, escolas, energia solar, moveis planejados.
+- Criar argumentos por dor: sem pixel, sem GTM, sem GA4, sem WhatsApp no site, site lento, baixa prova social, sem campanha aparente.
+- Adaptar prompts para ponto de vista de gestor de trafego.
+- Permitir escolher tom: consultivo, direto, diagnostico, oportunidade.
+
+Criterios de aceite:
+
+- Mensagem inicial e follow-up ficam mais especificos por nicho.
+- Prompt nao inventa dados do lead.
+- Templates podem ser revisados antes de entrar em fila.
+
+### 4. PR #21 - Diagnostico comercial avancado
+
+Objetivo: transformar o diagnostico base em material de venda.
+
+Escopo recomendado:
+
+- Diagnostico curto para WhatsApp.
+- Diagnostico completo em Markdown.
+- Roteiro de Loom/audio.
+- Roteiro de reuniao de 15 minutos.
+- Sugestao de oferta: trafego, tracking, site, CRM, WhatsApp, criativos ou consultoria.
+- Botao para copiar texto.
+
+Criterios de aceite:
+
+- Usuario consegue usar o diagnostico na abordagem.
+- Diagnostico diferencia fatos observados de inferencias.
+- Nao promete resultado financeiro sem dados.
+
+### 5. PR #22 - Agendamento comercial assistido
+
+Objetivo: deixar o caminho de resposta positiva ate reuniao mais curto.
+
+Escopo recomendado:
+
+- Sugerir horarios disponiveis manualmente cadastrados.
+- Gerar mensagem de convite para reuniao.
+- Confirmar data/horario combinado.
+- Registrar no lead e no historico.
+- Preparar futura integracao Google Calendar/Calendly.
+
+Criterios de aceite:
+
+- Lead interessado vira `reuniao_marcada` com menos cliques.
+- Nenhum evento externo e criado sem confirmacao.
+
+## Prioridade Media
+
+### 6. Operacao controlada de prospeccao real
 
 Objetivo: continuar gerando oportunidades enquanto o produto evolui.
 
@@ -49,105 +115,43 @@ Checklist:
 - Priorizar leads com WhatsApp confirmado e score alto.
 - Usar CRM Kanban para registrar status e proxima acao.
 - Usar IA para ajustar mensagem por nicho.
+- Usar `/autopilot` para aprovar, simular e enviar com controle.
 - Medir respostas, reunioes e clientes fechados.
 - Ajustar mensagens e criterios de score com base em respostas reais.
 
-### 3. PR #17 - Scheduler assistido
+### 7. Cron controlado futuro
 
-Objetivo: enfileirar leads elegiveis automaticamente, sem envio automatico.
+Objetivo: automatizar horarios diarios sem perder controle.
 
-Escopo recomendado:
+Escopo futuro:
 
-- Job diario configuravel.
-- Criacao de `automation_runs`.
-- Avaliacao de regras ativas.
-- Enfileiramento apenas como `pending`.
-- Respeito a score, fonte, cidade, nicho e contato.
-- Respeito a duplicidade de mensagem inicial ativa.
-- Logs de leads avaliados, enfileirados e ignorados.
-
-Regra de seguranca: scheduler nao envia WhatsApp para leads.
-
-## Prioridade Media
-
-### 4. PR #18 - Worker de envio controlado
-
-Objetivo: enviar mensagens `approved` pelo WhatsApp com limites e rastreabilidade.
-
-Requisitos antes de implementar:
-
-- UI do Autopilot concluida.
-- Scheduler assistido validado.
-- Aprovacao em lote funcionando em producao local.
-
-Escopo minimo:
-
-- Processar somente mensagens `approved`.
-- Respeitar `max_daily_sends`.
-- Respeitar `max_hourly_sends`.
-- Respeitar janela de envio.
-- Registrar tentativa, sucesso e falha.
-- Nunca enviar se lead respondeu recentemente.
-- Retry controlado.
-
-### 5. Stop-on-reply e follow-ups
-
-Objetivo: impedir follow-up automatico quando o lead responder.
-
-Escopo:
-
-- Detectar resposta recebida pelo webhook.
-- Marcar lead como `respondeu` ou status equivalente.
-- Cancelar follow-ups pendentes do lead.
-- Registrar motivo no historico.
-- Cobrir com teste.
-
-### 6. Dashboard do Autopilot
-
-Objetivo: acompanhar automacao sem misturar com dashboard comercial geral.
-
-Metricas desejadas:
-
-- Regras ativas.
-- Mensagens pendentes.
-- Mensagens aprovadas.
-- Mensagens canceladas.
-- Mensagens enviadas.
-- Taxa de resposta por regra.
-- Leads que viraram reuniao.
-- Limite diario consumido.
-
-## Prioridade Baixa
-
-### 7. Exportacao PDF
-
-Gerar PDF com diagnostico por lead para enviar em conversa comercial.
-
-### 8. Templates comerciais por nicho
-
-Criar argumentos e mensagens adaptadas para nichos como imobiliarias, clinicas, odontologia, estetica, advocacia, construtoras e educacao.
-
-### 9. Priorizacao inteligente avancada
-
-Usar IA para sugerir:
-
-- melhor argumento comercial;
-- oferta mais provavel;
-- canal ideal de abordagem;
-- urgencia do lead;
-- melhor horario de contato.
-
-### 10. Agendamento assistido
-
-Objetivo futuro:
-
-- Classificar resposta do lead.
-- Sugerir horarios.
-- Integrar Google Calendar ou Calendly.
-- Confirmar agendamento pelo WhatsApp.
-- Mover lead para `reuniao_marcada`.
+- Scheduler configuravel por horario.
+- Limite por regra.
+- Logs por execucao.
+- Pausa automatica em erro.
+- Nunca enviar direto sem configuracao explicita.
 
 ## Concluido Recentemente
+
+### PR #17 - Autopilot completo controlado
+
+Validado e mergeado.
+
+Resultado:
+
+- `/autopilot` criada e refinada como central operacional comercial.
+- Cards de proxima acao.
+- Fluxo visual 1 a 11.
+- Scheduler assistido.
+- Worker controlado.
+- Stop-on-reply.
+- Follow-ups assistidos.
+- Classificacao heuristica de respostas.
+- Agendamento assistido.
+- Diagnostico/PDF base em Markdown.
+- Reenvio de lote para WhatsApp pessoal.
+- Envio real restrito ao modo avancado com `dry_run=false` e `confirm_send=true`.
+- Merge commit: `78e62b205445d63a3b4dc768dc8de6794d8b302b`.
 
 ### PR #15 - Aprovacao em lote via WhatsApp real
 

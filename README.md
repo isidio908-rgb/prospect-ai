@@ -7,7 +7,7 @@ O objetivo inicial e uso proprio, separado do Performance Hub. A arquitetura ja 
 ## Status Atual
 
 **Atualizado em:** 04/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR assistido validado por WhatsApp real.
+**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado mergeado no PR #17.
 
 Stack local validada com Docker:
 
@@ -20,10 +20,12 @@ Stack local validada com Docker:
 Documentacao principal:
 
 - `docs/MAPA-INTERNO.md`
+- `docs/GUIA-USO-AUTOPILOT.md`
 - `docs/STATUS-ATUAL.md`
 - `docs/TODO.md`
 - `docs/HISTORICO.md`
 - `docs/README.md`
+- `docs/AUTOPILOT-COMPLETO-PR.md`
 - `docs/AUTOPILOT-SDR.md`
 - `docs/WHATSAPP-EVOLUTION.md`
 - `docs/IA-LLM.md`
@@ -60,7 +62,8 @@ Documentacao principal:
 - IA/LLM com tarefas comerciais dentro do detalhe do lead.
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
 - Dashboard comercial com funil, fontes, WhatsApp confirmado, conversao por nicho/cidade e filtros por periodo/fonte.
-- Autopilot SDR backend com regras, fila, lotes de aprovacao e aprovacao em lote via WhatsApp pessoal.
+- Autopilot SDR completo controlado em `/autopilot`.
+- Regras, fila, lotes, aprovacao em lote, scheduler assistido, worker controlado, stop-on-reply, follow-ups, classificacao de respostas, agendamento assistido e diagnostico base.
 - Aprovacao em lote validada com webhook real da Evolution API.
 - Documentacao operacional para WhatsApp, IA, coleta, credenciais e Autopilot.
 - Dark mode.
@@ -94,7 +97,7 @@ Gera diagnostico e mensagens conforme profissao/contexto do usuario
       ↓
 Usa CRM Kanban, WhatsApp e IA para abordagem
       ↓
-Autopilot SDR pode organizar mensagens pendentes para aprovacao assistida
+Autopilot SDR organiza fila, aprovacao, simulacao, envio controlado e follow-ups
 ```
 
 ## Fontes De Coleta
@@ -145,7 +148,7 @@ Regras:
 
 No cadastro e na pagina `/profile`, o usuario informa:
 
-- Profissao/função.
+- Profissao/funcao.
 - Nicho foco.
 - Instrucoes internas de como a IA deve pensar, escrever e priorizar.
 
@@ -194,16 +197,6 @@ A pagina `/dashboard` mostra:
 - Conversao por cidade.
 - Filtros por periodo e fonte.
 
-Periodos suportados:
-
-- Todo periodo.
-- Hoje.
-- Ultimos 7 dias.
-- Ultimos 30 dias.
-- Ultimos 90 dias.
-- Mes atual.
-- Periodo personalizado.
-
 ## WhatsApp
 
 O modulo WhatsApp usa Evolution API.
@@ -244,22 +237,30 @@ Guia operacional: `docs/IA-LLM.md`.
 
 ## Autopilot SDR
 
-O Autopilot SDR e a camada de automacao comercial assistida.
+O Autopilot SDR e a camada de automacao comercial assistida e controlada.
 
 Implementado:
 
+- Pagina `/autopilot`.
 - Regras de automacao.
 - Fila de mensagens.
 - Lotes de aprovacao.
 - Campo `approval_whatsapp` no perfil.
-- Envio de solicitacao de aprovacao ao WhatsApp pessoal.
+- Envio e reenvio de solicitacao de aprovacao ao WhatsApp pessoal.
 - Comandos `APROVAR LOTE`, `CANCELAR LOTE`, `APROVAR {id}:1,3` e `CANCELAR {id}:2`.
 - Processamento pelo webhook real da Evolution API.
 - Fallback autenticado para processar comando pela API.
+- Scheduler assistido.
+- Worker de envio controlado.
+- Stop-on-reply.
+- Follow-ups assistidos.
+- Classificacao heuristica de respostas.
+- Agendamento assistido.
+- Diagnostico/PDF base em Markdown.
 
-Regra atual: aprovar mensagem muda status para `approved`, mas nao envia mensagem automaticamente para lead.
+Regra atual: aprovar mensagem muda status para `approved`, mas nao envia mensagem automaticamente para lead. O envio real fica no modo avancado e exige `dry_run=false`, `confirm_send=true` e confirmacao visual.
 
-Guia operacional: `docs/AUTOPILOT-SDR.md`.
+Guia principal de uso: `docs/GUIA-USO-AUTOPILOT.md`.
 
 ## Rodar Localmente
 
@@ -301,14 +302,13 @@ npm run dev
 
 ## O Que Falta
 
-Principais proximos passos:
+Principais proximos passos da V2 comercial:
 
-1. UI assistida do Autopilot SDR em `/autopilot`.
-2. Operacao controlada de prospeccao real com baixo volume.
-3. Scheduler assistido para enfileirar leads elegiveis sem envio automatico.
-4. Worker de envio controlado para mensagens `approved`, com limites e stop-on-reply.
-5. Exportacao PDF com diagnostico por lead.
-6. Templates comerciais por nicho e priorizacao inteligente avancada.
+1. Guia de uso do Autopilot e mapa atualizado.
+2. Central de respostas e proxima acao recomendada.
+3. Templates comerciais por nicho e profissao.
+4. Diagnostico comercial avancado.
+5. Agendamento comercial assistido.
 
 Lista completa em `docs/TODO.md`.
 
@@ -321,6 +321,7 @@ Lista completa em `docs/TODO.md`.
 - Respeitar limites de provedores.
 - Nao usar rotacao de credenciais para burlar bloqueios.
 - Nunca enviar mensagem para lead apenas por aprovar lote.
+- Envio real do Autopilot exige confirmacao explicita.
 
 ## Fonte De Verdade
 
@@ -328,8 +329,9 @@ A fonte de verdade atual e:
 
 1. Codigo atual em `main`.
 2. `docs/MAPA-INTERNO.md`.
-3. `docs/STATUS-ATUAL.md`.
-4. `docs/TODO.md`.
-5. `docs/HISTORICO.md`.
+3. `docs/GUIA-USO-AUTOPILOT.md`.
+4. `docs/STATUS-ATUAL.md`.
+5. `docs/TODO.md`.
+6. `docs/HISTORICO.md`.
 
 Documentos antigos de sprint/backend foram mantidos como historico e podem estar parcialmente desatualizados.

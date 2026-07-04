@@ -1,7 +1,7 @@
 # Mapa Interno - Prospect AI
 
 **Atualizado em:** 04/07/2026  
-**Estado atual:** produto interno operacional em `main`, com Autopilot SDR assistido validado por WhatsApp real.
+**Estado atual:** produto interno operacional em `main`, com Autopilot SDR controlado e central `/autopilot` mergeada no PR #17.
 
 Este documento e a bussola curta do projeto. Use ele para nao perder o fio entre prospeccao real, manutencao tecnica e proximas PRs.
 
@@ -17,7 +17,7 @@ A ferramenta deve:
 4. Gerar diagnosticos e mensagens com IA.
 5. Organizar o funil no CRM/Kanban.
 6. Apoiar disparos e follow-ups pelo WhatsApp com controle humano.
-7. Evoluir para automacao assistida e, depois, automacao controlada.
+7. Ajudar o usuario a marcar reunioes e vender servicos digitais.
 
 ## Fonte De Verdade
 
@@ -25,10 +25,11 @@ Ordem de confianca:
 
 1. Codigo em `main`.
 2. `docs/MAPA-INTERNO.md`.
-3. `docs/STATUS-ATUAL.md`.
-4. `docs/TODO.md`.
-5. `docs/HISTORICO.md`.
-6. Documentos operacionais especificos.
+3. `docs/GUIA-USO-AUTOPILOT.md`.
+4. `docs/STATUS-ATUAL.md`.
+5. `docs/TODO.md`.
+6. `docs/HISTORICO.md`.
+7. Documentos operacionais especificos.
 
 Documentos antigos de sprint continuam no repositorio como historico, mas nao devem guiar decisoes atuais se divergirem destes arquivos.
 
@@ -45,25 +46,27 @@ Documentos antigos de sprint continuam no repositorio como historico, mas nao de
 | Dashboard comercial | Concluido | Funil, fontes, periodo, conversao por nicho/cidade. |
 | IA contextual | Concluido | Prompts ajustados por profissao, nicho e contexto interno. |
 | Autopilot fundacao | Concluido | Regras, runs e fila. |
-| Autopilot API | Concluido | CRUD de regras, fila e aprovar/cancelar mensagens. |
+| Autopilot API | Concluido | CRUD de regras, fila, lotes e comandos. |
 | Aprovacao em lote | Concluido | WhatsApp pessoal aprovou lote real via webhook. |
+| Autopilot completo controlado | Concluido | PR #17: central `/autopilot`, scheduler, worker controlado, stop-on-reply, follow-ups, classificacao, agendamento e diagnostico base. |
 
 ## Marco Mais Recente
 
-PR #15 foi validado e mergeado.
+PR #17 foi validado e mergeado.
 
 Resultado:
 
-- Lote real criado: `#26`.
-- Solicitacao chegou no WhatsApp pessoal.
-- Resposta `APROVAR LOTE 26` foi processada pelo webhook real.
-- Lote virou `approved`.
-- 2 itens viraram `approved`.
-- Nenhum item virou `sent`.
-- Logs recentes sem padroes de segredo.
-- Merge commit: `3404742ca7632e30b8556b3874bc84ee45d463f7`.
+- Pagina `/autopilot` refinada como central operacional comercial.
+- Fluxo visual 1 a 11 corrigido.
+- Operacao diaria separada de modo avancado/tecnico.
+- Scheduler e follow-ups mantem `dry_run=true` por padrao.
+- Worker so envia com `dry_run=false` e `confirm_send=true`.
+- Lotes recentes permitem ver lote, reenviar solicitacao e cancelar lote.
+- Agendamento e diagnostico usam busca/selecao de lead por nome.
+- Validacao final reportada: backend 60/60, frontend build, audit, Docker e `/health` ok.
+- Merge commit: `78e62b205445d63a3b4dc768dc8de6794d8b302b`.
 
-Conclusao: o Autopilot assistido esta seguro para aprovar mensagens em lote, mas ainda nao envia automaticamente para leads.
+Conclusao: o Autopilot ja pode ser usado como central assistida, mantendo controle humano antes de qualquer envio real.
 
 ## Estado Operacional Atual
 
@@ -75,14 +78,17 @@ O sistema pode ser usado hoje para:
 - gerar abordagem com IA;
 - criar fila de mensagens pendentes;
 - aprovar lotes pelo WhatsApp pessoal;
-- manter mensagens aprovadas aguardando envio futuro controlado.
+- simular envios antes de disparar;
+- enviar mensagens aprovadas somente com confirmacao avancada;
+- cancelar follow-ups quando houver resposta;
+- registrar reunioes e diagnosticos base.
 
 O sistema ainda nao deve:
 
-- disparar automaticamente para leads sem worker validado;
-- criar follow-ups automaticos sem stop-on-reply validado;
-- agendar reunioes sozinho sem fluxo de confirmacao;
-- rodar em volume alto sem limites por hora/dia.
+- rodar cron automatico em background sem uma decisao explicita;
+- disparar em volume alto sem acompanhamento diario;
+- agendar reunioes em calendario externo sem confirmacao;
+- usar classificacao por LLM paga em background sem limites/custos claros.
 
 ## Mapa Dos Modulos
 
@@ -97,54 +103,37 @@ O sistema ainda nao deve:
 | Perfil | `/profile` | `/api/auth/me` | Operacional |
 | WhatsApp | `/whatsapp` | `/api/whatsapp` | Operacional |
 | IA | Detalhe do lead | `/api/ai` | Operacional |
-| Autopilot | A criar | `/api/autopilot` | Backend pronto; UI pendente |
+| Autopilot | `/autopilot` | `/api/autopilot` | Operacional controlado |
 
-## Autopilot SDR - Linha De Evolucao
+## Como Usar O Autopilot
 
-### Concluido
+Guia principal: `docs/GUIA-USO-AUTOPILOT.md`.
 
-1. Schema: `automation_rules`, `automation_runs`, `message_queue`.
-2. API: regras, fila, aprovar/cancelar.
-3. Lotes: criar/listar/detalhar lote de aprovacao.
-4. WhatsApp pessoal: aprovacao/cancelamento por comando.
-5. Webhook real: resposta do WhatsApp aprova lote.
+Resumo operacional:
 
-### Proximo PR Recomendado
+1. Criar ou revisar regra assistida.
+2. Simular scheduler.
+3. Enfileirar mensagens `pending`.
+4. Criar lote.
+5. Aprovar pelo WhatsApp pessoal.
+6. Simular envio.
+7. Enviar aprovadas somente no modo avancado, com confirmacao.
+8. Rodar stop-on-reply.
+9. Criar/classificar follow-ups com cuidado.
+10. Registrar reunioes.
+11. Gerar diagnostico base.
 
-PR #16 - UI Assistida do Autopilot.
+## V2 Comercial - Sequencia De PRs
 
-Escopo:
+A V2 comercial deve melhorar conversao, nao apenas adicionar automacao.
 
-- criar pagina `/autopilot`;
-- adicionar menu lateral para Autopilot;
-- listar regras de automacao;
-- criar/editar/desativar regras;
-- listar fila `message_queue`;
-- listar lotes `approval_batches`;
-- criar lote de aprovacao pela interface;
-- aprovar/cancelar item individual pela interface;
-- exibir status de seguranca: `assistido`, `aprovacao manual`, `nenhum envio automatico ativo`;
-- nao ativar worker de envio para leads.
-
-Criterio de aceite:
-
-- usuario consegue operar regras, fila e lotes sem usar API manual;
-- nenhuma mensagem e enviada para lead ao aprovar;
-- tela deixa claro que aprovacao apenas muda status para `approved`;
-- frontend build passa;
-- backend tests passam;
-- Docker build/up passa;
-- logs/respostas continuam sem segredos.
-
-### PRs Depois Da UI
-
-| Ordem | PR | Objetivo | Regra de seguranca |
+| Ordem | PR sugerido | Objetivo | Resultado esperado |
 |---|---|---|---|
-| 17 | Scheduler assistido | Enfileirar leads elegiveis diariamente | Criar apenas `pending`, sem envio. |
-| 18 | Worker de envio controlado | Enviar mensagens `approved` | Limite diario/horario e janela de envio. |
-| 19 | Stop-on-reply | Parar follow-ups quando lead responder | Nunca enviar follow-up com resposta recente. |
-| 20 | IA de resposta | Classificar interesse e sugerir proximo passo | Sugestao antes de acao automatica. |
-| 21 | Agendamento | Integrar agenda/Calendly/Google Calendar | Confirmacao antes de marcar compromisso. |
+| 18 | Guia e mapa do Autopilot | Ensinar uso, atualizar mapa e alinhar proximos PRs | Usuario entende como operar a pagina atual. |
+| 19 | Central de respostas | Mostrar respostas recebidas e proxima acao recomendada | Menos conversa perdida e mais reunioes. |
+| 20 | Templates por nicho/profissao | Mensagens por nicho e ponto de vista do gestor de trafego | Abordagens melhores por segmento. |
+| 21 | Diagnostico comercial avancado | Diagnostico curto, completo e roteiro de reuniao/Loom | Mais autoridade na abordagem. |
+| 22 | Agendamento comercial assistido | Sugestao de horarios, convite e confirmacao | Mais reunioes marcadas com menos trabalho manual. |
 
 ## Regras De Seguranca Que Nao Podem Quebrar
 
@@ -161,19 +150,15 @@ Criterio de aceite:
 
 ## Operacao Comercial Enquanto Desenvolve
 
-Enquanto novas PRs rodam, a operacao recomendada e:
-
 1. Coletar pequenos lotes por cidade/nicho.
 2. Priorizar leads com WhatsApp confirmado e score alto.
 3. Usar CRM Kanban para status e proxima acao.
 4. Usar IA para ajustar mensagem por nicho.
-5. Fazer primeira abordagem manual ou assistida.
+5. Usar `/autopilot` para aprovar, simular e enviar com controle.
 6. Medir respostas, reunioes e clientes fechados.
 7. Ajustar criterios de score e mensagens com base nas respostas reais.
 
-## Prompts De Validacao Padrao
-
-Para cada PR, pedir para a CLI local validar:
+## Prompt De Validacao Padrao
 
 ```text
 Valide a PR atual do Prospect AI sem expor segredos.
@@ -196,6 +181,6 @@ Atualize o corpo do PR com resultados completos.
 
 ## Proxima Decisao
 
-Fazer PR #16 com a tela `/autopilot` antes de criar scheduler ou worker.
+Comecar a V2 comercial pelo PR #19: central de respostas e proxima acao recomendada.
 
-Motivo: agora que a aprovacao por WhatsApp funciona, o usuario precisa operar regras, fila e lotes visualmente antes de permitir qualquer automacao diaria ou envio controlado.
+Motivo: depois que a operacao de envio esta controlada, o maior ganho comercial vem de responder melhor e mais rapido quem demonstrou interesse.
