@@ -289,6 +289,14 @@ router.post('/approval-batches/process-command', async (req, res, next) => {
       });
     }
 
+    if (result.success === false) {
+      return res.status(400).json({
+        ...result,
+        error: 'Comando de aprovação não aplicado',
+        reason: result.reason || 'command_not_applied',
+      });
+    }
+
     res.json(result);
   } catch (error) {
     next(error);

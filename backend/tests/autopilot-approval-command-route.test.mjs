@@ -6,6 +6,7 @@ import autopilotRoutes from '../src/api/routes/autopilot.mjs';
 import { errorHandler } from '../src/api/middleware/errorHandler.mjs';
 import { pool, query } from '../src/database/init.mjs';
 import { ensureAutopilotTables } from '../src/database/autopilotSchema.mjs';
+import { processApprovalWebhookEvent } from '../src/services/autopilot/approvalBatchService.mjs';
 
 function hasSecretPattern(payload) {
   return /api_key|apiKey|api_key_encrypted|secret|Bearer|x-api-key|x-rapidapi-key|token/i.test(
@@ -132,7 +133,7 @@ describe('approval command fallback route', () => {
     });
 
     assert.equal(foreign.response.status, 400);
-    assert.equal(foreign.body.reason, 'unauthorized_number');
+    assert.equal(foreign.body.reason, 'batch_not_found');
 
     const wrongNumber = await request(baseUrl, '/api/autopilot/approval-batches/process-command', {
       method: 'POST',
@@ -188,5 +189,74 @@ describe('approval command fallback route', () => {
     assert.equal(result.response.status, 400);
     assert.equal(result.body.reason, 'unknown_command');
     assert.equal(hasSecretPattern(result.body), false);
+  });
+
+  test('processa payload padrao da Evolution com key e message dentro de data', async () => {
+    const instanceName = `approval-command-instance-${uniqueTag}`;
+    await query(
+      `INSERT INTO whatsapp_instances (user_id, instance_name, status)
+       VALUES ($1, $2, 'created')
+       ON CONFLICT (user_id)
+       DO UPDATE SET instance_name = EXCLUDED.instance_name, status = EXCLUDED.status`,
+      [userId, instanceName]
+    );
+
+    const localQueueIds = [];
+    for (let index = 0; index < 2; index += 1) {
+      const lead = await query(
+        `INSERT INTO leads (
+          user_id, nome_empresa, telefone, whatsapp, cidade, nicho, fonte, score, status, data_coleta, mensagem_whatsapp
+        ) VALUES ($1, $2, $3, $4, 'Cuiaba', 'webhook-evolution', 'manual', $5, 'mensagem_pronta', NOW(), $6)
+        RETURNING id`,
+        [
+          userId,
+          `Lead Webhook ${index + 1}`,
+          `+55659999777${index}`,
+          `+55659999777${index}`,
+          88 - index,
+          `Mensagem webhook ${index + 1}`,
+        ]
+      );
+
+      const queued = await query(
+        `INSERT INTO message_queue (
+          user_id, lead_id, channel, message_type, status, scheduled_at, payload_json
+        ) VALUES ($1, $2, 'whatsapp', 'initial', 'pending', NOW(), $3::jsonb)
+        RETURNING id`,
+        [userId, lead.rows[0].id, JSON.stringify({ message: `Mensagem webhook ${index + 1}` })]
+      );
+      localQueueIds.push(queued.rows[0].id);
+    }
+
+    const created = await request(baseUrl, '/api/autopilot/approval-batches', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ limit: 2, send_approval_request: false, niche: 'webhook-evolution', source_type: 'manual' }),
+    });
+    assert.equal(created.response.status, 201);
+
+    const processed = await processApprovalWebhookEvent({
+      event: 'messages.upsert',
+      instance: instanceName,
+      data: {
+        key: { remoteJid: '5565999990000@s.whatsapp.net', fromMe: false },
+        message: { conversation: `APROVAR LOTE ${created.body.batch.id}` },
+        messageType: 'conversation',
+      },
+    });
+
+    assert.equal(processed.handled, true);
+    assert.equal(processed.success, true);
+    assert.equal(processed.affectedCount, 2);
+
+    const statuses = await query(
+      `SELECT status
+       FROM message_queue
+       WHERE id = ANY($1::int[])
+       ORDER BY id ASC`,
+      [localQueueIds]
+    );
+
+    assert.equal(statuses.rows.every((row) => row.status === 'approved'), true);
   });
 });

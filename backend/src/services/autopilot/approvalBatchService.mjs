@@ -8,8 +8,30 @@ export const APPROVAL_ITEM_STATUSES = ['pending', 'approved', 'cancelled'];
 export function normalizeApprovalNumber(value) {
   let digits = String(value || '').replace(/\D/g, '').replace(/^0+/, '');
   if (!digits) return '';
+  if (digits.startsWith('550') && (digits.length === 13 || digits.length === 14)) digits = `55${digits.slice(3)}`;
   if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
   return digits;
+}
+
+function brazilianMobileVariants(value) {
+  const digits = normalizeApprovalNumber(value);
+  const variants = new Set([digits]);
+
+  if (digits.startsWith('55') && digits.length === 13) {
+    variants.add(`${digits.slice(0, 4)}${digits.slice(5)}`);
+  }
+
+  return variants;
+}
+
+export function approvalNumbersMatch(left, right) {
+  const leftDigits = normalizeApprovalNumber(left);
+  const rightDigits = normalizeApprovalNumber(right);
+  if (!leftDigits || !rightDigits) return false;
+  if (leftDigits === rightDigits) return true;
+
+  const leftVariants = brazilianMobileVariants(leftDigits);
+  return Array.from(brazilianMobileVariants(rightDigits)).some((variant) => leftVariants.has(variant));
 }
 
 function normalizeCommandText(value) {
@@ -33,7 +55,7 @@ function resolveWebhookData(payload = {}) {
   if (Array.isArray(payload?.data)) return payload.data[0] || {};
   if (Array.isArray(payload?.data?.messages)) return payload.data.messages[0] || {};
   if (Array.isArray(payload?.messages)) return payload.messages[0] || {};
-  return payload?.data?.message || payload?.data || payload?.message || payload || {};
+  return payload?.data || payload?.message || payload || {};
 }
 
 function getWebhookMessageText(data = {}) {
@@ -392,7 +414,12 @@ async function recalculateBatch(userId, batchId, responseText = null) {
 async function applyCommand(userId, command, responseText) {
   const loaded = await getApprovalBatch(userId, command.batchId);
   if (!loaded) {
-    return { handled: true, success: false, confirmationText: `Lote ${command.batchId} nao encontrado.` };
+    return {
+      handled: true,
+      success: false,
+      reason: 'batch_not_found',
+      confirmationText: `Lote ${command.batchId} nao encontrado.`,
+    };
   }
 
   if (new Date(loaded.batch.expires_at).getTime() < Date.now()) {
@@ -401,11 +428,21 @@ async function applyCommand(userId, command, responseText) {
        WHERE id = $1 AND user_id = $2`,
       [command.batchId, userId]
     );
-    return { handled: true, success: false, confirmationText: `Lote ${command.batchId} expirou. Gere um novo lote.` };
+    return {
+      handled: true,
+      success: false,
+      reason: 'batch_expired',
+      confirmationText: `Lote ${command.batchId} expirou. Gere um novo lote.`,
+    };
   }
 
   if (!['pending', 'partially_approved'].includes(loaded.batch.status)) {
-    return { handled: true, success: false, confirmationText: `Lote ${command.batchId} ja esta com status ${loaded.batch.status}.` };
+    return {
+      handled: true,
+      success: false,
+      reason: 'batch_not_processable',
+      confirmationText: `Lote ${command.batchId} ja esta com status ${loaded.batch.status}.`,
+    };
   }
 
   const actionStatus = command.action === 'approve' ? 'approved' : 'cancelled';
@@ -466,7 +503,7 @@ export async function processApprovalReply({ userId, fromPhone, text }) {
   );
 
   const approvalWhatsapp = normalizeApprovalNumber(userResult.rows[0]?.approval_whatsapp);
-  if (!approvalWhatsapp || normalizedFrom !== approvalWhatsapp) {
+  if (!approvalWhatsapp || !approvalNumbersMatch(normalizedFrom, approvalWhatsapp)) {
     return { handled: false, reason: 'unauthorized_number' };
   }
 
