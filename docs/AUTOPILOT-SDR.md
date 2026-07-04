@@ -69,6 +69,39 @@ Tipos iniciais:
 - `followup_1`
 - `followup_2`
 
+## API Atual
+
+A API atual permite operar regras e fila com autenticacao, mas ainda nao executa envio WhatsApp automatico.
+
+### Regras
+
+| Metodo | Rota | Uso |
+|---|---|---|
+| `GET` | `/api/autopilot/rules` | Lista regras do usuario autenticado. |
+| `POST` | `/api/autopilot/rules` | Cria regra de automacao. |
+| `PATCH` | `/api/autopilot/rules/:id` | Atualiza regra do usuario autenticado. |
+| `DELETE` | `/api/autopilot/rules/:id` | Remove regra do usuario autenticado. |
+
+### Fila
+
+| Metodo | Rota | Uso |
+|---|---|---|
+| `GET` | `/api/autopilot/queue` | Lista mensagens da fila do usuario autenticado. |
+| `PATCH` | `/api/autopilot/queue/:id/approve` | Aprova mensagem pendente para envio futuro. |
+| `PATCH` | `/api/autopilot/queue/:id/cancel` | Cancela mensagem pendente, aprovada ou enfileirada. |
+
+### Cliente Frontend
+
+O cliente `autopilot` em `frontend/src/services/api.js` centraliza:
+
+- `listRules`
+- `createRule`
+- `updateRule`
+- `deleteRule`
+- `listQueue`
+- `approveMessage`
+- `cancelMessage`
+
 ## Regras De Seguranca
 
 1. O modo padrao e assistido.
@@ -81,6 +114,10 @@ Tipos iniciais:
 8. Follow-up deve parar quando houver resposta do lead.
 9. A fila nao deve conter credenciais, tokens ou API keys.
 10. Toda execucao precisa gerar contadores auditaveis.
+11. Todas as rotas `/api/autopilot` exigem JWT.
+12. Regras e fila sao isoladas por `user_id`.
+13. O modo `assistido` sempre forca aprovacao manual.
+14. Aprovar uma mensagem nao envia WhatsApp nesta etapa; apenas muda o status para envio futuro controlado.
 
 ## Fluxo V1
 
@@ -129,28 +166,36 @@ Kanban move para reuniao_marcada
 - Testes unitarios de regras.
 - Documentacao operacional.
 
-### PR 2 - API E UI
+### PR 2 - API De Regras E Fila
 
 - CRUD de regras de automacao.
+- Listagem de mensagens da fila.
+- Aprovar/cancelar mensagens pendentes.
+- Cliente frontend para consumo futuro.
+- Testes HTTP de rotas autenticadas.
+
+### PR 3 - UI Assistida
+
 - Tela de configuracao do Autopilot.
 - Tela de fila de mensagens.
-- Aprovar/cancelar mensagens pendentes.
+- Aprovacao/cancelamento manual pela interface.
+- Indicadores de regras ativas e mensagens pendentes.
 
-### PR 3 - Scheduler Assistido
+### PR 4 - Scheduler Assistido
 
 - Job diario para criar fila.
 - Logs de execucao.
 - Respeito a limites por dia/hora.
 - Dashboard de enfileiramento.
 
-### PR 4 - Envio Controlado
+### PR 5 - Envio Controlado
 
 - Worker de envio WhatsApp.
 - Modo automatico com limites.
 - Retry seguro.
 - Stop-on-reply.
 
-### PR 5 - Resposta IA E Agendamento
+### PR 6 - Resposta IA E Agendamento
 
 - Classificacao de resposta.
 - Sugestao de proximo passo.
