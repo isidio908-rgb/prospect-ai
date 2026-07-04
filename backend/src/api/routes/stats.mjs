@@ -4,6 +4,96 @@ import { authenticate } from '../middleware/auth.mjs';
 
 const router = express.Router();
 
+export const STATS_PERIODS = ['all', 'today', '7d', '30d', '90d', 'month', 'custom'];
+
+function startOfDay(date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function parseDate(value, mode) {
+  if (!value || typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return mode === 'end' ? endOfDay(parsed) : startOfDay(parsed);
+}
+
+export function normalizeStatsFilters(rawFilters = {}, now = new Date()) {
+  const period = STATS_PERIODS.includes(rawFilters.period) ? rawFilters.period : 'all';
+  const fonte = typeof rawFilters.fonte === 'string' && rawFilters.fonte.trim() && rawFilters.fonte !== 'all'
+    ? rawFilters.fonte.trim()
+    : null;
+
+  let dateFrom = null;
+  let dateTo = null;
+
+  if (period === 'today') {
+    dateFrom = startOfDay(now);
+    dateTo = endOfDay(now);
+  }
+
+  if (['7d', '30d', '90d'].includes(period)) {
+    const days = parseInt(period.replace('d', ''), 10);
+    dateFrom = startOfDay(now);
+    dateFrom.setDate(dateFrom.getDate() - days + 1);
+    dateTo = endOfDay(now);
+  }
+
+  if (period === 'month') {
+    dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+    dateTo = endOfDay(now);
+  }
+
+  if (period === 'custom') {
+    dateFrom = parseDate(rawFilters.dateFrom, 'start');
+    dateTo = parseDate(rawFilters.dateTo, 'end');
+  }
+
+  return {
+    period,
+    fonte,
+    dateFrom,
+    dateTo,
+    dateFromIso: dateFrom ? dateFrom.toISOString() : null,
+    dateToIso: dateTo ? dateTo.toISOString() : null,
+  };
+}
+
+export function buildStatsFilterContext(userId, rawFilters = {}, now = new Date()) {
+  const filters = normalizeStatsFilters(rawFilters, now);
+  const params = [userId];
+  const conditions = ['user_id = $1'];
+  let paramIndex = 2;
+
+  if (filters.fonte) {
+    conditions.push(`LOWER(COALESCE(fonte, 'indefinida')) = LOWER($${paramIndex++})`);
+    params.push(filters.fonte);
+  }
+
+  if (filters.dateFrom) {
+    conditions.push(`data_coleta >= $${paramIndex++}`);
+    params.push(filters.dateFrom);
+  }
+
+  if (filters.dateTo) {
+    conditions.push(`data_coleta <= $${paramIndex++}`);
+    params.push(filters.dateTo);
+  }
+
+  return {
+    filters,
+    params,
+    whereClause: conditions.join(' AND '),
+  };
+}
+
 // Todas as rotas precisam de autenticação
 router.use(authenticate);
 
@@ -11,51 +101,52 @@ router.use(authenticate);
 router.get('/', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    
+    const { whereClause, params, filters } = buildStatsFilterContext(userId, req.query);
+
     // Total de leads
     const totalResult = await query(
-      'SELECT COUNT(*) as total FROM leads WHERE user_id = $1',
-      [userId]
+      `SELECT COUNT(*) as total FROM leads WHERE ${whereClause}`,
+      params
     );
     
     // Leads por prioridade
     const prioridadeResult = await query(
       `SELECT prioridade, COUNT(*) as count 
        FROM leads 
-       WHERE user_id = $1 
+       WHERE ${whereClause}
        GROUP BY prioridade`,
-      [userId]
+      params
     );
     
     // Leads por status
     const statusResult = await query(
       `SELECT status, COUNT(*) as count 
        FROM leads 
-       WHERE user_id = $1 
+       WHERE ${whereClause}
        GROUP BY status`,
-      [userId]
+      params
     );
     
     // Leads por cidade (top 10)
     const cidadeResult = await query(
       `SELECT cidade, COUNT(*) as count 
        FROM leads 
-       WHERE user_id = $1 AND cidade IS NOT NULL
+       WHERE ${whereClause} AND cidade IS NOT NULL
        GROUP BY cidade 
        ORDER BY count DESC 
        LIMIT 10`,
-      [userId]
+      params
     );
     
     // Leads por nicho (top 10)
     const nichoResult = await query(
       `SELECT nicho, COUNT(*) as count 
        FROM leads 
-       WHERE user_id = $1 AND nicho IS NOT NULL
+       WHERE ${whereClause} AND nicho IS NOT NULL
        GROUP BY nicho 
        ORDER BY count DESC 
        LIMIT 10`,
-      [userId]
+      params
     );
     
     // Score médio
@@ -65,8 +156,8 @@ router.get('/', async (req, res, next) => {
         MIN(score) as min_score,
         MAX(score) as max_score
        FROM leads 
-       WHERE user_id = $1 AND score IS NOT NULL`,
-      [userId]
+       WHERE ${whereClause} AND score IS NOT NULL`,
+      params
     );
     
     // Leads analisados vs não analisados
@@ -75,16 +166,16 @@ router.get('/', async (req, res, next) => {
         COUNT(CASE WHEN data_analise IS NOT NULL THEN 1 END) as analisados,
         COUNT(CASE WHEN data_analise IS NULL THEN 1 END) as nao_analisados
        FROM leads 
-       WHERE user_id = $1`,
-      [userId]
+       WHERE ${whereClause}`,
+      params
     );
     
     // Leads com oportunidades (score > 60)
     const oportunidadesResult = await query(
       `SELECT COUNT(*) as count 
        FROM leads 
-       WHERE user_id = $1 AND score >= 60`,
-      [userId]
+       WHERE ${whereClause} AND score >= 60`,
+      params
     );
 
     // Presença de recursos técnicos (spec seção 13: leads sem site/pixel/GTM/GA4, com telefone/site)
@@ -99,8 +190,8 @@ router.get('/', async (req, res, next) => {
         COUNT(CASE WHEN data_analise IS NOT NULL AND tem_ga4 = FALSE THEN 1 END) as sem_ga4,
         COUNT(CASE WHEN data_analise IS NOT NULL AND tem_whatsapp_site = FALSE THEN 1 END) as sem_whatsapp_site
        FROM leads
-       WHERE user_id = $1`,
-      [userId]
+       WHERE ${whereClause}`,
+      params
     );
 
     // Funil comercial (spec seção 13: reuniões marcadas, propostas enviadas, clientes fechados, taxa de resposta)
@@ -122,8 +213,8 @@ router.get('/', async (req, res, next) => {
         ) THEN 1 END) as total_respondeu_ou_avancou,
         SUM(CASE WHEN status = 'cliente_fechado' THEN valor_potencial ELSE 0 END) as valor_fechado
        FROM leads
-       WHERE user_id = $1`,
-      [userId]
+       WHERE ${whereClause}`,
+      params
     );
 
     const fonteResult = await query(
@@ -131,11 +222,11 @@ router.get('/', async (req, res, next) => {
         COUNT(CASE WHEN score >= 60 THEN 1 END) as oportunidades,
         COUNT(CASE WHEN status = 'cliente_fechado' THEN 1 END) as clientes
        FROM leads
-       WHERE user_id = $1
+       WHERE ${whereClause}
        GROUP BY COALESCE(fonte, 'indefinida')
        ORDER BY total DESC
        LIMIT 10`,
-      [userId]
+      params
     );
 
     const conversaoNichoResult = await query(
@@ -144,12 +235,12 @@ router.get('/', async (req, res, next) => {
         COUNT(CASE WHEN status IN ('respondeu', 'reuniao_marcada', 'proposta_enviada', 'cliente_fechado') THEN 1 END) as avancados,
         COUNT(CASE WHEN status = 'cliente_fechado' THEN 1 END) as clientes
        FROM leads
-       WHERE user_id = $1
+       WHERE ${whereClause}
        GROUP BY COALESCE(nicho, 'indefinido')
        HAVING COUNT(*) > 0
        ORDER BY avancados DESC, total DESC
        LIMIT 8`,
-      [userId]
+      params
     );
 
     const conversaoCidadeResult = await query(
@@ -158,11 +249,20 @@ router.get('/', async (req, res, next) => {
         COUNT(CASE WHEN status IN ('respondeu', 'reuniao_marcada', 'proposta_enviada', 'cliente_fechado') THEN 1 END) as avancados,
         COUNT(CASE WHEN status = 'cliente_fechado' THEN 1 END) as clientes
        FROM leads
-       WHERE user_id = $1
+       WHERE ${whereClause}
        GROUP BY COALESCE(cidade, 'indefinida')
        HAVING COUNT(*) > 0
        ORDER BY avancados DESC, total DESC
        LIMIT 8`,
+      params
+    );
+
+    const availableSourcesResult = await query(
+      `SELECT COALESCE(fonte, 'indefinida') as fonte, COUNT(*) as total
+       FROM leads
+       WHERE user_id = $1
+       GROUP BY COALESCE(fonte, 'indefinida')
+       ORDER BY total DESC, fonte ASC`,
       [userId]
     );
 
@@ -180,6 +280,16 @@ router.get('/', async (req, res, next) => {
     };
     
     res.json({
+      filters: {
+        period: filters.period,
+        fonte: filters.fonte || 'all',
+        dateFrom: filters.dateFromIso,
+        dateTo: filters.dateToIso
+      },
+      availableSources: availableSourcesResult.rows.map((row) => ({
+        fonte: row.fonte,
+        total: parseInt(row.total)
+      })),
       total: parseInt(totalResult.rows[0].total),
       porPrioridade: prioridadeResult.rows.reduce((acc, row) => {
         acc[row.prioridade || 'indefinida'] = parseInt(row.count);
