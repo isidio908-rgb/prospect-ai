@@ -1,5 +1,6 @@
 import express from 'express';
 import * as whatsappService from '../../services/whatsapp/whatsappService.mjs';
+import { processApprovalWebhookEvent } from '../../services/autopilot/approvalBatchService.mjs';
 
 const router = express.Router();
 
@@ -32,6 +33,12 @@ router.post('/webhook', async (req, res) => {
     await whatsappService.handleWebhookEvent(req.body);
   } catch (error) {
     console.error('Erro ao processar webhook WhatsApp:', error.message);
+  }
+
+  try {
+    await processApprovalWebhookEvent(req.body);
+  } catch (error) {
+    console.error('Erro ao processar aprovação Autopilot via WhatsApp:', error.message);
   }
 
   res.status(200).send('OK');
