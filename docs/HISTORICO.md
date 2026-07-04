@@ -2,6 +2,24 @@
 
 Este arquivo consolida o historico operacional do projeto. Documentos antigos de sprint continuam no repositorio, mas este passa a ser o registro principal e atualizado.
 
+## 03/07/2026 - Testes HTTP Das Rotas De Collections
+
+### Implementado
+
+- Adicionado teste automatizado HTTP para as rotas `/api/collections`.
+- Validada resposta `401` quando a listagem de histórico é chamada sem token.
+- Validada listagem autenticada de execuções de coleta por usuário.
+- Validado isolamento entre usuários: runs de outro usuário não aparecem na listagem.
+- Validada leitura de logs por run sem exposição de padrões de segredo.
+- Validada rejeição ao tentar limpar cache de execução pertencente a outro usuário.
+- Validada limpeza de cache da execução do próprio usuário e remoção de TTL na listagem posterior.
+
+### Observacoes
+
+- O teste monta um app Express em porta aleatória e usa JWT real contra o middleware `authenticate`.
+- Não adiciona dependências novas.
+- Precisa de validação local com `backend npm test`, audit, build frontend, Docker build/up e checagem de `/collections` antes do merge.
+
 ## 03/07/2026 - Dashboard Comercial Com Filtros
 
 ### Implementado
