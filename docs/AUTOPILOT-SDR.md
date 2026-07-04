@@ -1,6 +1,8 @@
 # Autopilot SDR - Modelo Operacional
 
-O Autopilot SDR e a camada de automacao comercial do Prospect AI. O objetivo e transformar coleta, priorizacao, abordagem, follow-up e agendamento em um fluxo cada vez mais automatico, sem perder controle operacional nem expor a conta WhatsApp a risco desnecessario.
+**Atualizado em:** 04/07/2026
+
+O Autopilot SDR e a camada de automacao comercial do Prospect AI. O objetivo e transformar coleta, priorizacao, abordagem, follow-up e agendamento em um fluxo cada vez mais automatico, sem perder controle operacional nem colocar a conta WhatsApp em risco.
 
 ## Principio
 
@@ -13,7 +15,30 @@ Isso significa:
 - o sistema pode sugerir horario de envio;
 - por padrao, a mensagem fica pendente de aprovacao manual;
 - o usuario pode aprovar mensagens em lote pelo WhatsApp pessoal;
-- envio automatico real so deve ser ativado quando houver regra explicita para isso.
+- aprovacao muda a fila para `approved`, mas nao envia mensagem ao lead;
+- envio automatico real so deve ser ativado quando houver worker validado e regra explicita.
+
+## Estado Atual
+
+Concluido e validado:
+
+- Fundacao com `automation_rules`, `automation_runs` e `message_queue`.
+- API autenticada para regras e fila.
+- Lotes de aprovacao com `approval_batches` e `approval_batch_items`.
+- Campo `approval_whatsapp` no perfil do usuario.
+- Envio de solicitacao de aprovacao ao WhatsApp pessoal.
+- Processamento de comandos pelo webhook real da Evolution API.
+- Fallback autenticado para processar comandos pela API.
+- Validacao real: `APROVAR LOTE 26` aprovou um lote real pelo webhook, com 2 itens `approved` e 0 itens `sent`.
+
+Pendente:
+
+- UI assistida em `/autopilot`.
+- Scheduler diario assistido.
+- Worker de envio controlado.
+- Stop-on-reply para follow-ups.
+- Classificacao de respostas por IA.
+- Agendamento assistido.
 
 ## Modulos Da Fundacao
 
@@ -57,7 +82,7 @@ Fila de mensagens comerciais.
 Status esperados:
 
 - `pending`: aguardando aprovacao manual.
-- `approved`: aprovado para envio.
+- `approved`: aprovado para envio futuro.
 - `queued`: reservado por worker de envio.
 - `sent`: enviado.
 - `skipped`: ignorado por regra.
@@ -90,7 +115,7 @@ Exemplo: no comando `APROVAR 42:1,3`, os itens `1` e `3` sao resolvidos por esta
 
 ## API Atual
 
-A API atual permite operar regras, fila e lotes de aprovacao com autenticacao, mas ainda nao executa envio WhatsApp automatico para leads.
+Todas as rotas exigem JWT e isolam dados por `user_id`.
 
 ### Regras
 
@@ -116,6 +141,7 @@ A API atual permite operar regras, fila e lotes de aprovacao com autenticacao, m
 | `GET` | `/api/autopilot/approval-batches` | Lista lotes do usuario autenticado. |
 | `POST` | `/api/autopilot/approval-batches` | Cria lote com mensagens `pending`. |
 | `GET` | `/api/autopilot/approval-batches/:id` | Detalha um lote e seus itens. |
+| `POST` | `/api/autopilot/approval-batches/process-command` | Processa comando manual/fallback como `APROVAR LOTE 42`. |
 
 Payload recomendado para teste sem chamada externa:
 
@@ -132,6 +158,14 @@ Payload para enviar ao WhatsApp de aprovacao:
 {
   "limit": 5,
   "send_approval_request": true
+}
+```
+
+Fallback autenticado:
+
+```json
+{
+  "text": "APROVAR LOTE 42"
 }
 ```
 
@@ -155,7 +189,7 @@ Regras:
 - cancelar muda status da fila para `cancelled`;
 - nenhum comando envia mensagem ao lead nesta etapa.
 
-### Cliente Frontend
+## Cliente Frontend
 
 O cliente `autopilot` em `frontend/src/services/api.js` centraliza:
 
@@ -169,6 +203,12 @@ O cliente `autopilot` em `frontend/src/services/api.js` centraliza:
 - `listApprovalBatches`
 - `createApprovalBatch`
 - `getApprovalBatch`
+
+Pendente para PR #16:
+
+- adicionar metodo para `process-command` se a UI precisar reprocessar comando manualmente;
+- criar pagina `/autopilot`;
+- adicionar menu lateral para Autopilot.
 
 ## Regras De Seguranca
 
@@ -187,8 +227,29 @@ O cliente `autopilot` em `frontend/src/services/api.js` centraliza:
 13. O modo `assistido` sempre forca aprovacao manual.
 14. Aprovar uma mensagem nao envia WhatsApp ao lead nesta etapa; apenas muda o status para envio futuro controlado.
 15. Respostas do webhook sao aceitas apenas do `approval_whatsapp` do usuario.
+16. Worker automatico so pode existir com limite diario, limite horario, janela de envio, retry controlado e stop-on-reply.
 
-## Fluxo V1
+## Fluxo Atual Validado
+
+```text
+Mensagem pendente
+↓
+Criar lote de aprovacao
+↓
+Enviar solicitacao ao WhatsApp pessoal
+↓
+Usuario responde APROVAR LOTE {id}
+↓
+Webhook Evolution recebe resposta
+↓
+Sistema valida numero aprovador
+↓
+Fila muda para approved
+↓
+Nada e enviado ao lead ainda
+```
+
+## Fluxo V1 Assistido
 
 ```text
 Regra habilitada
@@ -207,7 +268,7 @@ Usuario aprova pelo WhatsApp pessoal
 ↓
 Mensagem muda para approved
 ↓
-Worker futuro envia pelo WhatsApp
+Worker futuro envia pelo WhatsApp com limites
 ```
 
 ## Fluxo Futuro
@@ -221,23 +282,23 @@ Se interessado, oferece horarios
 ↓
 Lead escolhe horario
 ↓
-Google Calendar cria reuniao
+Agenda cria reuniao
 ↓
 WhatsApp confirma agendamento
 ↓
 Kanban move para reuniao_marcada
 ```
 
-## Roadmap
+## Roadmap De PRs
 
-### PR 1 - Fundacao
+### PR 1 - Fundacao - Concluido
 
 - Tabelas do Autopilot.
 - Servico de decisao de elegibilidade.
 - Testes unitarios de regras.
 - Documentacao operacional.
 
-### PR 2 - API De Regras E Fila
+### PR 2 - API De Regras E Fila - Concluido
 
 - CRUD de regras de automacao.
 - Listagem de mensagens da fila.
@@ -245,21 +306,26 @@ Kanban move para reuniao_marcada
 - Cliente frontend para consumo futuro.
 - Testes HTTP de rotas autenticadas.
 
-### PR 3 - Aprovacao Em Lote Via WhatsApp
+### PR 3 - Aprovacao Em Lote Via WhatsApp - Concluido
 
 - Campo `approval_whatsapp` no perfil.
 - Tabelas de lotes e itens.
 - Criacao/listagem/detalhe de lotes.
 - Envio de solicitacao ao WhatsApp pessoal.
 - Processamento de resposta via webhook Evolution API.
+- Fallback autenticado para reprocessar comandos.
 - Confirmacao de resultado ao usuario.
+- Validacao real com WhatsApp pessoal.
 
-### PR 4 - UI Assistida
+### PR 4 - UI Assistida - Proximo
 
-- Tela de configuracao do Autopilot.
+- Tela `/autopilot`.
+- Configuracao de regras.
 - Tela de fila e lotes de aprovacao.
+- Criacao de lote pela interface.
 - Aprovacao/cancelamento manual pela interface.
 - Indicadores de regras ativas e mensagens pendentes.
+- Alerta de seguranca: aprovacao nao envia mensagem ao lead.
 
 ### PR 5 - Scheduler Assistido
 
@@ -267,6 +333,7 @@ Kanban move para reuniao_marcada
 - Logs de execucao.
 - Respeito a limites por dia/hora.
 - Dashboard de enfileiramento.
+- Sem envio automatico para leads.
 
 ### PR 6 - Envio Controlado
 
@@ -279,5 +346,5 @@ Kanban move para reuniao_marcada
 
 - Classificacao de resposta.
 - Sugestao de proximo passo.
-- Integracao Google Calendar.
+- Integracao Google Calendar ou Calendly.
 - Confirmacao automatica de reuniao.
