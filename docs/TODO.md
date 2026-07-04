@@ -22,14 +22,12 @@ Checklist:
 
 ### 2. Autopilot SDR - proximas camadas
 
-A fundacao do Autopilot SDR ja define tabelas, regras e servico de decisao/fila. O envio automatico real ainda deve nascer controlado por configuracao explicita.
+A fundacao do Autopilot SDR ja define tabelas, regras, servico de decisao/fila e API autenticada para regras e fila. O envio automatico real ainda deve nascer controlado por configuracao explicita.
 
 Proximas etapas:
 
-- API para CRUD de regras de automacao.
 - Tela para configurar Autopilot SDR.
 - Tela de fila de mensagens pendentes.
-- Aprovacao/cancelamento manual de mensagens.
 - Scheduler diario para enfileirar leads elegiveis.
 - Worker de envio WhatsApp com limite diario/horario.
 - Stop-on-reply para follow-ups.
@@ -51,7 +49,7 @@ Melhorias futuras:
 
 ### 4. Testes automatizados complementares
 
-Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, rotas HTTP de `/api/collections`, erro RapidAPI sem expor key, erro Apify sem expor token, filtros do dashboard comercial e fundacao do Autopilot SDR.
+Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, rotas HTTP de `/api/collections`, erro RapidAPI sem expor key, erro Apify sem expor token, filtros do dashboard comercial, fundacao do Autopilot SDR e API HTTP do Autopilot.
 
 Cobrir proximas camadas:
 
@@ -63,6 +61,9 @@ Cobrir proximas camadas:
 - Salvamento do campo `whatsapp`.
 - Exportacao JSON de leads.
 - Deduplicacao com `place_id`, `business_id`, `google_id`, telefone, dominio e nome+cidade.
+- Tela do Autopilot SDR.
+- Scheduler assistido do Autopilot SDR.
+- Worker de envio WhatsApp com limites e stop-on-reply.
 
 ## Prioridade Baixa
 
@@ -85,6 +86,16 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- API do Autopilot SDR:
+  - rotas autenticadas em `/api/autopilot`;
+  - CRUD de regras em `/api/autopilot/rules`;
+  - listagem de fila em `/api/autopilot/queue`;
+  - aprovacao e cancelamento manual de mensagens pendentes;
+  - isolamento por usuario em regras e fila;
+  - modo `assistido` forcando aprovacao manual;
+  - cliente frontend `autopilot` em `frontend/src/services/api.js`;
+  - teste HTTP real das rotas de regras e fila;
+  - nenhum envio WhatsApp automatico ativado nesta etapa.
 - Fundacao do Autopilot SDR:
   - tabelas `automation_rules`, `automation_runs` e `message_queue`;
   - modo padrao assistido, com aprovacao manual;
@@ -94,11 +105,11 @@ Usar IA para sugerir:
   - teste unitario das regras de decisao;
   - documentacao `docs/AUTOPILOT-SDR.md`.
 - Teste HTTP real das rotas `/api/collections`:
-  - exige autenticação para listar histórico;
-  - lista apenas execuções do usuário autenticado;
+  - exige autenticacao para listar historico;
+  - lista apenas execucoes do usuario autenticado;
   - retorna logs por run sem vazar segredos;
-  - rejeita limpeza de cache de execução de outro usuário;
-  - limpa cache da execução do usuário e remove TTL visual da listagem.
+  - rejeita limpeza de cache de execucao de outro usuario;
+  - limpa cache da execucao do usuario e remove TTL visual da listagem.
 - Filtros por periodo e fonte no dashboard comercial:
   - backend `/api/stats` aceita `period`, `fonte`, `dateFrom` e `dateTo`;
   - periodo padrao `all` preserva metricas historicas existentes;
