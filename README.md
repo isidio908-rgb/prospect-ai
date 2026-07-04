@@ -6,8 +6,8 @@ O objetivo inicial e uso proprio, separado do Performance Hub. A arquitetura ja 
 
 ## Status Atual
 
-**Atualizado em:** 03/07/2026  
-**Estado:** produto interno operacional em `main`, com melhorias continuas por PRs pequenos e validaveis.
+**Atualizado em:** 04/07/2026  
+**Estado:** produto interno operacional em `main`, com Autopilot SDR assistido validado por WhatsApp real.
 
 Stack local validada com Docker:
 
@@ -19,10 +19,12 @@ Stack local validada com Docker:
 
 Documentacao principal:
 
+- `docs/MAPA-INTERNO.md`
 - `docs/STATUS-ATUAL.md`
 - `docs/TODO.md`
 - `docs/HISTORICO.md`
 - `docs/README.md`
+- `docs/AUTOPILOT-SDR.md`
 - `docs/WHATSAPP-EVOLUTION.md`
 - `docs/IA-LLM.md`
 - `docs/COLETA-LEADS.md`
@@ -58,7 +60,9 @@ Documentacao principal:
 - IA/LLM com tarefas comerciais dentro do detalhe do lead.
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
 - Dashboard comercial com funil, fontes, WhatsApp confirmado, conversao por nicho/cidade e filtros por periodo/fonte.
-- Documentacao operacional para WhatsApp, IA, coleta e credenciais.
+- Autopilot SDR backend com regras, fila, lotes de aprovacao e aprovacao em lote via WhatsApp pessoal.
+- Aprovacao em lote validada com webhook real da Evolution API.
+- Documentacao operacional para WhatsApp, IA, coleta, credenciais e Autopilot.
 - Dark mode.
 
 ## Fluxo Principal
@@ -89,6 +93,8 @@ Calcula score
 Gera diagnostico e mensagens conforme profissao/contexto do usuario
       ↓
 Usa CRM Kanban, WhatsApp e IA para abordagem
+      ↓
+Autopilot SDR pode organizar mensagens pendentes para aprovacao assistida
 ```
 
 ## Fontes De Coleta
@@ -214,6 +220,7 @@ Implementado e validado:
 - Verificacao de existencia de WhatsApp durante a coleta.
 - Envio real para lead de teste.
 - Coletas reais com verificacao WhatsApp ligada nos providers Serper, Apify e RapidAPI.
+- Webhook real processando comando de aprovacao do Autopilot SDR.
 
 Guia operacional: `docs/WHATSAPP-EVOLUTION.md`.
 
@@ -234,6 +241,25 @@ Tarefas atuais:
 Todas as tarefas usam o contexto profissional cadastrado pelo usuario.
 
 Guia operacional: `docs/IA-LLM.md`.
+
+## Autopilot SDR
+
+O Autopilot SDR e a camada de automacao comercial assistida.
+
+Implementado:
+
+- Regras de automacao.
+- Fila de mensagens.
+- Lotes de aprovacao.
+- Campo `approval_whatsapp` no perfil.
+- Envio de solicitacao de aprovacao ao WhatsApp pessoal.
+- Comandos `APROVAR LOTE`, `CANCELAR LOTE`, `APROVAR {id}:1,3` e `CANCELAR {id}:2`.
+- Processamento pelo webhook real da Evolution API.
+- Fallback autenticado para processar comando pela API.
+
+Regra atual: aprovar mensagem muda status para `approved`, mas nao envia mensagem automaticamente para lead.
+
+Guia operacional: `docs/AUTOPILOT-SDR.md`.
 
 ## Rodar Localmente
 
@@ -277,10 +303,12 @@ npm run dev
 
 Principais proximos passos:
 
-1. Testes automatizados complementares dos fluxos novos.
-2. Exportacao PDF com diagnostico por lead.
-3. Templates comerciais por nicho e priorizacao inteligente avancada.
-4. Comparativos semanais/mensais, custo por fonte e metas no dashboard comercial.
+1. UI assistida do Autopilot SDR em `/autopilot`.
+2. Operacao controlada de prospeccao real com baixo volume.
+3. Scheduler assistido para enfileirar leads elegiveis sem envio automatico.
+4. Worker de envio controlado para mensagens `approved`, com limites e stop-on-reply.
+5. Exportacao PDF com diagnostico por lead.
+6. Templates comerciais por nicho e priorizacao inteligente avancada.
 
 Lista completa em `docs/TODO.md`.
 
@@ -292,14 +320,16 @@ Lista completa em `docs/TODO.md`.
 - Mascarar chaves no frontend.
 - Respeitar limites de provedores.
 - Nao usar rotacao de credenciais para burlar bloqueios.
+- Nunca enviar mensagem para lead apenas por aprovar lote.
 
 ## Fonte De Verdade
 
 A fonte de verdade atual e:
 
-1. Codigo atual.
-2. `docs/STATUS-ATUAL.md`.
-3. `docs/TODO.md`.
-4. `docs/HISTORICO.md`.
+1. Codigo atual em `main`.
+2. `docs/MAPA-INTERNO.md`.
+3. `docs/STATUS-ATUAL.md`.
+4. `docs/TODO.md`.
+5. `docs/HISTORICO.md`.
 
 Documentos antigos de sprint/backend foram mantidos como historico e podem estar parcialmente desatualizados.
