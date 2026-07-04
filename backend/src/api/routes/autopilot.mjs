@@ -92,6 +92,30 @@ function handleServiceError(error, res, next) {
   return next(error);
 }
 
+async function ensureApprovalRequestCanBeSent(userId) {
+  const result = await query(
+    `SELECT status
+     FROM whatsapp_instances
+     WHERE user_id = $1
+     ORDER BY id DESC
+     LIMIT 1`,
+    [userId]
+  );
+
+  const instance = result.rows[0];
+  if (!instance) {
+    const error = new Error('Conecte um numero de WhatsApp antes de enviar solicitacoes de aprovacao.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (instance.status !== 'open') {
+    const error = new Error('WhatsApp desconectado. Reconecte antes de enviar solicitacoes de aprovacao.');
+    error.status = 409;
+    throw error;
+  }
+}
+
 router.get('/rules', async (req, res, next) => {
   try {
     const result = await query(
@@ -253,6 +277,11 @@ router.get('/approval-batches', async (req, res, next) => {
 router.post('/approval-batches', async (req, res, next) => {
   try {
     const data = createApprovalBatchSchema.parse(req.body || {});
+
+    if (data.send_approval_request !== false) {
+      await ensureApprovalRequestCanBeSent(req.user.id);
+    }
+
     const result = await createApprovalBatch(req.user.id, {
       ...data,
       city: nullIfBlank(data.city),
