@@ -1,15 +1,33 @@
 # Prospect AI - Status Atual do Projeto
 
-**Data:** 03/07/2026  
-**Estado:** produto interno operacional em `main`, validado pos-merge com credenciais reais, WhatsApp conectado, coletas reais, historico, cache e CRM.
+**Data:** 04/07/2026  
+**Estado:** produto interno operacional em `main`, com Autopilot SDR assistido validado por WhatsApp real.
+
+Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`.
 
 ## Resumo Executivo
 
-O Prospect AI ja funciona como uma maquina de prospeccao comercial, nao apenas como scraper. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens de WhatsApp, gerencia credenciais de scraper e LLM, conversa via WhatsApp/Evolution API e usa IA para melhorar textos e diagnosticos.
+O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual e organiza o pipeline no CRM Kanban.
 
-A versao atual inclui contexto profissional do usuario no cadastro e na pagina de perfil, prompts internos de IA ajustados por profissao/nicho/instrucoes, pagina CRM Kanban, historico persistente de coletas, logs de execucao, cache de busca/coleta e dashboard comercial ampliado.
+O marco mais recente foi a aprovacao em lote do Autopilot SDR pelo WhatsApp pessoal do usuario. Um lote real foi aprovado pelo webhook real da Evolution API, mudando mensagens para `approved` sem enviar nada automaticamente para leads.
 
-O `main` foi validado apos merge do PR #6 com backend, frontend, build Docker, providers Serper/Apify/RapidAPI, WhatsApp real, historico/logs/cache e CRM Kanban.
+## Marco Mais Recente - PR #15
+
+PR #15 foi validado e mergeado.
+
+Resultado final:
+
+- Stack local saudavel com `/health` ok.
+- Novo lote real criado: `#26`.
+- Solicitacao chegou no WhatsApp pessoal.
+- Resposta `APROVAR LOTE 26` foi processada pelo webhook real.
+- Lote virou `approved`.
+- 2 itens viraram `approved`.
+- Nenhum item virou `sent`.
+- Logs recentes sem padroes de segredo.
+- Merge commit: `3404742ca7632e30b8556b3874bc84ee45d463f7`.
+
+Conclusao: o Autopilot assistido esta pronto para aprovar mensagens em lote. O envio automatico para leads ainda nao esta ativo e deve nascer apenas em PR futura com limites e stop-on-reply.
 
 ## Stack Atual
 
@@ -17,329 +35,125 @@ O `main` foi validado apos merge do PR #6 com backend, frontend, build Docker, p
 - Frontend: React + Vite + Tailwind CSS v4, porta 5173.
 - Banco: PostgreSQL 16 via Docker.
 - WhatsApp: Evolution API + Redis via Docker.
-- Infra local: `docker compose` em `docker-compose.yml`.
+- Infra local: `docker compose`.
 - Autenticacao: JWT.
 - Criptografia: AES-256-GCM para API keys.
 
-## Validacao Pos-Merge Em Main
+## Modulos Operacionais
 
-Valido em 03/07/2026:
+| Modulo | Estado | Observacao |
+|---|---|---|
+| Autenticacao e perfil | Operacional | Cadastro, login, JWT, profissao, nicho e contexto interno. |
+| Leads | Operacional | CRUD, importacao, exportacao, analise e detalhes. |
+| Coleta | Operacional | Serper, Apify, RapidAPI e CSV/manual. |
+| Historico/log/cache | Operacional | Runs, logs, cache, TTL visual e limpeza manual. |
+| Credenciais | Operacional | Scrapers e LLMs com chave criptografada e mascarada. |
+| Deduplicacao | Operacional | IDs externos, telefone, dominio e nome+cidade. |
+| Auditoria de site | Operacional | Tracking, WhatsApp, formulario, tecnologias e conversao. |
+| IA/LLM | Operacional | Tarefas comerciais com contexto profissional do usuario. |
+| WhatsApp | Operacional | Conexao, chat, midia/audio, webhook e verificacao de numero. |
+| CRM Kanban | Operacional | Drag-and-drop, filtros e edicao rapida. |
+| Dashboard | Operacional | Funil, fontes, periodo, nicho, cidade e conversao. |
+| Autopilot SDR backend | Operacional | Regras, fila, lotes e aprovacao via WhatsApp. |
+| Autopilot SDR frontend | Pendente | Proximo passo recomendado: pagina `/autopilot`. |
 
-- `git checkout main` e `git pull origin main`: ok.
-- Backend `npm test`: 32 testes passando.
-- Frontend `npm run build`: passando.
-- `docker compose build backend frontend`: passando.
-- `docker compose up -d backend frontend`: passando.
-- Stack final saudavel: backend, frontend, postgres, redis e evolution-api.
-- `GET /health`: ok.
-- Frontend HTTP 200 em `/`, `/collections`, `/profile`, `/leads` e `/dashboard`.
-- Working tree limpo em `main...origin/main` apos validacao.
+## Validacoes Ja Realizadas
 
-Credenciais reais:
+### Core e Infra
 
-- Serper: teste de credencial ok, statusCode 200.
-- RapidAPI: teste de credencial ok, statusCode 200.
-- Apify: teste de credencial ok, statusCode 200.
-- Chaves mascaradas nas respostas; nenhuma chave completa observada em respostas/logs.
+- Backend `npm test` passando nas validacoes recentes.
+- Backend `npm audit --json` com 0 vulnerabilidades apos atualizacao controlada do `bcrypt`.
+- Frontend `npm run build` passando nas validacoes recentes.
+- `docker compose build backend frontend` passando.
+- `docker compose up -d backend frontend` passando.
+- `/health` retornando 200.
+- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`.
 
-WhatsApp:
+### Providers
+
+- Serper: credencial real testada e coleta real validada.
+- Apify: credencial real testada e coleta real validada com input `{ language, location, max_results, query }`.
+- RapidAPI: credencial real testada e coleta real validada.
+- RapidAPI 403 `not subscribed`: mensagem amigavel implementada.
+- Apify `full-permission-actor-not-approved`: mensagem amigavel implementada.
+
+### WhatsApp
 
 - Evolution API conectada.
-- Envio real de mensagem para lead de teste executado com sucesso.
+- Envio real para lead de teste validado.
 - Historico de mensagens atualizado apos envio.
-- Respostas/historico sem padroes de segredo.
-
-Coletas reais com WhatsApp ligado:
-
-- Serper: run 17, total 3, saved 0, duplicates 2, wa_verified 2, wa_rejected 1.
-- Apify: run 18, total 1, saved 0, duplicates 0, wa_verified 0, wa_rejected 1.
-- RapidAPI: run 19, total 5, saved 0, duplicates 3, wa_verified 3, wa_rejected 2.
-- Logs dos runs incluem `collection_started`, `cache_miss`, `whatsapp_connection_ok`, `provider_collected`, `whatsapp_verified`, `database_saved`.
-- Logs sem `api_key`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou `token`.
-
-Cache, historico e CRM:
-
-- Cache hit confirmado ao repetir Serper sem `forceRefresh`: run 20.
-- `/api/collections` lista os runs novos.
-- CRM/Kanban validado com status `contato_enviado`.
-- Backend rejeita corretamente status antigo invalido como `em_contato`.
-
-Auditoria de dependencias:
-
-- `npm audit --json` do backend foi avaliado sem `npm audit fix`.
-- O audit apontava 2 vulnerabilidades altas em `tar`, via `@mapbox/node-pre-gyp`, puxado por `bcrypt@5.1.1`.
-- Correcao aplicada: atualizacao direcionada de `bcrypt` para `^6.0.0`, que remove `@mapbox/node-pre-gyp` e `tar` da arvore de dependencias.
-- Resultado final: `npm audit --json` do backend com 0 vulnerabilidades.
-- `backend npm test`, `frontend npm run build` e `docker compose build backend frontend` passaram apos a atualizacao.
-
-## Modulos Implementados
-
-### Autenticacao e Perfil Profissional
-
-- Registro, login e JWT.
-- Middleware de autenticacao aplicado nas rotas protegidas.
-- Cadastro com campos profissionais: `profession`, `primary_niche` e `internal_context`.
-- Edicao posterior do perfil em `/profile` via `PATCH /api/auth/me`.
-- Layout exibe profissao e nicho foco do usuario.
-- Prompts internos de IA usam esses campos para adaptar diagnosticos, mensagens, e-mails, roteiros e propostas ao ponto de vista do usuario.
-
-Arquivos principais:
-
-- `backend/src/api/routes/auth.mjs`
-- `backend/src/api/middleware/auth.mjs`
-- `backend/src/database/init.mjs`
-- `frontend/src/pages/Login.jsx`
-- `frontend/src/pages/Profile.jsx`
-- `frontend/src/store/authStore.js`
-- `frontend/src/components/Layout.jsx`
-
-### Leads e CRM
-
-- CRUD de leads.
-- Importacao manual.
-- Importacao CSV.
-- Listagem com filtros.
-- Exportacao CSV e JSON.
-- Analise em lote.
-- Status comercial do lead.
-- Responsavel, proxima acao, valor potencial, motivo de perda.
-- Historico de follow-up e notas.
-- Pagina CRM Kanban em `/crm` com colunas por status e movimentacao rapida do lead.
-- Enum de status protegido no backend.
-
-Arquivos principais:
-
-- `backend/src/api/routes/leads.mjs`
-- `backend/src/services/csvImporter.mjs`
-- `frontend/src/pages/Leads.jsx`
-- `frontend/src/pages/LeadDetails.jsx`
-- `frontend/src/pages/CrmKanban.jsx`
-
-### Coleta, Historico, Logs e Cache
-
-Fontes suportadas e validadas:
-
-- RapidAPI Local Business Data.
-- Apify Google Maps Scraper.
-- Serper.dev Google Places.
-
-A coleta permite selecionar:
-
-- Credencial/fonte.
-- Pais, estado/regiao e cidade.
-- Nicho.
-- Modificador.
-- Quantidade de leads.
-- Extracao adicional de contatos no RapidAPI.
-- Verificacao de existencia de WhatsApp antes de salvar.
-- Forcar nova coleta ignorando cache.
-
-Persistencia operacional implementada:
-
-- `collection_runs`: uma linha por execucao de coleta.
-- `collection_run_logs`: eventos, erros e etapas da execucao.
-- `collection_cache`: cache por assinatura de busca para evitar chamadas repetidas ao provider.
-- Rota `GET /api/collections` para listar execucoes.
-- Rota `GET /api/collections/:id/logs` para ver logs da execucao.
-- Pagina `/collections` para visualizar historico, cache hit, totais e logs.
-
-Arquivos principais:
-
-- `backend/src/api/routes/leads.mjs`
-- `backend/src/api/routes/collectionRuns.mjs`
-- `backend/src/services/collectionRunService.mjs`
-- `backend/src/services/scraperCollector.mjs`
-- `backend/src/services/scrapers/rapidApiLocalBusiness.mjs`
-- `backend/src/services/scrapers/apifyGoogleMaps.mjs`
-- `backend/src/services/scrapers/serper.mjs`
-- `frontend/src/pages/Collect.jsx`
-- `frontend/src/pages/CollectionHistory.jsx`
-
-### Validacao De Providers
-
-Estado atual:
-
-- Serper: credencial real testada e coleta real com WhatsApp validada.
-- Apify: credencial real testada e coleta real com WhatsApp validada usando input `{ language, location, max_results, query }`.
-- RapidAPI: credencial real testada e coleta real com WhatsApp validada.
-- RapidAPI 403 `not subscribed`: mensagem amigavel implementada e coberta por teste.
-- Apify `full-permission-actor-not-approved`: mensagem amigavel implementada e coberta por teste.
-
-Observacao: se a interface local retornar 403 `You are not subscribed to this API` no RapidAPI, validar assinatura da API exata, projeto/API key selecionado e `x-rapidapi-host` copiado do playground da API assinada.
-
-### Verificacao de WhatsApp na Coleta
-
-Opcao adicionada na pagina de coleta:
-
-- `Verificar se o telefone existe no WhatsApp antes de salvar`.
-
-Comportamento validado:
-
-- Requer WhatsApp conectado.
-- Valida a conexao antes de consumir cota do scraper.
-- Consulta a Evolution API com os telefones encontrados.
-- Salva apenas leads com WhatsApp confirmado.
-- Preenche o campo `whatsapp` do lead com o telefone validado.
-- Retorna estatisticas de confirmados, rejeitados e sem telefone.
-- Registra os contadores no historico da coleta.
-
-Status: implementado e validado em coletas reais nos providers Serper, Apify e RapidAPI.
-
-Arquivos principais:
-
-- `backend/src/services/whatsapp/evolutionClient.mjs`
-- `backend/src/services/whatsapp/whatsappService.mjs`
-- `backend/src/api/routes/leads.mjs`
-- `frontend/src/pages/Collect.jsx`
-
-### Credenciais
-
-- CRUD completo.
-- Teste de credencial.
-- Status ativo, inativo, pausado, erro e limite atingido.
-- Uso diario e mensal.
-- Historico diario de uso.
-- Mascara de API key no frontend.
-- Criptografia da chave no banco.
-- Provedores agrupados visualmente em Scrapers de Leads e Inteligencia Artificial.
-
-Scrapers suportados:
-
-- RapidAPI Local Business Data.
-- Apify Google Maps Scraper.
-- Serper.dev Google Places.
-
-LLMs suportados:
-
-- OpenAI.
-- Anthropic.
-- Google Gemini.
-- Groq.
-- OpenRouter.
-- Cerebras.
-- Mistral AI.
-
-### Deduplicacao
-
-Deduplicacao ativa antes de salvar leads.
-
-Prioridade atual:
-
-1. `place_id`
-2. `business_id`
-3. `google_id`
-4. telefone normalizado
-5. dominio normalizado
-6. nome normalizado + cidade
-
-Tambem existem endpoints para listar duplicatas, mesclar leads e normalizar dados.
-
-### Auditoria de Site
-
-A auditoria detecta site online, HTTPS, tempo de carregamento, Meta Pixel, GTM, GA4, Google Ads Tag, WhatsApp no site, formularios, redes sociais, tecnologias e pontos basicos de conversao.
-
-### IA / LLM
-
-Implementado:
-
-- Cadastro de credenciais LLM.
-- Teste de credencial LLM.
-- Status de IA ativa.
-- Catalogo de provedores.
-- Catalogo de tarefas.
-- Execucao de tarefas por lead.
-- Aplicacao do resultado em campos do lead quando permitido.
-- Assistente IA dentro da pagina de detalhes do lead.
-- Prompt-base dinamico com profissao, nicho foco e instrucoes internas do usuario.
-
-Tarefas atuais:
-
-- Diagnostico comercial aprofundado.
-- Mensagem de WhatsApp de primeira abordagem.
-- Mensagem de follow-up.
-- E-mail de prospeccao.
-- Roteiro de video Loom.
-- Resumo e posicionamento.
-- Estrutura de proposta.
-
-### Dashboard
-
-Implementado dashboard comercial com:
-
-- Total de leads.
-- Score medio.
-- Oportunidades.
-- WhatsApp confirmado.
-- Distribuicao por prioridade.
-- Distribuicao por status.
-- Presenca digital.
-- Funil comercial.
-- Taxa de resposta.
-- Valor fechado.
-- Fontes de coleta.
-- Conversao por nicho.
-- Conversao por cidade.
-
-Arquivos principais:
-
-- `backend/src/api/routes/stats.mjs`
-- `frontend/src/pages/Dashboard.jsx`
-
-## Banco de Dados
-
-Tabelas principais:
-
-- `users`
-- `user_settings` legado
-- `rapidapi_usage` legado
-- `credentials`
-- `credential_usage`
-- `collection_runs`
-- `collection_run_logs`
-- `collection_cache`
-- `leads`
-- `lead_followups`
-- `whatsapp_instances`
-- `whatsapp_messages`
-
-Migracoes idempotentes relevantes:
-
-- `users.profession`
-- `users.primary_niche`
-- `users.internal_context`
-- `credentials.category`
-- `credentials.model`
-- tabelas de historico/log/cache de coleta
-- campos normalizados em `leads`
-- indices de deduplicacao
+- Verificacao de existencia de WhatsApp durante coleta validada.
+- Webhook real processou aprovacao de lote do Autopilot.
+
+### Seguranca
+
+- Chaves retornam mascaradas no frontend/API.
+- API keys criptografadas no banco.
+- Logs recentes sem padroes de segredo.
+- Nenhum item de lote aprovado foi enviado automaticamente para lead.
+- Aprovacao em lote aceita apenas o `approval_whatsapp` do usuario.
+
+## Autopilot SDR Atual
+
+### Implementado
+
+- Tabelas `automation_rules`, `automation_runs`, `message_queue`.
+- Tabelas `approval_batches` e `approval_batch_items`.
+- CRUD autenticado de regras em `/api/autopilot/rules`.
+- Listagem da fila em `/api/autopilot/queue`.
+- Aprovar/cancelar mensagem individual por API.
+- Criar/listar/detalhar lotes de aprovacao.
+- Enviar solicitacao de aprovacao ao WhatsApp pessoal.
+- Processar comandos pelo webhook real da Evolution API.
+- Fallback autenticado para processar comando pela API.
+
+### Comandos Suportados
+
+```text
+APROVAR LOTE 42
+CANCELAR LOTE 42
+APROVAR 42:1,3,5
+CANCELAR 42:2,4
+```
+
+### Importante
+
+Aprovar lote ou mensagem apenas muda `message_queue.status` para `approved`. O envio automatico real para lead ainda nao existe.
 
 ## O Que Ainda Falta
 
 Prioridade alta:
 
-1. Preparar operacao controlada de prospeccao real com baixo volume e acompanhamento de conversao.
+1. UI assistida do Autopilot SDR em `/autopilot`.
+2. Operacao controlada de prospeccao real com baixo volume.
+3. Scheduler assistido para criar fila `pending`, sem envio.
 
 Prioridade media:
 
-1. Kanban comercial avancado com drag-and-drop, filtros e edicao rapida.
-2. Filtros por periodo/fonte no dashboard comercial.
-3. TTL visual e limpeza manual de cache.
-4. Documentacao especifica de operacao WhatsApp/IA/coleta/credenciais.
+1. Worker de envio controlado para mensagens `approved`.
+2. Stop-on-reply para follow-ups.
+3. Dashboard especifico do Autopilot.
+4. Classificacao de respostas por IA.
 
 Prioridade baixa:
 
-1. Exportacao PDF.
-2. Roteiros comerciais por nicho.
-3. Sugestao de oferta por nicho.
-4. Relatorios de performance de prospeccao.
+1. Exportacao PDF por lead.
+2. Templates comerciais por nicho.
+3. Priorizacao inteligente avancada.
+4. Agendamento assistido.
+
+## Proximo Passo Recomendado
+
+Fazer PR #16 com a tela `/autopilot` antes de criar scheduler ou worker.
+
+Motivo: o backend do Autopilot ja esta pronto, mas o usuario precisa operar regras, fila e lotes visualmente antes de qualquer automacao diaria ou envio controlado.
 
 ## Status Geral
 
 Estimativa pragmatica:
 
-- Core de prospeccao: 96% pronto.
-- Operacao interna local: 95% pronta.
-- Produto comercial: 56% pronto.
-- Documentacao: atualizada para a validacao pos-merge.
-
-O sistema ja pode ser usado internamente para coletar, analisar, priorizar e abordar leads com credenciais reais e WhatsApp conectado. O audit do backend foi tratado com atualizacao controlada de dependencia; o proximo passo operacional e iniciar prospeccao real controlada.
+- Core de prospeccao: 97% pronto.
+- Operacao interna local: 96% pronta.
+- Autopilot assistido: 70% pronto.
+- Produto comercial: 58% pronto.
+- Documentacao: atualizada pos-PR #15.
