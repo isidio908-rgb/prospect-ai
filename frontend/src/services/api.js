@@ -64,7 +64,7 @@ export const collections = {
 
 // Stats
 export const stats = {
-  get: () => api.get('/api/stats'),
+  get: (params) => api.get('/api/stats', { params }),
 };
 
 // Credenciais
