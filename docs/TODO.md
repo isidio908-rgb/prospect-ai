@@ -24,19 +24,18 @@ Checklist:
 
 ### 2. Dashboard comercial avancado - proxima camada
 
-O dashboard ja mostra funil, resposta, valor fechado, presenca digital, fontes, conversao por nicho e conversao por cidade.
+O dashboard ja mostra funil, resposta, valor fechado, presenca digital, fontes, conversao por nicho e conversao por cidade. Tambem ja permite filtrar metricas por periodo e fonte.
 
 Melhorias futuras:
 
-- Filtro por periodo.
-- Filtro por fonte.
 - Comparativo semanal/mensal.
 - Custo por fonte de coleta.
 - Receita potencial por nicho/cidade.
+- Metas comerciais por periodo.
 
 ### 3. Testes automatizados complementares
 
-Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, erro RapidAPI sem expor key e erro Apify sem expor token.
+Ja existem testes para assinatura de cache, persistencia de runs/logs/cache, erro RapidAPI sem expor key, erro Apify sem expor token e filtros do dashboard comercial.
 
 Cobrir proximas camadas:
 
@@ -71,6 +70,12 @@ Usar IA para sugerir:
 
 ## Itens Concluidos Recentemente
 
+- Filtros por periodo e fonte no dashboard comercial:
+  - backend `/api/stats` aceita `period`, `fonte`, `dateFrom` e `dateTo`;
+  - periodo padrao `all` preserva metricas historicas existentes;
+  - periodo customizado usa datas de inicio/fim;
+  - frontend `/dashboard` mostra filtros e badges do recorte aplicado;
+  - teste unitario cobre normalizacao e montagem segura do filtro SQL.
 - Kanban comercial avancado em `/crm`:
   - drag-and-drop nativo entre colunas;
   - filtros por status, prioridade, cidade, nicho, responsavel e busca livre;

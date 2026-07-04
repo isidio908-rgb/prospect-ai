@@ -7,7 +7,7 @@ O objetivo inicial e uso proprio, separado do Performance Hub. A arquitetura ja 
 ## Status Atual
 
 **Atualizado em:** 03/07/2026  
-**Estado:** funcional em `main` pos-merge, validado com credenciais reais e WhatsApp conectado.
+**Estado:** produto interno operacional em `main`, com melhorias continuas por PRs pequenos e validaveis.
 
 Stack local validada com Docker:
 
@@ -57,59 +57,9 @@ Documentacao principal:
 - Verificacao de existencia de WhatsApp durante a coleta.
 - IA/LLM com tarefas comerciais dentro do detalhe do lead.
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
-- Dashboard comercial com funil, fontes, WhatsApp confirmado e conversao por nicho/cidade.
+- Dashboard comercial com funil, fontes, WhatsApp confirmado, conversao por nicho/cidade e filtros por periodo/fonte.
 - Documentacao operacional para WhatsApp, IA, coleta e credenciais.
 - Dark mode.
-
-## Validacao Pos-Merge No Main
-
-Validacao executada em `main` apos merge do PR #6:
-
-- `git checkout main` e `git pull origin main`: ok.
-- Backend `npm test`: 32 testes passando.
-- Frontend `npm run build`: passando.
-- `docker compose build backend frontend`: passando.
-- `docker compose up -d backend frontend`: passando.
-- Stack final saudavel: backend, frontend, postgres, redis e evolution-api.
-- `GET /health`: ok.
-- Frontend servido com HTTP 200 em `/`, `/collections`, `/profile`, `/leads` e `/dashboard`.
-
-Credenciais reais validadas no banco:
-
-- Serper: teste de credencial ok, statusCode 200.
-- RapidAPI: teste de credencial ok, statusCode 200.
-- Apify: teste de credencial ok, statusCode 200.
-- Chaves retornam mascaradas; nenhuma chave completa encontrada nas respostas/logs validados.
-
-WhatsApp validado:
-
-- Evolution API conectada.
-- Envio real de mensagem para lead de teste executado com sucesso.
-- Historico de mensagens atualizado.
-- Respostas e historico sem padroes de segredo.
-
-Coletas reais com verificacao WhatsApp ligada:
-
-- Serper: run 17, total 3, duplicates 2, wa_verified 2, wa_rejected 1.
-- Apify: run 18, total 1, wa_verified 0, wa_rejected 1.
-- RapidAPI: run 19, total 5, duplicates 3, wa_verified 3, wa_rejected 2.
-- Logs dos runs: `collection_started`, `cache_miss`, `whatsapp_connection_ok`, `provider_collected`, `whatsapp_verified`, `database_saved`.
-- Logs sem `api_key`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou `token`.
-
-Cache, historico e CRM:
-
-- Cache hit confirmado ao repetir Serper sem `forceRefresh`: run 20.
-- `/api/collections` lista os runs novos.
-- Atualizacao de status no CRM/Kanban validada com status `contato_enviado`.
-- Backend rejeita corretamente status antigo invalido como `em_contato`.
-
-Auditoria de dependencias:
-
-- `npm audit --json` do backend foi avaliado sem `npm audit fix`.
-- O audit apontava 2 vulnerabilidades altas em `tar`, via `@mapbox/node-pre-gyp`, puxado por `bcrypt@5.1.1`.
-- Correcao aplicada: atualizacao direcionada de `bcrypt` para `^6.0.0`, removendo `@mapbox/node-pre-gyp` e `tar` da arvore de dependencias.
-- Resultado final: `npm audit --json` do backend com 0 vulnerabilidades.
-- `backend npm test`, `frontend npm run build` e `docker compose build backend frontend` passaram apos a atualizacao.
 
 ## Fluxo Principal
 
@@ -156,27 +106,11 @@ A coleta possui persistencia operacional:
 - `collection_run_logs`: eventos e erros por execucao.
 - `collection_cache`: resposta recente por assinatura de busca.
 
-A assinatura de cache considera credencial, query, cidade, nicho, regiao, idioma, limite, coordenadas e opcoes como extracao de contatos e verificacao WhatsApp.
-
-A tela `/collections` mostra:
-
-- Busca executada.
-- Credencial/fonte.
-- Total encontrado.
-- Leads salvos.
-- Duplicados.
-- Erros.
-- Cache hit.
-- TTL do cache.
-- Limpeza manual de cache por execucao.
-- Logs detalhados da execucao.
+A tela `/collections` mostra busca executada, credencial/fonte, totais, duplicados, erros, cache hit, TTL do cache, limpeza manual de cache e logs detalhados.
 
 ## Credenciais
 
-A tela de credenciais suporta:
-
-- Scrapers de leads.
-- Provedores de IA/LLM.
+A tela de credenciais suporta scrapers de leads e provedores de IA/LLM.
 
 Scrapers:
 
@@ -209,13 +143,7 @@ No cadastro e na pagina `/profile`, o usuario informa:
 - Nicho foco.
 - Instrucoes internas de como a IA deve pensar, escrever e priorizar.
 
-Esses dados sao usados para:
-
-- Exibir o perfil correto no layout.
-- Ajustar prompts internos das LLMs.
-- Adaptar diagnosticos, mensagens, follow-ups, e-mails, roteiros e propostas ao ponto de vista profissional do usuario.
-
-Exemplo: para um gestor de trafego focado em imobiliario, a IA prioriza qualidade do lead, WhatsApp, rastreamento, oportunidades de captacao e conversao em reunioes.
+Esses dados sao usados para exibir o perfil correto no layout e ajustar prompts internos das LLMs ao ponto de vista profissional do usuario.
 
 ## CRM Kanban
 
@@ -240,6 +168,35 @@ Recursos atuais:
 - Edicao rapida de responsavel, proxima acao e valor potencial.
 - Botao de avanco rapido para a proxima etapa.
 - Abertura do detalhe completo do lead.
+
+## Dashboard Comercial
+
+A pagina `/dashboard` mostra:
+
+- Total de leads.
+- Score medio.
+- Oportunidades.
+- WhatsApp confirmado.
+- Distribuicao por prioridade.
+- Distribuicao por status.
+- Presenca digital.
+- Funil comercial.
+- Taxa de resposta.
+- Valor fechado.
+- Fontes de coleta.
+- Conversao por nicho.
+- Conversao por cidade.
+- Filtros por periodo e fonte.
+
+Periodos suportados:
+
+- Todo periodo.
+- Hoje.
+- Ultimos 7 dias.
+- Ultimos 30 dias.
+- Ultimos 90 dias.
+- Mes atual.
+- Periodo personalizado.
 
 ## WhatsApp
 
@@ -320,9 +277,10 @@ npm run dev
 
 Principais proximos passos:
 
-1. Filtros por periodo/fonte no dashboard comercial.
-2. Testes automatizados complementares dos fluxos novos.
-3. Exportacao PDF, templates por nicho e priorizacao inteligente avancada.
+1. Testes automatizados complementares dos fluxos novos.
+2. Exportacao PDF com diagnostico por lead.
+3. Templates comerciais por nicho e priorizacao inteligente avancada.
+4. Comparativos semanais/mensais, custo por fonte e metas no dashboard comercial.
 
 Lista completa em `docs/TODO.md`.
 
