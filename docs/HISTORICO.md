@@ -2,6 +2,35 @@
 
 Este arquivo consolida o historico operacional do projeto. Documentos antigos de sprint continuam no repositorio, mas este passa a ser o registro principal e atualizado.
 
+## 03/07/2026 - API Do Autopilot SDR
+
+### Implementado
+
+- Criadas rotas autenticadas em `/api/autopilot`.
+- Criado CRUD de regras em `/api/autopilot/rules`.
+- Criada listagem de fila em `/api/autopilot/queue`.
+- Criada aprovacao de mensagens pendentes em `/api/autopilot/queue/:id/approve`.
+- Criado cancelamento de mensagens em `/api/autopilot/queue/:id/cancel`.
+- Adicionado cliente frontend `autopilot` em `frontend/src/services/api.js`.
+- Adicionado teste HTTP real em `backend/tests/autopilot-routes-http.test.mjs`.
+
+### Regras De Seguranca
+
+- Todas as rotas exigem JWT.
+- Regras sao filtradas por `user_id`.
+- Fila e filtrada por `user_id`.
+- Usuario nao aprova nem cancela mensagem de outro usuario.
+- Modo `assistido` sempre forca `require_manual_approval=true`.
+- Modo `automatico` pode liberar aprovacao manual apenas quando configurado explicitamente.
+- A API nao executa envio WhatsApp automaticamente nesta etapa.
+- A API nao cria scheduler nem worker automatico nesta etapa.
+
+### Observacoes
+
+- Esta etapa prepara controle operacional de regras e fila, mas ainda sem disparo automatico.
+- Proximas etapas: tela do Autopilot, scheduler assistido, worker de envio controlado, stop-on-reply, IA de resposta e agendamento.
+- Precisa de validacao local com backend tests, audit, frontend build e Docker build/up antes do merge.
+
 ## 03/07/2026 - Fundacao Do Autopilot SDR
 
 ### Implementado
@@ -42,17 +71,17 @@ Este arquivo consolida o historico operacional do projeto. Documentos antigos de
 ### Implementado
 
 - Adicionado teste automatizado HTTP para as rotas `/api/collections`.
-- Validada resposta `401` quando a listagem de histórico é chamada sem token.
-- Validada listagem autenticada de execuções de coleta por usuário.
-- Validado isolamento entre usuários: runs de outro usuário não aparecem na listagem.
-- Validada leitura de logs por run sem exposição de padrões de segredo.
-- Validada rejeição ao tentar limpar cache de execução pertencente a outro usuário.
-- Validada limpeza de cache da execução do próprio usuário e remoção de TTL na listagem posterior.
+- Validada resposta `401` quando a listagem de historico e chamada sem token.
+- Validada listagem autenticada de execucoes de coleta por usuario.
+- Validado isolamento entre usuarios: runs de outro usuario nao aparecem na listagem.
+- Validada leitura de logs por run sem exposicao de padroes de segredo.
+- Validada rejeicao ao tentar limpar cache de execucao pertencente a outro usuario.
+- Validada limpeza de cache da execucao do proprio usuario e remocao de TTL na listagem posterior.
 
 ### Observacoes
 
-- O teste monta um app Express em porta aleatória e usa JWT real contra o middleware `authenticate`.
-- Não adiciona dependências novas.
+- O teste monta um app Express em porta aleatoria e usa JWT real contra o middleware `authenticate`.
+- Nao adiciona dependencias novas.
 - Validado localmente antes do merge: backend tests, audit, frontend build, Docker build/up, `/collections`, logs, limpeza de cache e scan de segredos.
 
 ## 03/07/2026 - Dashboard Comercial Com Filtros
@@ -215,7 +244,7 @@ O projeto esta pronto para uso interno controlado, desde que:
 
 ## Proximos Marcos
 
-1. API/UI do Autopilot SDR e fila de mensagens pendentes.
+1. UI do Autopilot SDR e fila de mensagens pendentes.
 2. Scheduler assistido para enfileirar leads elegiveis.
 3. Worker de envio WhatsApp com limites e stop-on-reply.
 4. Resposta IA e agendamento automatico.
