@@ -3,11 +3,14 @@ import toast from 'react-hot-toast';
 import {
   AlertTriangle,
   Bot,
+  CalendarClock,
   CheckCircle2,
   Clock,
+  FileText,
   ListChecks,
   MessageSquare,
   Pencil,
+  Play,
   Plus,
   RefreshCw,
   Send,
@@ -48,7 +51,7 @@ const EMPTY_BATCH_FORM = {
   send_approval_request: false,
 };
 
-const QUEUE_STATUS_LABELS = {
+const STATUS_LABELS = {
   pending: 'Pendente',
   approved: 'Aprovada',
   queued: 'Na fila',
@@ -56,20 +59,18 @@ const QUEUE_STATUS_LABELS = {
   skipped: 'Ignorada',
   failed: 'Falhou',
   cancelled: 'Cancelada',
-};
-
-const BATCH_STATUS_LABELS = {
-  pending: 'Pendente',
-  partially_approved: 'Parcialmente aprovado',
-  approved: 'Aprovado',
-  cancelled: 'Cancelado',
-  expired: 'Expirado',
+  partially_approved: 'Parcial',
+  expired: 'Expirada',
+  completed: 'Concluída',
+  running: 'Executando',
 };
 
 const STATUS_BADGES = {
   pending: 'badge-warning',
   partially_approved: 'badge-warning',
   approved: 'badge-success',
+  completed: 'badge-success',
+  running: 'badge-info',
   queued: 'badge-info',
   sent: 'badge-success',
   skipped: 'badge-secondary',
@@ -82,15 +83,19 @@ export default function Autopilot() {
   const [rules, setRules] = useState([]);
   const [queue, setQueue] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [runs, setRuns] = useState([]);
+  const [stats, setStats] = useState(null);
   const [selectedBatch, setSelectedBatch] = useState(null);
+  const [lastResult, setLastResult] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [savingRule, setSavingRule] = useState(false);
-  const [creatingBatch, setCreatingBatch] = useState(false);
-  const [updatingMessageId, setUpdatingMessageId] = useState(null);
+  const [busyAction, setBusyAction] = useState('');
   const [editingRuleId, setEditingRuleId] = useState(null);
   const [ruleForm, setRuleForm] = useState(EMPTY_RULE);
   const [batchForm, setBatchForm] = useState(EMPTY_BATCH_FORM);
-  const [queueFilters, setQueueFilters] = useState({ status: 'pending', message_type: '', city: '', niche: '', rule: '' });
+  const [queueFilters, setQueueFilters] = useState({ status: 'pending', message_type: '', city: '', niche: '' });
+  const [appointmentForm, setAppointmentForm] = useState({ lead_id: '', scheduled_for: '', note: '' });
+  const [diagnosticLeadId, setDiagnosticLeadId] = useState('');
+  const [diagnostic, setDiagnostic] = useState(null);
 
   useEffect(() => {
     loadAutopilot();
@@ -99,14 +104,18 @@ export default function Autopilot() {
   async function loadAutopilot() {
     setLoading(true);
     try {
-      const [rulesResponse, queueResponse, batchesResponse] = await Promise.all([
+      const [rulesResponse, queueResponse, batchesResponse, statsResponse, runsResponse] = await Promise.all([
         autopilot.listRules(),
-        autopilot.listQueue({ limit: 100 }),
+        autopilot.listQueue({ limit: 150 }),
         autopilot.listApprovalBatches({ limit: 30 }),
+        autopilot.stats(),
+        autopilot.runs({ limit: 10 }),
       ]);
       setRules(rulesResponse.data.rules || []);
       setQueue(queueResponse.data.messages || []);
       setBatches(batchesResponse.data.batches || []);
+      setStats(statsResponse.data.stats || null);
+      setRuns(runsResponse.data.runs || []);
     } catch (error) {
       toast.error(error.response?.data?.error || 'Erro ao carregar Autopilot');
     } finally {
@@ -114,33 +123,42 @@ export default function Autopilot() {
     }
   }
 
-  const filteredQueue = useMemo(() => {
-    return queue.filter((message) => {
-      const city = message.cidade || '';
-      const niche = message.nicho || '';
-      const ruleName = message.automation_rule_name || '';
-      return (!queueFilters.status || message.status === queueFilters.status)
-        && (!queueFilters.message_type || message.message_type === queueFilters.message_type)
-        && (!queueFilters.city || city === queueFilters.city)
-        && (!queueFilters.niche || niche === queueFilters.niche)
-        && (!queueFilters.rule || ruleName === queueFilters.rule);
-    });
-  }, [queue, queueFilters]);
+  const filteredQueue = useMemo(() => queue.filter((message) => (
+    (!queueFilters.status || message.status === queueFilters.status)
+    && (!queueFilters.message_type || message.message_type === queueFilters.message_type)
+    && (!queueFilters.city || message.cidade === queueFilters.city)
+    && (!queueFilters.niche || message.nicho === queueFilters.niche)
+  )), [queue, queueFilters]);
 
   const queueOptions = useMemo(() => ({
     cities: uniqueValues(queue.map((message) => message.cidade)),
     niches: uniqueValues(queue.map((message) => message.nicho)),
-    rules: uniqueValues(queue.map((message) => message.automation_rule_name)),
     types: uniqueValues(queue.map((message) => message.message_type)),
   }), [queue]);
 
-  const summary = useMemo(() => ({
-    activeRules: rules.filter((rule) => rule.enabled).length,
-    pending: queue.filter((message) => message.status === 'pending').length,
-    approved: queue.filter((message) => message.status === 'approved').length,
-    sent: queue.filter((message) => message.status === 'sent').length,
-    pendingBatches: batches.filter((batch) => batch.status === 'pending' || batch.status === 'partially_approved').length,
-  }), [rules, queue, batches]);
+  const localSummary = useMemo(() => ({
+    rulesActive: stats?.rules_active ?? rules.filter((rule) => rule.enabled).length,
+    pending: stats?.queue_pending ?? queue.filter((message) => message.status === 'pending').length,
+    approved: stats?.queue_approved ?? queue.filter((message) => message.status === 'approved').length,
+    sent: stats?.queue_sent ?? queue.filter((message) => message.status === 'sent').length,
+    openBatches: stats?.batches_open ?? batches.filter((batch) => ['pending', 'partially_approved'].includes(batch.status)).length,
+  }), [stats, rules, queue, batches]);
+
+  async function runAction(actionKey, label, fn, reload = true) {
+    setBusyAction(actionKey);
+    try {
+      const response = await fn();
+      setLastResult({ label, data: response.data, at: new Date().toISOString() });
+      toast.success(label);
+      if (reload) await loadAutopilot();
+      return response.data;
+    } catch (error) {
+      toast.error(error.response?.data?.error || error.response?.data?.message || `Erro: ${label}`);
+      return null;
+    } finally {
+      setBusyAction('');
+    }
+  }
 
   function updateRuleField(field, value) {
     setRuleForm((current) => ({ ...current, [field]: value }));
@@ -180,96 +198,65 @@ export default function Autopilot() {
 
   async function saveRule(event) {
     event.preventDefault();
-    setSavingRule(true);
-    try {
+    await runAction('save-rule', editingRuleId ? 'Regra atualizada' : 'Regra criada', async () => {
       const payload = normalizeRulePayload(ruleForm);
-      if (editingRuleId) {
-        await autopilot.updateRule(editingRuleId, payload);
-        toast.success('Regra atualizada');
-      } else {
-        await autopilot.createRule(payload);
-        toast.success('Regra criada');
-      }
-      resetRuleForm();
-      await loadAutopilot();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Erro ao salvar regra');
-    } finally {
-      setSavingRule(false);
-    }
+      return editingRuleId ? autopilot.updateRule(editingRuleId, payload) : autopilot.createRule(payload);
+    });
+    resetRuleForm();
   }
 
   async function deleteRule(rule) {
-    const confirmed = window.confirm(`Excluir a regra "${rule.name}"?`);
-    if (!confirmed) return;
-
-    try {
-      await autopilot.deleteRule(rule.id);
-      toast.success('Regra excluída');
-      await loadAutopilot();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Erro ao excluir regra');
-    }
+    if (!window.confirm(`Excluir a regra "${rule.name}"?`)) return;
+    await runAction(`delete-rule-${rule.id}`, 'Regra excluída', () => autopilot.deleteRule(rule.id));
   }
 
   async function toggleRule(rule) {
-    try {
-      await autopilot.updateRule(rule.id, { enabled: !rule.enabled });
-      toast.success(rule.enabled ? 'Regra pausada' : 'Regra ativada');
-      await loadAutopilot();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Erro ao alterar regra');
-    }
+    await runAction(`toggle-rule-${rule.id}`, rule.enabled ? 'Regra pausada' : 'Regra ativada', () => autopilot.updateRule(rule.id, { enabled: !rule.enabled }));
   }
 
   async function updateQueueMessage(message, action) {
-    setUpdatingMessageId(message.id);
-    try {
-      if (action === 'approve') {
-        await autopilot.approveMessage(message.id);
-        toast.success('Mensagem aprovada para envio futuro');
-      } else {
-        await autopilot.cancelMessage(message.id);
-        toast.success('Mensagem cancelada');
-      }
-      await loadAutopilot();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Erro ao atualizar mensagem');
-    } finally {
-      setUpdatingMessageId(null);
-    }
+    await runAction(`${action}-${message.id}`, action === 'approve' ? 'Mensagem aprovada' : 'Mensagem cancelada', () => (
+      action === 'approve' ? autopilot.approveMessage(message.id) : autopilot.cancelMessage(message.id)
+    ));
   }
 
   async function createBatch(event) {
     event.preventDefault();
-    setCreatingBatch(true);
-    try {
-      const payload = normalizeBatchPayload(batchForm);
-      const response = await autopilot.createApprovalBatch(payload);
-      toast.success(payload.send_approval_request ? 'Lote enviado para aprovação' : 'Lote criado sem envio externo');
-      setBatchForm(EMPTY_BATCH_FORM);
-      await loadAutopilot();
-      if (response.data?.batch?.id) {
-        await openBatch(response.data.batch.id);
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Erro ao criar lote');
-    } finally {
-      setCreatingBatch(false);
-    }
+    const payload = normalizeBatchPayload(batchForm);
+    const result = await runAction('create-batch', payload.send_approval_request ? 'Lote enviado para aprovação' : 'Lote criado sem envio externo', () => autopilot.createApprovalBatch(payload));
+    setBatchForm(EMPTY_BATCH_FORM);
+    if (result?.batch?.id) await openBatch(result.batch.id);
   }
 
   async function openBatch(id) {
-    try {
-      const response = await autopilot.getApprovalBatch(id);
-      setSelectedBatch(response.data);
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Erro ao abrir lote');
-    }
+    const result = await runAction(`open-batch-${id}`, 'Lote carregado', () => autopilot.getApprovalBatch(id), false);
+    if (result) setSelectedBatch(result);
   }
 
-  function resetQueueFilters() {
-    setQueueFilters({ status: 'pending', message_type: '', city: '', niche: '', rule: '' });
+  async function createAppointment(event) {
+    event.preventDefault();
+    const leadId = Number(appointmentForm.lead_id);
+    if (!leadId) {
+      toast.error('Informe o ID do lead');
+      return;
+    }
+    await runAction('appointment', 'Reunião assistida registrada', () => autopilot.createAppointment({
+      lead_id: leadId,
+      scheduled_for: appointmentForm.scheduled_for,
+      note: appointmentForm.note,
+    }));
+    setAppointmentForm({ lead_id: '', scheduled_for: '', note: '' });
+  }
+
+  async function loadDiagnostic(event) {
+    event.preventDefault();
+    const leadId = Number(diagnosticLeadId);
+    if (!leadId) {
+      toast.error('Informe o ID do lead');
+      return;
+    }
+    const result = await runAction('diagnostic', 'Diagnóstico carregado', () => autopilot.diagnostic(leadId), false);
+    if (result) setDiagnostic(result);
   }
 
   return (
@@ -280,9 +267,9 @@ export default function Autopilot() {
             <Bot className="h-5 w-5" />
             <span className="text-sm font-semibold uppercase tracking-wide">Autopilot SDR</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Automação assistida</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Operação assistida e controlada</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Configure regras, revise a fila e aprove lotes pelo WhatsApp pessoal antes de qualquer envio.
+            Regras, fila, lotes, scheduler, envio controlado, follow-ups, resposta, agendamento e diagnóstico em um só painel.
           </p>
         </div>
 
@@ -296,364 +283,288 @@ export default function Autopilot() {
         <div className="flex gap-3">
           <ShieldCheck className="h-5 w-5 flex-shrink-0" />
           <div>
-            <p className="font-semibold">Modo seguro assistido ativo</p>
-            <p>Aprovar uma mensagem muda o status para <strong>approved</strong>, mas não envia automaticamente para o lead. O worker de envio controlado será uma etapa futura.</p>
+            <p className="font-semibold">Travas de segurança ativas</p>
+            <p>Scheduler e follow-ups usam dry-run por padrão. O worker só envia para leads quando chamado com <strong>dry_run=false</strong> e <strong>confirm_send=true</strong>.</p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Metric label="Regras ativas" value={summary.activeRules} tone="blue" />
-        <Metric label="Pendentes" value={summary.pending} tone="yellow" />
-        <Metric label="Aprovadas" value={summary.approved} tone="green" />
-        <Metric label="Enviadas" value={summary.sent} tone="gray" />
-        <Metric label="Lotes abertos" value={summary.pendingBatches} tone="blue" />
+        <Metric label="Regras ativas" value={localSummary.rulesActive} tone="blue" />
+        <Metric label="Pendentes" value={localSummary.pending} tone="yellow" />
+        <Metric label="Aprovadas" value={localSummary.approved} tone="green" />
+        <Metric label="Enviadas" value={localSummary.sent} tone="gray" />
+        <Metric label="Lotes abertos" value={localSummary.openBatches} tone="blue" />
       </div>
 
+      <section className="card">
+        <div className="mb-4 flex items-center gap-2">
+          <Play className="h-5 w-5 text-primary-600 dark:text-primary-300" />
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Sequência operacional 1 ao 11</h2>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ActionButton busy={busyAction === 'scheduler-dry'} onClick={() => runAction('scheduler-dry', 'Scheduler simulado', () => autopilot.runScheduler({ limit: 50, dry_run: true }))} title="1-2. Simular scheduler" description="Avalia leads elegíveis sem criar fila." />
+          <ActionButton busy={busyAction === 'scheduler-run'} onClick={() => runAction('scheduler-run', 'Scheduler executado', () => autopilot.runScheduler({ limit: 50, dry_run: false }))} title="2. Enfileirar pendentes" description="Cria mensagens pending para aprovação." />
+          <ActionButton busy={busyAction === 'worker-dry'} onClick={() => runAction('worker-dry', 'Worker simulado', () => autopilot.processApproved({ limit: 10, dry_run: true, confirm_send: false }))} title="3. Simular envio" description="Mostra aprovadas que seriam enviadas." />
+          <ActionButton danger busy={busyAction === 'worker-send'} onClick={() => confirmDanger('Enviar mensagens aprovadas para leads agora?') && runAction('worker-send', 'Worker processado', () => autopilot.processApproved({ limit: 10, dry_run: false, confirm_send: true }))} title="3. Enviar aprovadas" description="Envia somente mensagens approved." />
+          <ActionButton busy={busyAction === 'stop'} onClick={() => runAction('stop', 'Stop-on-reply aplicado', () => autopilot.stopOnReply())} title="4. Stop-on-reply" description="Cancela follow-ups se houve resposta." />
+          <ActionButton busy={busyAction === 'followups-dry'} onClick={() => runAction('followups-dry', 'Follow-up simulado', () => autopilot.queueFollowups({ limit: 50, dry_run: true }))} title="5. Simular follow-up" description="Mostra follow-ups elegíveis." />
+          <ActionButton busy={busyAction === 'followups-run'} onClick={() => runAction('followups-run', 'Follow-ups enfileirados', () => autopilot.queueFollowups({ limit: 50, dry_run: false }))} title="5. Enfileirar follow-up" description="Cria followups pending/approved." />
+          <ActionButton busy={busyAction === 'classify-dry'} onClick={() => runAction('classify-dry', 'Respostas classificadas em simulação', () => autopilot.classifyReplies({ limit: 20, dry_run: true }))} title="6. Classificar respostas" description="Dry-run da intenção do lead." />
+          <ActionButton busy={busyAction === 'classify-run'} onClick={() => runAction('classify-run', 'Classificação aplicada', () => autopilot.classifyReplies({ limit: 20, dry_run: false }))} title="6. Aplicar classificação" description="Atualiza status/próxima ação." />
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <section className="card xl:col-span-1">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Settings className="h-5 w-5 text-primary-600 dark:text-primary-300" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Regras</h2>
-            </div>
-            {editingRuleId && (
-              <button type="button" onClick={resetRuleForm} className="btn btn-secondary text-xs py-1 px-2">Nova</button>
-            )}
-          </div>
-
-          <form onSubmit={saveRule} className="space-y-3">
-            <input className="input" value={ruleForm.name} onChange={(event) => updateRuleField('name', event.target.value)} placeholder="Nome da regra" required />
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs text-gray-600 dark:text-gray-400">
-                Modo
-                <select className="input mt-1" value={ruleForm.mode} onChange={(event) => updateRuleField('mode', event.target.value)}>
-                  <option value="assistido">Assistido</option>
-                  <option value="automatico">Automático controlado</option>
-                </select>
-              </label>
-              <label className="text-xs text-gray-600 dark:text-gray-400">
-                Score mínimo
-                <input className="input mt-1" type="number" min="0" max="100" value={ruleForm.min_score} onChange={(event) => updateRuleField('min_score', event.target.value)} />
-              </label>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <input className="input" value={ruleForm.source_type} onChange={(event) => updateRuleField('source_type', event.target.value)} placeholder="Fonte: serper/apify/rapidapi" />
-              <input className="input" value={ruleForm.city} onChange={(event) => updateRuleField('city', event.target.value)} placeholder="Cidade" />
-              <input className="input" value={ruleForm.niche} onChange={(event) => updateRuleField('niche', event.target.value)} placeholder="Nicho" />
-              <input className="input" value={ruleForm.timezone} onChange={(event) => updateRuleField('timezone', event.target.value)} placeholder="Timezone" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs text-gray-600 dark:text-gray-400">
-                Limite diário
-                <input className="input mt-1" type="number" min="1" value={ruleForm.max_daily_sends} onChange={(event) => updateRuleField('max_daily_sends', event.target.value)} />
-              </label>
-              <label className="text-xs text-gray-600 dark:text-gray-400">
-                Limite horário
-                <input className="input mt-1" type="number" min="1" value={ruleForm.max_hourly_sends} onChange={(event) => updateRuleField('max_hourly_sends', event.target.value)} />
-              </label>
-              <label className="text-xs text-gray-600 dark:text-gray-400">
-                Início
-                <input className="input mt-1" type="time" value={ruleForm.send_window_start} onChange={(event) => updateRuleField('send_window_start', event.target.value)} />
-              </label>
-              <label className="text-xs text-gray-600 dark:text-gray-400">
-                Fim
-                <input className="input mt-1" type="time" value={ruleForm.send_window_end} onChange={(event) => updateRuleField('send_window_end', event.target.value)} />
-              </label>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs text-gray-600 dark:text-gray-400">
-                Follow-up 1 (h)
-                <input className="input mt-1" type="number" min="1" value={ruleForm.followup_1_delay_hours} onChange={(event) => updateRuleField('followup_1_delay_hours', event.target.value)} />
-              </label>
-              <label className="text-xs text-gray-600 dark:text-gray-400">
-                Follow-up 2 (h)
-                <input className="input mt-1" type="number" min="1" value={ruleForm.followup_2_delay_hours} onChange={(event) => updateRuleField('followup_2_delay_hours', event.target.value)} />
-              </label>
-            </div>
-
-            <div className="space-y-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40">
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <input type="checkbox" checked={ruleForm.enabled} onChange={(event) => updateRuleField('enabled', event.target.checked)} />
-                Regra ativa
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <input type="checkbox" checked={ruleForm.require_manual_approval} onChange={(event) => updateRuleField('require_manual_approval', event.target.checked)} />
-                Exigir aprovação manual
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <input type="checkbox" checked={ruleForm.stop_on_reply} onChange={(event) => updateRuleField('stop_on_reply', event.target.checked)} />
-                Parar follow-ups ao responder
-              </label>
-            </div>
-
-            <textarea className="input min-h-20" value={ruleForm.notes} onChange={(event) => updateRuleField('notes', event.target.value)} placeholder="Notas internas da regra" />
-
-            <button type="submit" className="btn btn-primary w-full flex items-center justify-center gap-2" disabled={savingRule}>
-              <Plus className="h-4 w-4" />
-              {savingRule ? 'Salvando...' : editingRuleId ? 'Atualizar regra' : 'Criar regra'}
-            </button>
-          </form>
-
-          <div className="mt-5 space-y-3">
-            {rules.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma regra criada ainda.</p>
-            ) : rules.map((rule) => (
-              <div key={rule.id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-gray-900 dark:text-gray-100">{rule.name}</div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {rule.city || 'Todas cidades'} • {rule.niche || 'Todos nichos'} • score {rule.min_score}
-                    </div>
-                  </div>
-                  <span className={`badge ${rule.enabled ? 'badge-success' : 'badge-secondary'}`}>{rule.enabled ? 'ativa' : 'pausada'}</span>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => editRule(rule)} className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1">
-                    <Pencil className="h-3 w-3" /> Editar
-                  </button>
-                  <button type="button" onClick={() => toggleRule(rule)} className="btn btn-secondary text-xs py-1 px-2">
-                    {rule.enabled ? 'Pausar' : 'Ativar'}
-                  </button>
-                  <button type="button" onClick={() => deleteRule(rule)} className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1">
-                    <Trash2 className="h-3 w-3" /> Excluir
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <RulePanel
+          rules={rules}
+          form={ruleForm}
+          editingRuleId={editingRuleId}
+          busyAction={busyAction}
+          onChange={updateRuleField}
+          onSubmit={saveRule}
+          onReset={resetRuleForm}
+          onEdit={editRule}
+          onToggle={toggleRule}
+          onDelete={deleteRule}
+        />
 
         <section className="space-y-6 xl:col-span-2">
-          <div className="card">
-            <div className="mb-4 flex items-center gap-2">
-              <ListChecks className="h-5 w-5 text-primary-600 dark:text-primary-300" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Fila de mensagens</h2>
-            </div>
-
-            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-5">
-              <Select value={queueFilters.status} onChange={(value) => setQueueFilters((current) => ({ ...current, status: value }))}>
-                <option value="">Todos status</option>
-                {Object.entries(QUEUE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </Select>
-              <Select value={queueFilters.message_type} onChange={(value) => setQueueFilters((current) => ({ ...current, message_type: value }))}>
-                <option value="">Todos tipos</option>
-                {queueOptions.types.map((type) => <option key={type} value={type}>{type}</option>)}
-              </Select>
-              <Select value={queueFilters.city} onChange={(value) => setQueueFilters((current) => ({ ...current, city: value }))}>
-                <option value="">Todas cidades</option>
-                {queueOptions.cities.map((city) => <option key={city} value={city}>{city}</option>)}
-              </Select>
-              <Select value={queueFilters.niche} onChange={(value) => setQueueFilters((current) => ({ ...current, niche: value }))}>
-                <option value="">Todos nichos</option>
-                {queueOptions.niches.map((niche) => <option key={niche} value={niche}>{niche}</option>)}
-              </Select>
-              <button type="button" onClick={resetQueueFilters} className="btn btn-secondary">Limpar</button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900/40">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Lead</th>
-                    <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Status</th>
-                    <th className="px-3 py-2 text-left">Agendada</th>
-                    <th className="px-3 py-2 text-left">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {loading ? (
-                    <tr><td colSpan="5" className="px-3 py-6 text-center text-gray-500">Carregando...</td></tr>
-                  ) : filteredQueue.length === 0 ? (
-                    <tr><td colSpan="5" className="px-3 py-6 text-center text-gray-500">Nenhuma mensagem no filtro.</td></tr>
-                  ) : filteredQueue.map((message) => (
-                    <tr key={message.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                      <td className="px-3 py-3 min-w-64">
-                        <div className="font-medium text-gray-900 dark:text-gray-100">{message.nome_empresa || 'Lead sem nome'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{message.cidade || '-'} • {message.nicho || '-'} • score {message.score ?? '-'}</div>
-                      </td>
-                      <td className="px-3 py-3 text-sm text-gray-700 dark:text-gray-300">{message.message_type}</td>
-                      <td className="px-3 py-3"><StatusBadge status={message.status} labels={QUEUE_STATUS_LABELS} /></td>
-                      <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">{formatDate(message.scheduled_at)}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button type="button" onClick={() => updateQueueMessage(message, 'approve')} disabled={updatingMessageId === message.id || message.status !== 'pending'} className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1">
-                            <CheckCircle2 className="h-3 w-3" /> Aprovar
-                          </button>
-                          <button type="button" onClick={() => updateQueueMessage(message, 'cancel')} disabled={updatingMessageId === message.id || message.status === 'sent'} className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1">
-                            <XCircle className="h-3 w-3" /> Cancelar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <QueuePanel
+            queue={filteredQueue}
+            filters={queueFilters}
+            options={queueOptions}
+            busyAction={busyAction}
+            onFilterChange={(patch) => setQueueFilters((current) => ({ ...current, ...patch }))}
+            onClear={() => setQueueFilters({ status: 'pending', message_type: '', city: '', niche: '' })}
+            onApprove={(message) => updateQueueMessage(message, 'approve')}
+            onCancel={(message) => updateQueueMessage(message, 'cancel')}
+          />
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="card">
-              <div className="mb-4 flex items-center gap-2">
-                <Send className="h-5 w-5 text-primary-600 dark:text-primary-300" />
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100">Criar lote</h2>
-              </div>
-
-              <form onSubmit={createBatch} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="text-xs text-gray-600 dark:text-gray-400">
-                    Limite
-                    <input className="input mt-1" type="number" min="1" max="10" value={batchForm.limit} onChange={(event) => updateBatchField('limit', event.target.value)} />
-                  </label>
-                  <label className="text-xs text-gray-600 dark:text-gray-400">
-                    Expira em min.
-                    <input className="input mt-1" type="number" min="10" max="1440" value={batchForm.expires_in_minutes} onChange={(event) => updateBatchField('expires_in_minutes', event.target.value)} />
-                  </label>
-                  <input className="input" value={batchForm.min_score} onChange={(event) => updateBatchField('min_score', event.target.value)} placeholder="Score mínimo opcional" />
-                  <input className="input" value={batchForm.source_type} onChange={(event) => updateBatchField('source_type', event.target.value)} placeholder="Fonte opcional" />
-                  <input className="input" value={batchForm.city} onChange={(event) => updateBatchField('city', event.target.value)} placeholder="Cidade opcional" />
-                  <input className="input" value={batchForm.niche} onChange={(event) => updateBatchField('niche', event.target.value)} placeholder="Nicho opcional" />
-                </div>
-
-                <label className="flex items-center gap-2 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
-                  <input type="checkbox" checked={batchForm.send_approval_request} onChange={(event) => updateBatchField('send_approval_request', event.target.checked)} />
-                  Enviar solicitação ao WhatsApp pessoal
-                </label>
-
-                <button type="submit" className="btn btn-primary w-full flex items-center justify-center gap-2" disabled={creatingBatch}>
-                  <MessageSquare className="h-4 w-4" />
-                  {creatingBatch ? 'Criando...' : 'Criar lote'}
-                </button>
-              </form>
-            </div>
-
-            <div className="card">
-              <div className="mb-4 flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary-600 dark:text-primary-300" />
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100">Lotes recentes</h2>
-              </div>
-
-              <div className="space-y-3">
-                {batches.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum lote criado ainda.</p>
-                ) : batches.map((batch) => (
-                  <button key={batch.id} type="button" onClick={() => openBatch(batch.id)} className="w-full rounded-lg border border-gray-200 p-3 text-left hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/30">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-gray-100">Lote #{batch.id}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {batch.approved_items || 0} aprovados • {batch.cancelled_items || 0} cancelados • {batch.total_items || 0} itens
-                        </div>
-                      </div>
-                      <StatusBadge status={batch.status} labels={BATCH_STATUS_LABELS} />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <BatchPanel form={batchForm} busyAction={busyAction} onChange={updateBatchField} onSubmit={createBatch} />
+            <BatchesList batches={batches} onOpen={openBatch} />
           </div>
 
-          {selectedBatch && (
-            <div className="card">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100">Lote #{selectedBatch.batch.id}</h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Expira em {formatDate(selectedBatch.batch.expires_at)} • {selectedBatch.items.length} item(ns)
-                  </p>
-                </div>
-                <StatusBadge status={selectedBatch.batch.status} labels={BATCH_STATUS_LABELS} />
-              </div>
+          <UtilityPanel
+            appointmentForm={appointmentForm}
+            setAppointmentForm={setAppointmentForm}
+            diagnosticLeadId={diagnosticLeadId}
+            setDiagnosticLeadId={setDiagnosticLeadId}
+            diagnostic={diagnostic}
+            onCreateAppointment={createAppointment}
+            onLoadDiagnostic={loadDiagnostic}
+            busyAction={busyAction}
+          />
 
-              <div className="space-y-3">
-                {selectedBatch.items.map((item) => (
-                  <div key={item.batch_item_id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.position}. {item.nome_empresa || 'Lead sem nome'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {item.cidade || '-'} • {item.nicho || '-'} • score {item.score ?? '-'} • tipo {item.message_type}
-                        </div>
-                      </div>
-                      <StatusBadge status={item.batch_item_status || item.status} labels={QUEUE_STATUS_LABELS} />
-                    </div>
-                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
-                      {item.payload_json?.message || item.payload_json?.text || item.mensagem_whatsapp || 'Mensagem não disponível.'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {selectedBatch && <BatchDetails selectedBatch={selectedBatch} />}
+          <RunsPanel runs={runs} lastResult={lastResult} />
         </section>
       </div>
     </div>
   );
 }
 
-function normalizeRulePayload(form) {
-  return {
-    ...form,
-    min_score: Number(form.min_score || 0),
-    max_daily_sends: Number(form.max_daily_sends || 1),
-    max_hourly_sends: Number(form.max_hourly_sends || 1),
-    followup_1_delay_hours: Number(form.followup_1_delay_hours || 24),
-    followup_2_delay_hours: Number(form.followup_2_delay_hours || 48),
-  };
+function RulePanel({ rules, form, editingRuleId, busyAction, onChange, onSubmit, onReset, onEdit, onToggle, onDelete }) {
+  return (
+    <section className="card">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Settings className="h-5 w-5 text-primary-600 dark:text-primary-300" />
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">1. Regras</h2>
+        </div>
+        {editingRuleId && <button type="button" onClick={onReset} className="btn btn-secondary text-xs py-1 px-2">Nova</button>}
+      </div>
+
+      <form onSubmit={onSubmit} className="space-y-3">
+        <input className="input" value={form.name} onChange={(event) => onChange('name', event.target.value)} placeholder="Nome da regra" required />
+        <div className="grid grid-cols-2 gap-3">
+          <select className="input" value={form.mode} onChange={(event) => onChange('mode', event.target.value)}>
+            <option value="assistido">Assistido</option>
+            <option value="automatico">Automático controlado</option>
+          </select>
+          <input className="input" type="number" min="0" max="100" value={form.min_score} onChange={(event) => onChange('min_score', event.target.value)} placeholder="Score" />
+          <input className="input" value={form.source_type} onChange={(event) => onChange('source_type', event.target.value)} placeholder="Fonte" />
+          <input className="input" value={form.city} onChange={(event) => onChange('city', event.target.value)} placeholder="Cidade" />
+          <input className="input" value={form.niche} onChange={(event) => onChange('niche', event.target.value)} placeholder="Nicho" />
+          <input className="input" value={form.timezone} onChange={(event) => onChange('timezone', event.target.value)} placeholder="Timezone" />
+          <input className="input" type="number" min="1" value={form.max_daily_sends} onChange={(event) => onChange('max_daily_sends', event.target.value)} placeholder="Limite diário" />
+          <input className="input" type="number" min="1" value={form.max_hourly_sends} onChange={(event) => onChange('max_hourly_sends', event.target.value)} placeholder="Limite hora" />
+          <input className="input" type="time" value={form.send_window_start} onChange={(event) => onChange('send_window_start', event.target.value)} />
+          <input className="input" type="time" value={form.send_window_end} onChange={(event) => onChange('send_window_end', event.target.value)} />
+        </div>
+        <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40 space-y-2">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.enabled} onChange={(event) => onChange('enabled', event.target.checked)} /> Ativa</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.require_manual_approval} onChange={(event) => onChange('require_manual_approval', event.target.checked)} /> Aprovação manual</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.stop_on_reply} onChange={(event) => onChange('stop_on_reply', event.target.checked)} /> Stop-on-reply</label>
+        </div>
+        <textarea className="input min-h-20" value={form.notes} onChange={(event) => onChange('notes', event.target.value)} placeholder="Notas internas" />
+        <button type="submit" className="btn btn-primary w-full" disabled={busyAction === 'save-rule'}>{editingRuleId ? 'Atualizar regra' : 'Criar regra'}</button>
+      </form>
+
+      <div className="mt-5 space-y-3">
+        {rules.map((rule) => (
+          <div key={rule.id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{rule.name}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{rule.city || 'Todas'} • {rule.niche || 'Todos'} • score {rule.min_score}</div>
+              </div>
+              <span className={`badge ${rule.enabled ? 'badge-success' : 'badge-secondary'}`}>{rule.enabled ? 'ativa' : 'pausada'}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => onEdit(rule)} className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1"><Pencil className="h-3 w-3" /> Editar</button>
+              <button type="button" onClick={() => onToggle(rule)} className="btn btn-secondary text-xs py-1 px-2">{rule.enabled ? 'Pausar' : 'Ativar'}</button>
+              <button type="button" onClick={() => onDelete(rule)} className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1"><Trash2 className="h-3 w-3" /> Excluir</button>
+            </div>
+          </div>
+        ))}
+        {rules.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma regra criada ainda.</p>}
+      </div>
+    </section>
+  );
 }
 
-function normalizeBatchPayload(form) {
-  const payload = {
-    limit: Number(form.limit || 5),
-    expires_in_minutes: Number(form.expires_in_minutes || 120),
-    send_approval_request: Boolean(form.send_approval_request),
-    city: form.city || '',
-    niche: form.niche || '',
-    source_type: form.source_type || '',
-  };
+function QueuePanel({ queue, filters, options, busyAction, onFilterChange, onClear, onApprove, onCancel }) {
+  return (
+    <section className="card">
+      <div className="mb-4 flex items-center gap-2">
+        <ListChecks className="h-5 w-5 text-primary-600 dark:text-primary-300" />
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">3-5. Fila e follow-ups</h2>
+      </div>
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-5">
+        <Select value={filters.status} onChange={(value) => onFilterChange({ status: value })}><option value="">Todos status</option>{['pending', 'approved', 'queued', 'sent', 'cancelled', 'failed'].map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}</Select>
+        <Select value={filters.message_type} onChange={(value) => onFilterChange({ message_type: value })}><option value="">Todos tipos</option>{options.types.map((type) => <option key={type} value={type}>{type}</option>)}</Select>
+        <Select value={filters.city} onChange={(value) => onFilterChange({ city: value })}><option value="">Todas cidades</option>{options.cities.map((city) => <option key={city} value={city}>{city}</option>)}</Select>
+        <Select value={filters.niche} onChange={(value) => onFilterChange({ niche: value })}><option value="">Todos nichos</option>{options.niches.map((niche) => <option key={niche} value={niche}>{niche}</option>)}</Select>
+        <button type="button" onClick={onClear} className="btn btn-secondary">Limpar</button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500 dark:border-gray-700 dark:bg-gray-900/40">
+            <tr><th className="px-3 py-2 text-left">Lead</th><th className="px-3 py-2 text-left">Tipo</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-left">Ações</th></tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            {queue.length === 0 ? <tr><td colSpan="4" className="px-3 py-6 text-center text-gray-500">Nenhuma mensagem no filtro.</td></tr> : queue.map((message) => (
+              <tr key={message.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td className="px-3 py-3 min-w-64"><div className="font-medium text-gray-900 dark:text-gray-100">{message.nome_empresa || 'Lead sem nome'}</div><div className="text-xs text-gray-500 dark:text-gray-400">{message.cidade || '-'} • {message.nicho || '-'} • score {message.score ?? '-'}</div></td>
+                <td className="px-3 py-3 text-sm">{message.message_type}</td>
+                <td className="px-3 py-3"><StatusBadge status={message.status} /></td>
+                <td className="px-3 py-3"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => onApprove(message)} disabled={busyAction || message.status !== 'pending'} className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Aprovar</button><button type="button" onClick={() => onCancel(message)} disabled={busyAction || message.status === 'sent'} className="btn btn-secondary text-xs py-1 px-2 flex items-center gap-1"><XCircle className="h-3 w-3" /> Cancelar</button></div></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
-  if (String(form.min_score || '').trim()) {
-    payload.min_score = Number(form.min_score);
-  }
+function BatchPanel({ form, busyAction, onChange, onSubmit }) {
+  return (
+    <section className="card">
+      <div className="mb-4 flex items-center gap-2"><Send className="h-5 w-5 text-primary-600 dark:text-primary-300" /><h2 className="font-semibold text-gray-900 dark:text-gray-100">Criar lote</h2></div>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <input className="input" type="number" min="1" max="10" value={form.limit} onChange={(event) => onChange('limit', event.target.value)} placeholder="Limite" />
+          <input className="input" type="number" min="10" max="1440" value={form.expires_in_minutes} onChange={(event) => onChange('expires_in_minutes', event.target.value)} placeholder="Expira min" />
+          <input className="input" value={form.min_score} onChange={(event) => onChange('min_score', event.target.value)} placeholder="Score mínimo" />
+          <input className="input" value={form.source_type} onChange={(event) => onChange('source_type', event.target.value)} placeholder="Fonte" />
+          <input className="input" value={form.city} onChange={(event) => onChange('city', event.target.value)} placeholder="Cidade" />
+          <input className="input" value={form.niche} onChange={(event) => onChange('niche', event.target.value)} placeholder="Nicho" />
+        </div>
+        <label className="flex items-center gap-2 rounded-lg bg-gray-50 p-3 text-sm dark:bg-gray-900/40"><input type="checkbox" checked={form.send_approval_request} onChange={(event) => onChange('send_approval_request', event.target.checked)} /> Enviar solicitação ao WhatsApp pessoal</label>
+        <button type="submit" className="btn btn-primary w-full" disabled={busyAction === 'create-batch'}>Criar lote</button>
+      </form>
+    </section>
+  );
+}
 
-  return payload;
+function BatchesList({ batches, onOpen }) {
+  return (
+    <section className="card">
+      <div className="mb-4 flex items-center gap-2"><Clock className="h-5 w-5 text-primary-600 dark:text-primary-300" /><h2 className="font-semibold text-gray-900 dark:text-gray-100">Lotes recentes</h2></div>
+      <div className="space-y-3">
+        {batches.map((batch) => <button key={batch.id} type="button" onClick={() => onOpen(batch.id)} className="w-full rounded-lg border border-gray-200 p-3 text-left hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/30"><div className="flex items-start justify-between gap-3"><div><div className="font-medium text-gray-900 dark:text-gray-100">Lote #{batch.id}</div><div className="text-xs text-gray-500 dark:text-gray-400">{batch.approved_items || 0} aprovados • {batch.cancelled_items || 0} cancelados • {batch.total_items || 0} itens</div></div><StatusBadge status={batch.status} /></div></button>)}
+        {batches.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum lote criado ainda.</p>}
+      </div>
+    </section>
+  );
+}
+
+function UtilityPanel({ appointmentForm, setAppointmentForm, diagnosticLeadId, setDiagnosticLeadId, diagnostic, onCreateAppointment, onLoadDiagnostic, busyAction }) {
+  return (
+    <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="card">
+        <div className="mb-4 flex items-center gap-2"><CalendarClock className="h-5 w-5 text-primary-600 dark:text-primary-300" /><h2 className="font-semibold text-gray-900 dark:text-gray-100">7. Agendamento assistido</h2></div>
+        <form onSubmit={onCreateAppointment} className="space-y-3">
+          <input className="input" value={appointmentForm.lead_id} onChange={(event) => setAppointmentForm((current) => ({ ...current, lead_id: event.target.value }))} placeholder="ID do lead" />
+          <input className="input" value={appointmentForm.scheduled_for} onChange={(event) => setAppointmentForm((current) => ({ ...current, scheduled_for: event.target.value }))} placeholder="Data/horário combinado" />
+          <textarea className="input min-h-20" value={appointmentForm.note} onChange={(event) => setAppointmentForm((current) => ({ ...current, note: event.target.value }))} placeholder="Observação" />
+          <button type="submit" className="btn btn-primary w-full" disabled={busyAction === 'appointment'}>Registrar reunião</button>
+        </form>
+      </div>
+      <div className="card">
+        <div className="mb-4 flex items-center gap-2"><FileText className="h-5 w-5 text-primary-600 dark:text-primary-300" /><h2 className="font-semibold text-gray-900 dark:text-gray-100">10. Diagnóstico/PDF base</h2></div>
+        <form onSubmit={onLoadDiagnostic} className="flex gap-2"><input className="input" value={diagnosticLeadId} onChange={(event) => setDiagnosticLeadId(event.target.value)} placeholder="ID do lead" /><button type="submit" className="btn btn-secondary" disabled={busyAction === 'diagnostic'}>Gerar</button></form>
+        {diagnostic?.markdown && <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-900/40 dark:text-gray-300">{diagnostic.markdown}</pre>}
+      </div>
+    </section>
+  );
+}
+
+function BatchDetails({ selectedBatch }) {
+  return (
+    <section className="card">
+      <div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="font-semibold text-gray-900 dark:text-gray-100">Lote #{selectedBatch.batch.id}</h2><p className="text-sm text-gray-500 dark:text-gray-400">{selectedBatch.items.length} item(ns)</p></div><StatusBadge status={selectedBatch.batch.status} /></div>
+      <div className="space-y-3">{selectedBatch.items.map((item) => <div key={item.batch_item_id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-start justify-between gap-3"><div><div className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.position}. {item.nome_empresa || 'Lead sem nome'}</div><div className="text-xs text-gray-500 dark:text-gray-400">{item.cidade || '-'} • {item.nicho || '-'} • score {item.score ?? '-'}</div></div><StatusBadge status={item.batch_item_status || item.status} /></div><p className="mt-2 text-sm text-gray-700 dark:text-gray-300">{item.payload_json?.message || item.payload_json?.text || item.mensagem_whatsapp || 'Mensagem não disponível.'}</p></div>)}</div>
+    </section>
+  );
+}
+
+function RunsPanel({ runs, lastResult }) {
+  return (
+    <section className="card">
+      <div className="mb-4 flex items-center gap-2"><MessageSquare className="h-5 w-5 text-primary-600 dark:text-primary-300" /><h2 className="font-semibold text-gray-900 dark:text-gray-100">8-11. Runs, auditoria e hardening</h2></div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="space-y-3">{runs.map((run) => <div key={run.id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700"><div className="flex items-center justify-between gap-2"><div className="font-medium text-gray-900 dark:text-gray-100">#{run.id} {run.type}</div><StatusBadge status={run.status} /></div><div className="mt-1 text-xs text-gray-500 dark:text-gray-400">avaliados {run.leads_evaluated || 0} • fila {run.messages_queued || 0} • ignorados {run.messages_skipped || 0}</div></div>)}{runs.length === 0 && <p className="text-sm text-gray-500">Nenhuma execução ainda.</p>}</div>
+        <div>{lastResult ? <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-900/40 dark:text-gray-300">{JSON.stringify(lastResult, null, 2)}</pre> : <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700"><AlertTriangle className="mb-2 h-5 w-5" />O último resultado de ação aparecerá aqui para auditoria rápida.</div>}</div>
+      </div>
+    </section>
+  );
+}
+
+function ActionButton({ title, description, onClick, busy, danger = false }) {
+  return <button type="button" onClick={onClick} disabled={busy} className={`rounded-lg border p-3 text-left transition ${danger ? 'border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-900/60 dark:bg-red-900/20' : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700/50'}`}><div className="font-medium text-gray-900 dark:text-gray-100">{busy ? 'Executando...' : title}</div><div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{description}</div></button>;
 }
 
 function Metric({ label, value, tone = 'gray' }) {
-  const tones = {
-    gray: 'bg-gray-50 dark:bg-gray-900/40 text-gray-900 dark:text-gray-100',
-    green: 'bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-300',
-    yellow: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-900 dark:text-yellow-300',
-    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-300',
-  };
-
-  return (
-    <div className={`rounded-lg p-4 ${tones[tone]}`}>
-      <div className="text-2xl font-bold">{value ?? 0}</div>
-      <div className="mt-1 text-xs opacity-80">{label}</div>
-    </div>
-  );
+  const tones = { gray: 'bg-gray-50 dark:bg-gray-900/40 text-gray-900 dark:text-gray-100', green: 'bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-300', yellow: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-900 dark:text-yellow-300', blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-300' };
+  return <div className={`rounded-lg p-4 ${tones[tone]}`}><div className="text-2xl font-bold">{value ?? 0}</div><div className="mt-1 text-xs opacity-80">{label}</div></div>;
 }
 
 function Select({ value, onChange, children }) {
   return <select className="input" value={value} onChange={(event) => onChange(event.target.value)}>{children}</select>;
 }
 
-function StatusBadge({ status, labels }) {
-  return <span className={`badge ${STATUS_BADGES[status] || 'badge-secondary'}`}>{labels[status] || status || '-'}</span>;
+function StatusBadge({ status }) {
+  return <span className={`badge ${STATUS_BADGES[status] || 'badge-secondary'}`}>{STATUS_LABELS[status] || status || '-'}</span>;
 }
 
 function uniqueValues(values) {
   return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
-function formatDate(value) {
-  if (!value) return '-';
-  return new Date(value).toLocaleString('pt-BR');
+function normalizeRulePayload(form) {
+  return { ...form, min_score: Number(form.min_score || 0), max_daily_sends: Number(form.max_daily_sends || 1), max_hourly_sends: Number(form.max_hourly_sends || 1), followup_1_delay_hours: Number(form.followup_1_delay_hours || 24), followup_2_delay_hours: Number(form.followup_2_delay_hours || 48) };
+}
+
+function normalizeBatchPayload(form) {
+  const payload = { limit: Number(form.limit || 5), expires_in_minutes: Number(form.expires_in_minutes || 120), send_approval_request: Boolean(form.send_approval_request), city: form.city || '', niche: form.niche || '', source_type: form.source_type || '' };
+  if (String(form.min_score || '').trim()) payload.min_score = Number(form.min_score);
+  return payload;
+}
+
+function confirmDanger(message) {
+  return window.confirm(message);
 }
