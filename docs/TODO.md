@@ -6,49 +6,32 @@ Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, esta
 
 ## Prioridade Alta
 
-### 1. PR #19 - Central de respostas e proxima acao recomendada
-
-Objetivo: transformar respostas recebidas em acao comercial rapida.
-
-Escopo:
-
-- Criar pagina `/autopilot/replies`.
-- Listar leads com resposta recente no WhatsApp.
-- Mostrar ultima mensagem recebida.
-- Classificar intencao: interesse, preco, reuniao, pergunta, sem interesse, neutro.
-- Sugerir proxima acao.
-- Sugerir resposta copiavel.
-- Permitir marcar respondeu, reuniao, sem interesse ou proxima acao.
-- Registrar a acao no CRM e em `lead_followups`.
-- Manter toda resposta externa fora do automatico: a pagina copia e organiza, mas nao dispara mensagem.
-
-Criterios de aceite:
-
-- Usuario ve rapidamente quem respondeu.
-- Usuario entende qual proximo passo tomar.
-- Usuario consegue copiar uma resposta sugerida.
-- Nenhuma resposta automatica e enviada sem confirmacao.
-- Outro usuario nao acessa nem altera lead de terceiro.
-
-### 2. PR #20 - Templates comerciais por nicho e profissao
+### 1. PR #20 - Templates comerciais por nicho e profissao
 
 Objetivo: melhorar qualidade das mensagens com base no nicho do lead e na profissao/contexto interno do usuario.
 
-Escopo recomendado:
+Escopo:
 
 - Criar biblioteca de templates por nicho.
-- Nichos iniciais: imobiliarias, clinicas, odontologia, estetica, advocacia, escolas, energia solar, moveis planejados.
-- Criar argumentos por dor: sem pixel, sem GTM, sem GA4, sem WhatsApp no site, site lento, baixa prova social, sem campanha aparente.
-- Adaptar prompts para ponto de vista de gestor de trafego.
+- Nichos iniciais: imobiliarias, clinicas, odontologia, estetica, advocacia, escolas, energia solar, moveis planejados e negocio local.
+- Criar argumentos por dor: sem site, sem Pixel Meta, sem GTM, sem GA4, sem WhatsApp no site, sem formulario, site lento e prova social sem tracking.
+- Adaptar mensagem ao ponto de vista profissional do usuario.
+- Usar `profession`, `primary_niche` e `internal_context` no contexto profissional do template.
 - Permitir escolher tom: consultivo, direto, diagnostico, oportunidade.
+- Criar pagina `/autopilot/templates`.
+- Permitir gerar previa, copiar textos e aplicar no lead.
+- Aplicar template apenas atualiza `mensagem_whatsapp`, `mensagem_whatsapp_followup`, diagnostico quando vazio e `proxima_acao`.
+- Registrar historico em `lead_followups`.
 
 Criterios de aceite:
 
 - Mensagem inicial e follow-up ficam mais especificos por nicho.
-- Prompt nao inventa dados do lead.
+- Template nao inventa dados do lead.
 - Templates podem ser revisados antes de entrar em fila.
+- Aplicar template nao envia mensagem WhatsApp.
+- Outro usuario nao consegue aplicar template em lead de terceiro.
 
-### 3. PR #21 - Diagnostico comercial avancado
+### 2. PR #21 - Diagnostico comercial avancado
 
 Objetivo: transformar o diagnostico base em material de venda.
 
@@ -67,7 +50,7 @@ Criterios de aceite:
 - Diagnostico diferencia fatos observados de inferencias.
 - Nao promete resultado financeiro sem dados.
 
-### 4. PR #22 - Agendamento comercial assistido
+### 3. PR #22 - Agendamento comercial assistido
 
 Objetivo: deixar o caminho de resposta positiva ate reuniao mais curto.
 
@@ -86,7 +69,7 @@ Criterios de aceite:
 
 ## Prioridade Media
 
-### 5. Operacao controlada de prospeccao real
+### 4. Operacao controlada de prospeccao real
 
 Objetivo: continuar gerando oportunidades enquanto o produto evolui.
 
@@ -97,13 +80,13 @@ Checklist:
 - Coletar lotes pequenos por provider ativo.
 - Priorizar leads com WhatsApp confirmado e score alto.
 - Usar CRM Kanban para registrar status e proxima acao.
-- Usar IA para ajustar mensagem por nicho.
+- Usar `/autopilot/templates` para ajustar mensagem por nicho.
 - Usar `/autopilot` para aprovar, simular e enviar com controle.
 - Usar `/autopilot/replies` para tratar respostas recebidas.
 - Medir respostas, reunioes e clientes fechados.
 - Ajustar mensagens e criterios de score com base em respostas reais.
 
-### 6. Cron controlado futuro
+### 5. Cron controlado futuro
 
 Objetivo: automatizar horarios diarios sem perder controle.
 
@@ -116,6 +99,22 @@ Escopo futuro:
 - Nunca enviar direto sem configuracao explicita.
 
 ## Concluido Recentemente
+
+### PR #19 - Central de respostas e proxima acao recomendada
+
+Validado e mergeado.
+
+Resultado:
+
+- Criada pagina `/autopilot/replies`.
+- Criado inbox autenticado de respostas recebidas.
+- Classificacao de intencao.
+- Resposta sugerida copiavel.
+- Acoes seguras para CRM.
+- Registro em `lead_followups`.
+- Isolamento por usuario validado.
+- Nenhum envio automatico de WhatsApp no fluxo.
+- Merge commit: `c8ba8ab913e83b09b7b0ec843a1141753274d315`.
 
 ### PR #18 - Guia de uso do Autopilot e mapa atualizado
 
@@ -149,21 +148,6 @@ Resultado:
 - Envio real restrito ao modo avancado com `dry_run=false` e `confirm_send=true`.
 - Merge commit: `78e62b205445d63a3b4dc768dc8de6794d8b302b`.
 
-### PR #15 - Aprovacao em lote via WhatsApp real
-
-Validado e mergeado.
-
-Resultado:
-
-- Lote real `#26` criado.
-- Solicitacao chegou no WhatsApp pessoal.
-- Resposta `APROVAR LOTE 26` foi processada pelo webhook real.
-- Lote virou `approved`.
-- 2 itens viraram `approved`.
-- Nenhum item virou `sent`.
-- Logs recentes sem padroes de segredo.
-- Merge commit: `3404742ca7632e30b8556b3874bc84ee45d463f7`.
-
 ### Outros blocos concluidos
 
 - Fundacao do Autopilot SDR.
@@ -187,4 +171,5 @@ Resultado:
 - Nunca enviar mensagem para lead apenas por aprovar lote.
 - Modo `assistido` sempre exige aprovacao manual.
 - Worker automatico so pode existir com limite diario, limite horario, janela de envio e stop-on-reply.
+- Template comercial pode gerar, copiar e aplicar textos no lead, mas nao pode enviar WhatsApp automaticamente.
 - Toda PR deve terminar com testes, build, Docker e scan basico de segredos.
