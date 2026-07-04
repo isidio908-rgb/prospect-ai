@@ -8,6 +8,7 @@ import Leads from './pages/Leads';
 import LeadDetails from './pages/LeadDetails';
 import CrmKanban from './pages/CrmKanban';
 import CollectionHistory from './pages/CollectionHistory';
+import Autopilot from './pages/Autopilot';
 import Profile from './pages/Profile';
 import Credentials from './pages/Credentials';
 import WhatsAppSettings from './pages/WhatsAppSettings';
@@ -100,6 +101,17 @@ function App() {
             <PrivateRoute>
               <Layout>
                 <CrmKanban />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/autopilot"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <Autopilot />
               </Layout>
             </PrivateRoute>
           }
