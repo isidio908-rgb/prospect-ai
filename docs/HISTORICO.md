@@ -2,6 +2,46 @@
 
 Este arquivo consolida o historico operacional do projeto. Documentos antigos de sprint continuam no repositorio, mas este passa a ser o registro principal e atualizado.
 
+## 03/07/2026 - Aprovacao Em Lote Via WhatsApp
+
+### Implementado
+
+- Adicionado campo `approval_whatsapp` ao perfil do usuario.
+- Adicionada configuracao visual do WhatsApp de aprovacao em `/profile`.
+- Criadas tabelas `approval_batches` e `approval_batch_items`.
+- Adicionado vinculo `approval_batch_id` em `message_queue`.
+- Criadas rotas autenticadas:
+  - `GET /api/autopilot/approval-batches`
+  - `POST /api/autopilot/approval-batches`
+  - `GET /api/autopilot/approval-batches/:id`
+- Criado servico `approvalBatchService.mjs` para criar lotes, montar mensagem, parsear comandos e atualizar fila.
+- Adicionado parser para comandos:
+  - `APROVAR LOTE {id}`
+  - `CANCELAR LOTE {id}`
+  - `APROVAR {id}:1,3`
+  - `CANCELAR {id}:2`
+- O webhook publico da Evolution API passa a processar respostas de aprovacao do Autopilot.
+- Quando um comando valido e processado, o sistema envia confirmacao ao WhatsApp de aprovacao.
+- Cliente frontend `autopilot` recebeu metodos para lotes de aprovacao.
+- Teste HTTP do Autopilot cobre criacao de lote, comando autorizado, numero nao autorizado e isolamento por usuario.
+
+### Regras De Seguranca
+
+- Aprovacao em lote apenas altera `message_queue.status` para `approved` ou `cancelled`.
+- Nenhuma mensagem e enviada automaticamente para leads nesta etapa.
+- O webhook aceita comandos apenas do `approval_whatsapp` configurado para o usuario.
+- Lotes sao isolados por `user_id`.
+- Usuario nao visualiza lote de outro usuario.
+- `send_approval_request:false` permite validacao local sem chamada externa para Evolution API.
+- O envio de confirmacao vai apenas para o numero de aprovacao.
+- Tokens e API keys continuam fora de respostas, logs e documentos.
+
+### Observacoes
+
+- Esta etapa ainda nao cria scheduler de enfileiramento automatico.
+- Esta etapa ainda nao cria worker de envio para leads.
+- Proximo passo recomendado: UI do Autopilot com lista de lotes/fila e, depois, scheduler assistido.
+
 ## 03/07/2026 - API Do Autopilot SDR
 
 ### Implementado
@@ -244,7 +284,7 @@ O projeto esta pronto para uso interno controlado, desde que:
 
 ## Proximos Marcos
 
-1. UI do Autopilot SDR e fila de mensagens pendentes.
+1. UI do Autopilot SDR e fila/lotes de aprovacao.
 2. Scheduler assistido para enfileirar leads elegiveis.
 3. Worker de envio WhatsApp com limites e stop-on-reply.
 4. Resposta IA e agendamento automatico.
