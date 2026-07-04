@@ -1,33 +1,38 @@
 # Prospect AI - Status Atual do Projeto
 
 **Data:** 04/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR assistido validado por WhatsApp real.
+**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado mergeado no PR #17.
 
-Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`.
+Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para operar a pagina `/autopilot`, leia `docs/GUIA-USO-AUTOPILOT.md`.
 
 ## Resumo Executivo
 
-O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual e organiza o pipeline no CRM Kanban.
+O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual, organiza o pipeline no CRM Kanban e possui Autopilot SDR controlado.
 
-O marco mais recente foi a aprovacao em lote do Autopilot SDR pelo WhatsApp pessoal do usuario. Um lote real foi aprovado pelo webhook real da Evolution API, mudando mensagens para `approved` sem enviar nada automaticamente para leads.
+O marco mais recente foi o merge do PR #17, que adicionou a central `/autopilot` para operar regras, fila, lotes, scheduler, envio controlado, stop-on-reply, follow-ups, classificacao de respostas, agendamento assistido e diagnostico base.
 
-## Marco Mais Recente - PR #15
+## Marco Mais Recente - PR #17
 
-PR #15 foi validado e mergeado.
+PR #17 foi validado e mergeado.
 
 Resultado final:
 
-- Stack local saudavel com `/health` ok.
-- Novo lote real criado: `#26`.
-- Solicitacao chegou no WhatsApp pessoal.
-- Resposta `APROVAR LOTE 26` foi processada pelo webhook real.
-- Lote virou `approved`.
-- 2 itens viraram `approved`.
-- Nenhum item virou `sent`.
-- Logs recentes sem padroes de segredo.
-- Merge commit: `3404742ca7632e30b8556b3874bc84ee45d463f7`.
+- `/autopilot` refinada como central operacional comercial.
+- Cards de proxima acao.
+- Fluxo visual 1 a 11.
+- Regras, fila e lotes operaveis pela interface.
+- Scheduler assistido com `dry_run=true` por padrao.
+- Worker de envio controlado, com envio real apenas se `dry_run=false` e `confirm_send=true`.
+- Stop-on-reply para cancelar follow-ups quando ha resposta.
+- Follow-ups assistidos.
+- Classificacao heuristica de respostas.
+- Agendamento assistido.
+- Diagnostico/PDF base em Markdown.
+- Reenvio de solicitacao de lote para WhatsApp pessoal conectado.
+- Validacao final reportada: backend 60/60, frontend build, audit, Docker, `/health` e `/autopilot` ok.
+- Merge commit: `78e62b205445d63a3b4dc768dc8de6794d8b302b`.
 
-Conclusao: o Autopilot assistido esta pronto para aprovar mensagens em lote. O envio automatico para leads ainda nao esta ativo e deve nascer apenas em PR futura com limites e stop-on-reply.
+Conclusao: o Autopilot esta pronto para uso assistido diario, mantendo controle humano antes de qualquer envio real.
 
 ## Stack Atual
 
@@ -54,8 +59,7 @@ Conclusao: o Autopilot assistido esta pronto para aprovar mensagens em lote. O e
 | WhatsApp | Operacional | Conexao, chat, midia/audio, webhook e verificacao de numero. |
 | CRM Kanban | Operacional | Drag-and-drop, filtros e edicao rapida. |
 | Dashboard | Operacional | Funil, fontes, periodo, nicho, cidade e conversao. |
-| Autopilot SDR backend | Operacional | Regras, fila, lotes e aprovacao via WhatsApp. |
-| Autopilot SDR frontend | Pendente | Proximo passo recomendado: pagina `/autopilot`. |
+| Autopilot SDR | Operacional controlado | Regras, fila, lotes, scheduler, worker controlado, follow-ups, resposta, agendamento e diagnostico. |
 
 ## Validacoes Ja Realizadas
 
@@ -67,7 +71,7 @@ Conclusao: o Autopilot assistido esta pronto para aprovar mensagens em lote. O e
 - `docker compose build backend frontend` passando.
 - `docker compose up -d backend frontend` passando.
 - `/health` retornando 200.
-- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`.
+- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`.
 
 ### Providers
 
@@ -92,6 +96,7 @@ Conclusao: o Autopilot assistido esta pronto para aprovar mensagens em lote. O e
 - Logs recentes sem padroes de segredo.
 - Nenhum item de lote aprovado foi enviado automaticamente para lead.
 - Aprovacao em lote aceita apenas o `approval_whatsapp` do usuario.
+- Envio real do worker exige confirmacao explicita.
 
 ## Autopilot SDR Atual
 
@@ -101,11 +106,18 @@ Conclusao: o Autopilot assistido esta pronto para aprovar mensagens em lote. O e
 - Tabelas `approval_batches` e `approval_batch_items`.
 - CRUD autenticado de regras em `/api/autopilot/rules`.
 - Listagem da fila em `/api/autopilot/queue`.
-- Aprovar/cancelar mensagem individual por API.
+- Aprovar/cancelar mensagem individual por API/UI.
 - Criar/listar/detalhar lotes de aprovacao.
-- Enviar solicitacao de aprovacao ao WhatsApp pessoal.
+- Enviar e reenviar solicitacao de aprovacao ao WhatsApp pessoal.
 - Processar comandos pelo webhook real da Evolution API.
 - Fallback autenticado para processar comando pela API.
+- Scheduler assistido.
+- Worker controlado.
+- Stop-on-reply.
+- Follow-ups assistidos.
+- Classificacao heuristica.
+- Agendamento assistido.
+- Diagnostico Markdown.
 
 ### Comandos Suportados
 
@@ -118,42 +130,37 @@ CANCELAR 42:2,4
 
 ### Importante
 
-Aprovar lote ou mensagem apenas muda `message_queue.status` para `approved`. O envio automatico real para lead ainda nao existe.
+Aprovar lote ou mensagem apenas muda `message_queue.status` para `approved`. O envio real para lead acontece somente pelo worker controlado, em modo avancado, com confirmacao explicita.
 
 ## O Que Ainda Falta
 
-Prioridade alta:
+Prioridade alta da V2 comercial:
 
-1. UI assistida do Autopilot SDR em `/autopilot`.
-2. Operacao controlada de prospeccao real com baixo volume.
-3. Scheduler assistido para criar fila `pending`, sem envio.
+1. Guia de uso do Autopilot e mapa atualizado.
+2. Central de respostas e proxima acao recomendada.
+3. Templates comerciais por nicho e profissao.
+4. Diagnostico comercial avancado.
+5. Agendamento comercial assistido.
 
 Prioridade media:
 
-1. Worker de envio controlado para mensagens `approved`.
-2. Stop-on-reply para follow-ups.
-3. Dashboard especifico do Autopilot.
-4. Classificacao de respostas por IA.
-
-Prioridade baixa:
-
-1. Exportacao PDF por lead.
-2. Templates comerciais por nicho.
-3. Priorizacao inteligente avancada.
-4. Agendamento assistido.
+1. Cron controlado futuro.
+2. PDF binario com template visual.
+3. Classificacao por LLM com custo/limite.
+4. Integracao Google Calendar/Calendly.
 
 ## Proximo Passo Recomendado
 
-Fazer PR #16 com a tela `/autopilot` antes de criar scheduler ou worker.
+Fazer PR #18 com `docs/GUIA-USO-AUTOPILOT.md` e atualizacao de mapa/TODO/status.
 
-Motivo: o backend do Autopilot ja esta pronto, mas o usuario precisa operar regras, fila e lotes visualmente antes de qualquer automacao diaria ou envio controlado.
+Motivo: antes de adicionar novas funcoes comerciais, o usuario precisa entender claramente como operar o Autopilot atual.
 
 ## Status Geral
 
 Estimativa pragmatica:
 
-- Core de prospeccao: 97% pronto.
-- Operacao interna local: 96% pronta.
-- Autopilot assistido: 70% pronto.
-- Produto comercial: 58% pronto.
-- Documentacao: atualizada pos-PR #15.
+- Core de prospeccao: 98% pronto.
+- Operacao interna local: 97% pronta.
+- Autopilot assistido/controlado: 88% pronto.
+- Produto comercial: 62% pronto.
+- Documentacao: em atualizacao pos-PR #17.
