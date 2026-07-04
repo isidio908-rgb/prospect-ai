@@ -1,7 +1,7 @@
 # Prospect AI - Status Atual do Projeto
 
 **Data:** 04/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado mergeado no PR #17.
+**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado e guia operacional mergeados. PR #19 adiciona a central de respostas comerciais.
 
 Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para operar a pagina `/autopilot`, leia `docs/GUIA-USO-AUTOPILOT.md`.
 
@@ -9,30 +9,35 @@ Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para o
 
 O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual, organiza o pipeline no CRM Kanban e possui Autopilot SDR controlado.
 
-O marco mais recente foi o merge do PR #17, que adicionou a central `/autopilot` para operar regras, fila, lotes, scheduler, envio controlado, stop-on-reply, follow-ups, classificacao de respostas, agendamento assistido e diagnostico base.
+O marco mais recente em `main` foi o merge do PR #18, que documentou o uso do Autopilot e atualizou o mapa interno. O PR #19 em producao adiciona `/autopilot/replies` para tratar respostas recebidas, sugerir proxima acao e atualizar CRM sem envio automatico.
 
-## Marco Mais Recente - PR #17
+## Marco Mais Recente Em Main - PR #18
 
-PR #17 foi validado e mergeado.
+PR #18 foi validado e mergeado.
 
 Resultado final:
 
-- `/autopilot` refinada como central operacional comercial.
-- Cards de proxima acao.
-- Fluxo visual 1 a 11.
-- Regras, fila e lotes operaveis pela interface.
-- Scheduler assistido com `dry_run=true` por padrao.
-- Worker de envio controlado, com envio real apenas se `dry_run=false` e `confirm_send=true`.
-- Stop-on-reply para cancelar follow-ups quando ha resposta.
-- Follow-ups assistidos.
-- Classificacao heuristica de respostas.
-- Agendamento assistido.
-- Diagnostico/PDF base em Markdown.
-- Reenvio de solicitacao de lote para WhatsApp pessoal conectado.
-- Validacao final reportada: backend 60/60, frontend build, audit, Docker, `/health` e `/autopilot` ok.
-- Merge commit: `78e62b205445d63a3b4dc768dc8de6794d8b302b`.
+- Criado `docs/GUIA-USO-AUTOPILOT.md`.
+- Atualizados README, mapa interno, TODO e status.
+- Documentado fluxo diario seguro.
+- Documentada diferenca entre aprovar lote e enviar mensagem para lead.
+- Merge commit: `dc6dd77b4dd15dd602cf18e7b7876017b0d648e0`.
 
-Conclusao: o Autopilot esta pronto para uso assistido diario, mantendo controle humano antes de qualquer envio real.
+## Em Producao - PR #19
+
+Objetivo: centralizar respostas recebidas e transformar cada retorno em acao comercial.
+
+Entregas:
+
+- Nova pagina `/autopilot/replies`.
+- Novo endpoint `GET /api/autopilot/replies/inbox`.
+- Novo endpoint `POST /api/autopilot/replies/:leadId/action`.
+- Classificacao heuristica de respostas.
+- Resposta sugerida copiavel.
+- Acoes seguras para CRM: respondeu, reuniao, sem interesse, proxima acao/tratar preco.
+- Registro em `lead_followups`.
+- Testes para inbox, isolamento por usuario e aplicacao de acao.
+- Sem envio automatico de resposta para lead.
 
 ## Stack Atual
 
@@ -60,6 +65,7 @@ Conclusao: o Autopilot esta pronto para uso assistido diario, mantendo controle 
 | CRM Kanban | Operacional | Drag-and-drop, filtros e edicao rapida. |
 | Dashboard | Operacional | Funil, fontes, periodo, nicho, cidade e conversao. |
 | Autopilot SDR | Operacional controlado | Regras, fila, lotes, scheduler, worker controlado, follow-ups, resposta, agendamento e diagnostico. |
+| Central de respostas | PR #19 | Inbox comercial em `/autopilot/replies`, sem envio automatico. |
 
 ## Validacoes Ja Realizadas
 
@@ -97,6 +103,7 @@ Conclusao: o Autopilot esta pronto para uso assistido diario, mantendo controle 
 - Nenhum item de lote aprovado foi enviado automaticamente para lead.
 - Aprovacao em lote aceita apenas o `approval_whatsapp` do usuario.
 - Envio real do worker exige confirmacao explicita.
+- PR #19 mantem respostas como acao assistida/copia, sem envio automatico.
 
 ## Autopilot SDR Atual
 
@@ -118,6 +125,7 @@ Conclusao: o Autopilot esta pronto para uso assistido diario, mantendo controle 
 - Classificacao heuristica.
 - Agendamento assistido.
 - Diagnostico Markdown.
+- Em PR #19: central de respostas e proxima acao recomendada.
 
 ### Comandos Suportados
 
@@ -132,15 +140,16 @@ CANCELAR 42:2,4
 
 Aprovar lote ou mensagem apenas muda `message_queue.status` para `approved`. O envio real para lead acontece somente pelo worker controlado, em modo avancado, com confirmacao explicita.
 
+A central de respostas copia sugestoes e registra acoes no CRM. Ela nao envia resposta automatica para leads.
+
 ## O Que Ainda Falta
 
 Prioridade alta da V2 comercial:
 
-1. Guia de uso do Autopilot e mapa atualizado.
-2. Central de respostas e proxima acao recomendada.
-3. Templates comerciais por nicho e profissao.
-4. Diagnostico comercial avancado.
-5. Agendamento comercial assistido.
+1. Validar e mergear PR #19: central de respostas e proxima acao recomendada.
+2. PR #20: templates comerciais por nicho e profissao.
+3. PR #21: diagnostico comercial avancado.
+4. PR #22: agendamento comercial assistido.
 
 Prioridade media:
 
@@ -151,9 +160,9 @@ Prioridade media:
 
 ## Proximo Passo Recomendado
 
-Fazer PR #18 com `docs/GUIA-USO-AUTOPILOT.md` e atualizacao de mapa/TODO/status.
+Validar PR #19 pela CLI local.
 
-Motivo: antes de adicionar novas funcoes comerciais, o usuario precisa entender claramente como operar o Autopilot atual.
+Motivo: depois que a operacao de envio esta controlada e documentada, o maior ganho comercial vem de responder melhor e mais rapido quem demonstrou interesse.
 
 ## Status Geral
 
@@ -161,6 +170,6 @@ Estimativa pragmatica:
 
 - Core de prospeccao: 98% pronto.
 - Operacao interna local: 97% pronta.
-- Autopilot assistido/controlado: 88% pronto.
-- Produto comercial: 62% pronto.
-- Documentacao: em atualizacao pos-PR #17.
+- Autopilot assistido/controlado: 90% pronto.
+- Produto comercial: 65% pronto.
+- Documentacao: em atualizacao continua.
