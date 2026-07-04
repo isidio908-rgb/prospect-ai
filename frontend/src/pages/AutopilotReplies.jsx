@@ -59,14 +59,14 @@ export default function AutopilotReplies() {
     notInterested: replies.filter((reply) => reply.classification?.intent === 'not_interested').length,
   }), [replies]);
 
-  async function loadReplies() {
+  async function loadReplies(nextFilters = filters) {
     setLoading(true);
     try {
       const response = await autopilot.replyInbox({
         limit: 50,
-        search: filters.search || undefined,
-        intent: filters.intent || undefined,
-        status: filters.status || undefined,
+        search: nextFilters.search || undefined,
+        intent: nextFilters.intent || undefined,
+        status: nextFilters.status || undefined,
       });
       setReplies(response.data.replies || []);
     } catch (error) {
@@ -77,7 +77,7 @@ export default function AutopilotReplies() {
   }
 
   useEffect(() => {
-    loadReplies();
+    loadReplies({ search: '', intent: '', status: '' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -107,8 +107,9 @@ export default function AutopilotReplies() {
   }
 
   function resetFilters() {
-    setFilters({ search: '', intent: '', status: '' });
-    setTimeout(loadReplies, 0);
+    const emptyFilters = { search: '', intent: '', status: '' };
+    setFilters(emptyFilters);
+    loadReplies(emptyFilters);
   }
 
   return (
@@ -122,7 +123,7 @@ export default function AutopilotReplies() {
           </p>
         </div>
         <button
-          onClick={loadReplies}
+          onClick={() => loadReplies()}
           disabled={loading}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
         >
@@ -170,7 +171,7 @@ export default function AutopilotReplies() {
             <option value="sem_interesse">Sem interesse</option>
           </select>
           <div className="flex gap-2">
-            <button onClick={loadReplies} className="flex-1 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700">
+            <button onClick={() => loadReplies()} className="flex-1 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700">
               Filtrar
             </button>
             <button onClick={resetFilters} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-100">
@@ -238,11 +239,11 @@ function ReplyCard({ reply, busyAction, onApply, onCopy }) {
               {reply.nome_empresa}
             </Link>
             <span className={`rounded-full px-2 py-1 text-xs font-medium ${INTENT_BADGES[intent] || INTENT_BADGES.unknown}`}>
-              {intentLabel(intent)} · {confidence}%
+              {intentLabel(intent)} - {confidence}%
             </span>
           </div>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {reply.cidade || '-'} · {reply.nicho || '-'} · score {reply.score ?? '-'} · status {reply.status || '-'} · {formatDate(reply.received_at)}
+            {reply.cidade || '-'} - {reply.nicho || '-'} - score {reply.score ?? '-'} - status {reply.status || '-'} - {formatDate(reply.received_at)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
