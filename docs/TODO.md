@@ -1,56 +1,39 @@
 # TODO - Prospect AI
 
-**Atualizado em:** 04/07/2026
+**Atualizado em:** 05/07/2026
 
 Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, estado atual e sequencia de PRs, use `docs/MAPA-INTERNO.md`.
 
 ## Prioridade Alta
 
-### 1. PR #20 - Templates comerciais por nicho e profissao
+### 1. PR #21 - Diagnostico comercial avancado
 
-Objetivo: melhorar qualidade das mensagens com base no nicho do lead e na profissao/contexto interno do usuario.
+Objetivo: transformar o diagnostico base em material de venda pronto para abordagem consultiva.
 
 Escopo:
 
-- Criar biblioteca de templates por nicho.
-- Nichos iniciais: imobiliarias, clinicas, odontologia, estetica, advocacia, escolas, energia solar, moveis planejados e negocio local.
-- Criar argumentos por dor: sem site, sem Pixel Meta, sem GTM, sem GA4, sem WhatsApp no site, sem formulario, site lento e prova social sem tracking.
-- Adaptar mensagem ao ponto de vista profissional do usuario.
-- Usar `profession`, `primary_niche` e `internal_context` no contexto profissional do template.
-- Permitir escolher tom: consultivo, direto, diagnostico, oportunidade.
-- Criar pagina `/autopilot/templates`.
-- Permitir gerar previa, copiar textos e aplicar no lead.
-- Aplicar template apenas atualiza `mensagem_whatsapp`, `mensagem_whatsapp_followup`, diagnostico quando vazio e `proxima_acao`.
+- Criar pagina `/autopilot/diagnostics`.
+- Criar endpoint `GET /api/autopilot/diagnostics/:leadId/advanced`.
+- Criar endpoint `POST /api/autopilot/diagnostics/:leadId/advanced/apply`.
+- Gerar diagnostico curto para WhatsApp.
+- Gerar diagnostico completo em Markdown.
+- Gerar roteiro de Loom/audio.
+- Gerar roteiro de reuniao de 15 minutos.
+- Gerar sugestao de oferta: trafego, tracking, site/landing page, CRM, WhatsApp/conversao, criativos ou consultoria.
+- Separar fatos observados de inferencias comerciais.
+- Permitir copiar cada bloco na interface.
+- Aplicar diagnostico no lead sem criar fila e sem enviar WhatsApp.
 - Registrar historico em `lead_followups`.
-
-Criterios de aceite:
-
-- Mensagem inicial e follow-up ficam mais especificos por nicho.
-- Template nao inventa dados do lead.
-- Templates podem ser revisados antes de entrar em fila.
-- Aplicar template nao envia mensagem WhatsApp.
-- Outro usuario nao consegue aplicar template em lead de terceiro.
-
-### 2. PR #21 - Diagnostico comercial avancado
-
-Objetivo: transformar o diagnostico base em material de venda.
-
-Escopo recomendado:
-
-- Diagnostico curto para WhatsApp.
-- Diagnostico completo em Markdown.
-- Roteiro de Loom/audio.
-- Roteiro de reuniao de 15 minutos.
-- Sugestao de oferta: trafego, tracking, site, CRM, WhatsApp, criativos ou consultoria.
-- Botao para copiar texto.
 
 Criterios de aceite:
 
 - Usuario consegue usar o diagnostico na abordagem.
 - Diagnostico diferencia fatos observados de inferencias.
-- Nao promete resultado financeiro sem dados.
+- Diagnostico nao promete resultado financeiro sem dados.
+- Aplicar diagnostico nao envia mensagem automaticamente.
+- Outro usuario nao acessa diagnostico de lead de terceiro.
 
-### 3. PR #22 - Agendamento comercial assistido
+### 2. PR #22 - Agendamento comercial assistido
 
 Objetivo: deixar o caminho de resposta positiva ate reuniao mais curto.
 
@@ -69,7 +52,7 @@ Criterios de aceite:
 
 ## Prioridade Media
 
-### 4. Operacao controlada de prospeccao real
+### 3. Operacao controlada de prospeccao real
 
 Objetivo: continuar gerando oportunidades enquanto o produto evolui.
 
@@ -81,12 +64,13 @@ Checklist:
 - Priorizar leads com WhatsApp confirmado e score alto.
 - Usar CRM Kanban para registrar status e proxima acao.
 - Usar `/autopilot/templates` para ajustar mensagem por nicho.
+- Usar `/autopilot/diagnostics` para preparar diagnostico comercial antes de reuniao.
 - Usar `/autopilot` para aprovar, simular e enviar com controle.
 - Usar `/autopilot/replies` para tratar respostas recebidas.
 - Medir respostas, reunioes e clientes fechados.
 - Ajustar mensagens e criterios de score com base em respostas reais.
 
-### 5. Cron controlado futuro
+### 4. Cron controlado futuro
 
 Objetivo: automatizar horarios diarios sem perder controle.
 
@@ -99,6 +83,21 @@ Escopo futuro:
 - Nunca enviar direto sem configuracao explicita.
 
 ## Concluido Recentemente
+
+### PR #20 - Templates comerciais por nicho e profissao
+
+Validado e mergeado.
+
+Resultado:
+
+- Criada pagina `/autopilot/templates`.
+- Criado catalogo de nichos e tons comerciais.
+- Criada deteccao de dores observaveis por lead.
+- Gerada mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
+- Usados `profession`, `primary_niche` e `internal_context` do usuario.
+- Aplicar template atualiza lead e registra `lead_followups`.
+- Nenhum envio automatico de WhatsApp no fluxo.
+- Merge commit: `99bc8d786884a53b64876670044926a0df355982`.
 
 ### PR #19 - Central de respostas e proxima acao recomendada
 
@@ -172,4 +171,5 @@ Resultado:
 - Modo `assistido` sempre exige aprovacao manual.
 - Worker automatico so pode existir com limite diario, limite horario, janela de envio e stop-on-reply.
 - Template comercial pode gerar, copiar e aplicar textos no lead, mas nao pode enviar WhatsApp automaticamente.
+- Diagnostico comercial pode gerar, copiar e aplicar texto no lead, mas nao pode criar fila nem enviar WhatsApp automaticamente.
 - Toda PR deve terminar com testes, build, Docker e scan basico de segredos.

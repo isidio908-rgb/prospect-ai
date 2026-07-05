@@ -19,6 +19,10 @@ import {
   getCommercialTemplateCatalog,
   previewCommercialTemplate,
 } from '../../services/autopilot/commercialTemplateService.mjs';
+import {
+  applyAdvancedCommercialDiagnostic,
+  buildAdvancedCommercialDiagnostic,
+} from '../../services/autopilot/commercialDiagnosticService.mjs';
 
 const router = express.Router();
 
@@ -182,6 +186,24 @@ router.post('/templates/apply', async (req, res, next) => {
   try {
     const data = templateSchema.parse(req.body || {});
     const result = await applyCommercialTemplate(req.user.id, req.user, data);
+    res.json(result);
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+});
+
+router.get('/diagnostics/:leadId/advanced', async (req, res, next) => {
+  try {
+    const result = await buildAdvancedCommercialDiagnostic(req.user.id, req.user, Number(req.params.leadId));
+    res.json(result);
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+});
+
+router.post('/diagnostics/:leadId/advanced/apply', async (req, res, next) => {
+  try {
+    const result = await applyAdvancedCommercialDiagnostic(req.user.id, req.user, Number(req.params.leadId));
     res.json(result);
   } catch (error) {
     handleServiceError(error, res, next);

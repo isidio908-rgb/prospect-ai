@@ -1,7 +1,7 @@
 # Prospect AI - Status Atual do Projeto
 
-**Data:** 04/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado, guia operacional e central de respostas mergeados. PR #20 adiciona templates comerciais por nicho e profissao.
+**Data:** 05/07/2026  
+**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado, guia operacional, central de respostas e templates comerciais mergeados. PR #21 adiciona diagnostico comercial avancado.
 
 Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para operar a pagina `/autopilot`, leia `docs/GUIA-USO-AUTOPILOT.md`.
 
@@ -9,41 +9,41 @@ Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para o
 
 O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual, organiza o pipeline no CRM Kanban e possui Autopilot SDR controlado.
 
-O marco mais recente em `main` foi o merge do PR #19, que adicionou a central `/autopilot/replies` para tratar respostas recebidas, sugerir proxima acao e atualizar CRM sem envio automatico. O PR #20 em producao adiciona `/autopilot/templates` para gerar mensagens por nicho, tom e contexto profissional.
+O marco mais recente em `main` foi o merge do PR #20, que adicionou `/autopilot/templates` para gerar mensagens por nicho, tom e contexto profissional sem envio automatico. O PR #21 em producao adiciona `/autopilot/diagnostics` para transformar dados do lead em material comercial: resumo WhatsApp, Markdown, roteiro de Loom/audio, roteiro de reuniao e oferta recomendada.
 
-## Marco Mais Recente Em Main - PR #19
+## Marco Mais Recente Em Main - PR #20
 
-PR #19 foi validado e mergeado.
+PR #20 foi validado e mergeado.
 
 Resultado final:
 
-- Criada pagina `/autopilot/replies`.
-- Criado inbox autenticado de respostas recebidas.
-- Filtros por busca, intencao e status.
-- Resposta sugerida copiavel.
-- Acoes seguras para CRM.
-- Registro em `lead_followups`.
-- Isolamento por usuario validado.
+- Criada pagina `/autopilot/templates`.
+- Criado catalogo de nichos e tons comerciais.
+- Criada deteccao de dores observaveis por lead.
+- Gerada mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
+- Usados `profession`, `primary_niche` e `internal_context` do usuario.
+- Aplicar template atualiza lead e registra `lead_followups`.
 - Nenhum envio automatico de WhatsApp no fluxo.
-- Merge commit: `c8ba8ab913e83b09b7b0ec843a1141753274d315`.
+- Merge commit: `99bc8d786884a53b64876670044926a0df355982`.
 
-## Em Producao - PR #20
+## Em Producao - PR #21
 
-Objetivo: melhorar a qualidade da abordagem comercial antes do envio.
+Objetivo: transformar diagnostico em material de venda consultivo.
 
 Entregas:
 
-- Nova pagina `/autopilot/templates`.
-- Novo endpoint `GET /api/autopilot/templates/catalog`.
-- Novo endpoint `POST /api/autopilot/templates/preview`.
-- Novo endpoint `POST /api/autopilot/templates/apply`.
-- Biblioteca de nichos e tons comerciais.
-- Deteccao de dores observaveis no lead.
-- Mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
-- Uso de `profession`, `primary_niche` e `internal_context` do usuario.
-- Aplicacao de template no lead sem envio automatico.
+- Nova pagina `/autopilot/diagnostics`.
+- Novo endpoint `GET /api/autopilot/diagnostics/:leadId/advanced`.
+- Novo endpoint `POST /api/autopilot/diagnostics/:leadId/advanced/apply`.
+- Diagnostico curto para WhatsApp.
+- Diagnostico completo em Markdown.
+- Roteiro de Loom/audio.
+- Roteiro de reuniao de 15 minutos.
+- Sugestao de oferta: tracking, trafego, site/landing page, conversao WhatsApp/formulario, criativos, CRM ou consultoria.
+- Separacao entre fatos observados e inferencias comerciais.
+- Aplicacao de diagnostico no lead sem fila e sem envio automatico.
 - Registro em `lead_followups`.
-- Testes para catalogo, previa, isolamento por usuario e aplicacao.
+- Testes para geracao, isolamento por usuario e garantia de que nenhuma mensagem entra em `message_queue`.
 
 ## Stack Atual
 
@@ -72,7 +72,8 @@ Entregas:
 | Dashboard | Operacional | Funil, fontes, periodo, nicho, cidade e conversao. |
 | Autopilot SDR | Operacional controlado | Regras, fila, lotes, scheduler, worker controlado, follow-ups, resposta, agendamento e diagnostico. |
 | Central de respostas | Operacional | Inbox comercial em `/autopilot/replies`, sem envio automatico. |
-| Templates comerciais | PR #20 | Mensagens por nicho/contexto em `/autopilot/templates`, sem envio automatico. |
+| Templates comerciais | Operacional | Mensagens por nicho/contexto em `/autopilot/templates`, sem envio automatico. |
+| Diagnostico avancado | PR #21 | Material comercial em `/autopilot/diagnostics`, sem envio automatico. |
 
 ## Validacoes Ja Realizadas
 
@@ -84,7 +85,7 @@ Entregas:
 - `docker compose build backend frontend` passando.
 - `docker compose up -d backend frontend` passando.
 - `/health` retornando 200.
-- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`, `/autopilot/replies`.
+- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`, `/autopilot/replies`, `/autopilot/templates`.
 
 ### Providers
 
@@ -111,7 +112,8 @@ Entregas:
 - Aprovacao em lote aceita apenas o `approval_whatsapp` do usuario.
 - Envio real do worker exige confirmacao explicita.
 - Central de respostas mantem respostas como acao assistida/copia, sem envio automatico.
-- PR #20 aplica templates no cadastro do lead, mas nao envia WhatsApp automaticamente.
+- Templates aplicam textos no cadastro do lead, mas nao enviam WhatsApp automaticamente.
+- PR #21 aplica diagnostico no lead, mas nao cria fila nem envia WhatsApp automaticamente.
 
 ## Autopilot SDR Atual
 
@@ -134,7 +136,8 @@ Entregas:
 - Agendamento assistido.
 - Diagnostico Markdown.
 - Central de respostas e proxima acao recomendada.
-- Em PR #20: templates comerciais por nicho e profissao.
+- Templates comerciais por nicho e profissao.
+- Em PR #21: diagnostico comercial avancado.
 
 ### Comandos Suportados
 
@@ -153,13 +156,14 @@ A central de respostas copia sugestoes e registra acoes no CRM. Ela nao envia re
 
 A central de templates gera, copia e aplica textos no lead. Ela nao envia mensagem para leads.
 
+A central de diagnostico avancado gera, copia e aplica diagnostico no lead. Ela nao cria fila nem envia mensagem para leads.
+
 ## O Que Ainda Falta
 
 Prioridade alta da V2 comercial:
 
-1. Validar e mergear PR #20: templates comerciais por nicho e profissao.
-2. PR #21: diagnostico comercial avancado.
-3. PR #22: agendamento comercial assistido.
+1. Validar e mergear PR #21: diagnostico comercial avancado.
+2. PR #22: agendamento comercial assistido.
 
 Prioridade media:
 
@@ -170,9 +174,9 @@ Prioridade media:
 
 ## Proximo Passo Recomendado
 
-Validar PR #20 pela CLI local.
+Validar PR #21 pela CLI local.
 
-Motivo: templates por nicho melhoram a qualidade da abordagem antes de usar lotes, fila e envio controlado.
+Motivo: o diagnostico avancado aumenta autoridade na abordagem e facilita transformar resposta positiva em reuniao.
 
 ## Status Geral
 
@@ -180,6 +184,6 @@ Estimativa pragmatica:
 
 - Core de prospeccao: 98% pronto.
 - Operacao interna local: 97% pronta.
-- Autopilot assistido/controlado: 92% pronto.
-- Produto comercial: 68% pronto.
+- Autopilot assistido/controlado: 94% pronto.
+- Produto comercial: 70% pronto.
 - Documentacao: em atualizacao continua.

@@ -11,6 +11,7 @@ import CollectionHistory from './pages/CollectionHistory';
 import Autopilot from './pages/Autopilot';
 import AutopilotReplies from './pages/AutopilotReplies';
 import AutopilotTemplates from './pages/AutopilotTemplates';
+import AutopilotDiagnostics from './pages/AutopilotDiagnostics';
 import Profile from './pages/Profile';
 import Credentials from './pages/Credentials';
 import WhatsAppSettings from './pages/WhatsAppSettings';
@@ -137,6 +138,17 @@ function App() {
             <PrivateRoute>
               <Layout>
                 <AutopilotTemplates />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/autopilot/diagnostics"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <AutopilotDiagnostics />
               </Layout>
             </PrivateRoute>
           }
