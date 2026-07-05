@@ -14,6 +14,7 @@ describe('semi-auto commercial autopilot planning', () => {
 
     assert.equal(buildCollectionQuery('clinicas odontologicas', 'Sinop'), 'clinicas odontologicas em Sinop');
     assert.equal(buildCollectionQuery('', 'Cuiaba', 'MT'), 'Cuiaba, MT');
+    assert.equal(buildCollectionQuery('', '', 'br'), '');
   });
 
   test('sugere credencial ativa e recorte historico mais produtivo', () => {
@@ -72,6 +73,8 @@ describe('semi-auto commercial autopilot planning', () => {
 
     assert.equal(plan.ready, false);
     assert.equal(plan.recommendation.credential_id, null);
+    assert.equal(plan.recommendation.query, '');
+    assert.equal(plan.recommendation.region, '');
     assert.ok(plan.reasons.includes('Nenhuma credencial ativa de coleta encontrada.'));
     assert.ok(plan.reasons.includes('Historico insuficiente para sugerir query; informe nicho e cidade manualmente.'));
   });
