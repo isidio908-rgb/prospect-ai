@@ -17,7 +17,8 @@ import {
   User,
   Bot,
   Inbox,
-  FileText
+  FileText,
+  ClipboardList
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -37,6 +38,7 @@ export default function Layout({ children }) {
     { name: 'Autopilot', href: '/autopilot', icon: Bot },
     { name: 'Respostas', href: '/autopilot/replies', icon: Inbox },
     { name: 'Templates', href: '/autopilot/templates', icon: FileText },
+    { name: 'Diagnostico', href: '/autopilot/diagnostics', icon: ClipboardList },
     { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
     { name: 'Credenciais', href: '/credentials', icon: Key },
     { name: 'Perfil', href: '/profile', icon: User },
