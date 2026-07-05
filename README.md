@@ -6,8 +6,8 @@ O objetivo inicial e uso proprio, separado do Performance Hub. A arquitetura ja 
 
 ## Status Atual
 
-**Atualizado em:** 04/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR, guia operacional e central de respostas mergeados. PR #20 adiciona templates comerciais por nicho e profissao.
+**Atualizado em:** 05/07/2026  
+**Estado:** produto interno operacional em `main`, com Autopilot SDR, guia operacional, central de respostas e templates comerciais mergeados. PR #21 adiciona diagnostico comercial avancado.
 
 Stack local validada com Docker:
 
@@ -64,7 +64,8 @@ Documentacao principal:
 - Dashboard comercial com funil, fontes, WhatsApp confirmado, conversao por nicho/cidade e filtros por periodo/fonte.
 - Autopilot SDR completo controlado em `/autopilot`.
 - Central de respostas em `/autopilot/replies`.
-- Templates comerciais por nicho/contexto em `/autopilot/templates` no PR #20.
+- Templates comerciais por nicho/contexto em `/autopilot/templates`.
+- Diagnostico comercial avancado em `/autopilot/diagnostics` no PR #21.
 - Regras, fila, lotes, aprovacao em lote, scheduler assistido, worker controlado, stop-on-reply, follow-ups, classificacao de respostas, agendamento assistido e diagnostico base.
 - Aprovacao em lote validada com webhook real da Evolution API.
 - Documentacao operacional para WhatsApp, IA, coleta, credenciais e Autopilot.
@@ -97,7 +98,7 @@ Calcula score
       ↓
 Gera diagnostico e mensagens conforme profissao/contexto do usuario
       ↓
-Usa CRM Kanban, templates, WhatsApp e IA para abordagem
+Usa CRM Kanban, templates, diagnostico avancado, WhatsApp e IA para abordagem
       ↓
 Autopilot SDR organiza fila, aprovacao, simulacao, envio controlado, respostas e follow-ups
 ```
@@ -154,7 +155,7 @@ No cadastro e na pagina `/profile`, o usuario informa:
 - Nicho foco.
 - Instrucoes internas de como a IA deve pensar, escrever e priorizar.
 
-Esses dados sao usados para exibir o perfil correto no layout e ajustar prompts internos das LLMs e templates comerciais ao ponto de vista profissional do usuario.
+Esses dados sao usados para exibir o perfil correto no layout e ajustar prompts internos das LLMs, templates comerciais e diagnosticos ao ponto de vista profissional do usuario.
 
 ## CRM Kanban
 
@@ -245,7 +246,8 @@ Implementado:
 
 - Pagina `/autopilot`.
 - Pagina `/autopilot/replies`.
-- Pagina `/autopilot/templates` no PR #20.
+- Pagina `/autopilot/templates`.
+- Pagina `/autopilot/diagnostics` no PR #21.
 - Regras de automacao.
 - Fila de mensagens.
 - Lotes de aprovacao.
@@ -261,12 +263,13 @@ Implementado:
 - Classificacao heuristica de respostas.
 - Central de respostas comerciais.
 - Templates comerciais por nicho/profissao.
+- Diagnostico comercial avancado.
 - Agendamento assistido.
 - Diagnostico/PDF base em Markdown.
 
 Regra atual: aprovar mensagem muda status para `approved`, mas nao envia mensagem automaticamente para lead. O envio real fica no modo avancado e exige `dry_run=false`, `confirm_send=true` e confirmacao visual.
 
-Templates comerciais atualizam textos no lead para revisao. Eles nao enviam WhatsApp automaticamente.
+Templates comerciais e diagnosticos atualizam textos no lead para revisao. Eles nao enviam WhatsApp automaticamente.
 
 Guia principal de uso: `docs/GUIA-USO-AUTOPILOT.md`.
 
@@ -312,9 +315,9 @@ npm run dev
 
 Principais proximos passos da V2 comercial:
 
-1. Validar/mergear templates comerciais por nicho e profissao.
-2. Diagnostico comercial avancado.
-3. Agendamento comercial assistido.
+1. Validar/mergear diagnostico comercial avancado.
+2. Agendamento comercial assistido.
+3. Cron controlado futuro.
 
 Lista completa em `docs/TODO.md`.
 
@@ -329,6 +332,7 @@ Lista completa em `docs/TODO.md`.
 - Nunca enviar mensagem para lead apenas por aprovar lote.
 - Envio real do Autopilot exige confirmacao explicita.
 - Templates podem gerar/aplicar textos, mas nao enviar WhatsApp automaticamente.
+- Diagnosticos podem gerar/aplicar textos, mas nao criar fila nem enviar WhatsApp automaticamente.
 
 ## Fonte De Verdade
 
