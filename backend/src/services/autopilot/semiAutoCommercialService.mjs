@@ -49,6 +49,7 @@ function bool(value, fallback = false) {
 export function buildCollectionQuery(niche, city, region = '') {
   const parts = [clean(niche), clean(city)].filter(Boolean);
   const base = parts.length === 2 ? `${parts[0]} em ${parts[1]}` : parts.join(' ');
+  if (!base) return '';
   return clean(region) ? `${base}, ${clean(region)}` : base;
 }
 
@@ -108,7 +109,7 @@ export function buildSemiAutoPlanFromHistory({ history = [], credentials = [], q
   const credential = chooseCredential(credentials, scope?.source_type);
   const city = clean(scope?.city) || '';
   const niche = clean(scope?.niche) || '';
-  const region = clean(scope?.region) || DEFAULT_REGION;
+  const region = scope ? (clean(scope.region) || DEFAULT_REGION) : '';
   const queryText = clean(scope?.query) || buildCollectionQuery(niche, city, region);
 
   const ready = Boolean(credential && queryText);
@@ -625,12 +626,13 @@ export async function runSemiAutoCommercialCycle(userId, userContext = {}, optio
   };
 
   const approveCollection = bool(options.approve_collection, false);
+  const ignoreSchedule = bool(options.ignore_schedule ?? options.ignoreSchedule, false);
   if (dryRun) {
     summary.actions.push({ step: 'collection_planner', would_collect: approveCollection, input: collectionInput });
     summary.actions.push({ step: 'lead_processor', would_analyze_saved_leads: approveCollection && options.analyze_saved_leads !== false });
     summary.actions.push({ step: 'queue_orchestrator', would_create_rule: true, would_queue_pending: true });
     summary.actions.push({ step: 'approval_batch', would_create_batch: options.create_approval_batch !== false, would_send_to_personal_whatsapp: options.send_approval_request !== false });
-    summary.actions.push({ step: 'approved_worker', would_process_approved: options.process_approved !== false, would_send_only_approved: true });
+    summary.actions.push({ step: 'approved_worker', would_process_approved: options.process_approved !== false, would_send_only_approved: true, ignore_schedule: ignoreSchedule });
     return summary;
   }
 
@@ -693,8 +695,15 @@ export async function runSemiAutoCommercialCycle(userId, userContext = {}, optio
       limit: asInt(options.worker_limit, 10, 1, 100),
       dry_run: false,
       confirm_send: true,
+      ignore_schedule: ignoreSchedule,
     });
-    summary.actions.push({ step: 'approved_worker', status: 'completed', sent: summary.approvedWorker.sentCount, total: summary.approvedWorker.total });
+    summary.actions.push({
+      step: 'approved_worker',
+      status: 'completed',
+      sent: summary.approvedWorker.sentCount,
+      total: summary.approvedWorker.total,
+      ignore_schedule: ignoreSchedule,
+    });
   }
 
   return summary;
