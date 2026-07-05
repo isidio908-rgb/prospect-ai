@@ -33,6 +33,7 @@ const DEFAULT_FORM = {
   batch_limit: 5,
   batch_expires_in_minutes: 120,
   process_approved: true,
+  ignore_schedule: false,
   worker_limit: 10,
 };
 
@@ -359,7 +360,7 @@ export default function AutopilotSemiAuto() {
           <ActionButton
             icon={Send}
             label="Enviar aprovadas agora"
-            description="Processa apenas mensagens approved. Use quando você já aprovou o lote pelo WhatsApp pessoal."
+            description="Processa apenas mensagens approved, mesmo que tenham sido agendadas para mais tarde. Use somente depois de revisar e aprovar o lote."
             danger
             loading={busy === 'approved'}
             onClick={() => runCycle(
@@ -370,8 +371,9 @@ export default function AutopilotSemiAuto() {
                 approve_collection: false,
                 create_approval_batch: false,
                 process_approved: true,
+                ignore_schedule: true,
               },
-              'Enviar agora as mensagens que já estão approved? Confirme apenas se o WhatsApp está conectado e a fila foi revisada.'
+              'Enviar agora as mensagens que já estão approved, ignorando o horário agendado? Confirme apenas se o WhatsApp está conectado e a fila foi revisada.'
             )}
           />
         </div>
