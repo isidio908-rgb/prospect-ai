@@ -42,6 +42,7 @@ const workerSchema = z.object({
   limit: z.number().int().min(1).max(100).optional().default(10),
   dry_run: z.boolean().optional().default(true),
   confirm_send: z.boolean().optional().default(false),
+  ignore_schedule: z.boolean().optional().default(false),
 });
 
 const simpleRunSchema = z.object({
@@ -74,6 +75,7 @@ const semiAutoRunSchema = z.object({
   batch_limit: z.number().int().min(1).max(10).optional(),
   batch_expires_in_minutes: z.number().int().min(10).max(1440).optional(),
   process_approved: z.boolean().optional().default(true),
+  ignore_schedule: z.boolean().optional().default(false),
   worker_limit: z.number().int().min(1).max(100).optional(),
 });
 
