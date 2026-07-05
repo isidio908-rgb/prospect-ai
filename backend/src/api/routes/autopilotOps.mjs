@@ -14,6 +14,11 @@ import {
   queueFollowups,
   runAssistedScheduler,
 } from '../../services/autopilot/autopilotExecutionService.mjs';
+import {
+  applyCommercialTemplate,
+  getCommercialTemplateCatalog,
+  previewCommercialTemplate,
+} from '../../services/autopilot/commercialTemplateService.mjs';
 
 const router = express.Router();
 
@@ -46,6 +51,12 @@ const replyActionSchema = z.object({
   action: z.enum(['mark_responded', 'mark_meeting', 'mark_not_interested', 'create_followup', 'mark_pricing']),
   note: z.string().max(1000).optional().or(z.literal('')),
   scheduled_for: z.string().max(255).optional().or(z.literal('')),
+});
+
+const templateSchema = z.object({
+  lead_id: z.number().int().positive(),
+  niche_key: z.string().max(100).optional().or(z.literal('')),
+  tone: z.enum(['consultivo', 'direto', 'diagnostico', 'oportunidade']).optional().default('consultivo'),
 });
 
 function handleServiceError(error, res, next) {
@@ -143,6 +154,34 @@ router.post('/replies/:leadId/action', async (req, res, next) => {
   try {
     const data = replyActionSchema.parse(req.body || {});
     const result = await applyReplyNextAction(req.user.id, Number(req.params.leadId), data);
+    res.json(result);
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+});
+
+router.get('/templates/catalog', async (req, res, next) => {
+  try {
+    res.json(getCommercialTemplateCatalog());
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/templates/preview', async (req, res, next) => {
+  try {
+    const data = templateSchema.parse(req.body || {});
+    const result = await previewCommercialTemplate(req.user.id, req.user, data);
+    res.json(result);
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+});
+
+router.post('/templates/apply', async (req, res, next) => {
+  try {
+    const data = templateSchema.parse(req.body || {});
+    const result = await applyCommercialTemplate(req.user.id, req.user, data);
     res.json(result);
   } catch (error) {
     handleServiceError(error, res, next);

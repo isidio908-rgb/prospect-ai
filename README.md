@@ -1,13 +1,13 @@
 # Prospect AI
 
-Ferramenta interna de prospeccao comercial para gestor de trafego pago. O sistema encontra empresas locais, enriquece dados, remove duplicados, audita presenca digital, calcula score de oportunidade, gera diagnosticos, prepara mensagens comerciais, opera WhatsApp e usa IA para melhorar abordagens.
+Ferramenta interna de prospeccao comercial para gestor de trafego pago. O sistema encontra empresas locais, enriquece dados, remove duplicados, audita presenca digital, calcula score de oportunidade, gera diagnosticos, prepara mensagens comerciais, opera WhatsApp e usa IA/templates para melhorar abordagens.
 
 O objetivo inicial e uso proprio, separado do Performance Hub. A arquitetura ja foi organizada para poder evoluir para produto comercial no futuro.
 
 ## Status Atual
 
 **Atualizado em:** 04/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado mergeado no PR #17.
+**Estado:** produto interno operacional em `main`, com Autopilot SDR, guia operacional e central de respostas mergeados. PR #20 adiciona templates comerciais por nicho e profissao.
 
 Stack local validada com Docker:
 
@@ -63,6 +63,8 @@ Documentacao principal:
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
 - Dashboard comercial com funil, fontes, WhatsApp confirmado, conversao por nicho/cidade e filtros por periodo/fonte.
 - Autopilot SDR completo controlado em `/autopilot`.
+- Central de respostas em `/autopilot/replies`.
+- Templates comerciais por nicho/contexto em `/autopilot/templates` no PR #20.
 - Regras, fila, lotes, aprovacao em lote, scheduler assistido, worker controlado, stop-on-reply, follow-ups, classificacao de respostas, agendamento assistido e diagnostico base.
 - Aprovacao em lote validada com webhook real da Evolution API.
 - Documentacao operacional para WhatsApp, IA, coleta, credenciais e Autopilot.
@@ -95,9 +97,9 @@ Calcula score
       ↓
 Gera diagnostico e mensagens conforme profissao/contexto do usuario
       ↓
-Usa CRM Kanban, WhatsApp e IA para abordagem
+Usa CRM Kanban, templates, WhatsApp e IA para abordagem
       ↓
-Autopilot SDR organiza fila, aprovacao, simulacao, envio controlado e follow-ups
+Autopilot SDR organiza fila, aprovacao, simulacao, envio controlado, respostas e follow-ups
 ```
 
 ## Fontes De Coleta
@@ -152,7 +154,7 @@ No cadastro e na pagina `/profile`, o usuario informa:
 - Nicho foco.
 - Instrucoes internas de como a IA deve pensar, escrever e priorizar.
 
-Esses dados sao usados para exibir o perfil correto no layout e ajustar prompts internos das LLMs ao ponto de vista profissional do usuario.
+Esses dados sao usados para exibir o perfil correto no layout e ajustar prompts internos das LLMs e templates comerciais ao ponto de vista profissional do usuario.
 
 ## CRM Kanban
 
@@ -242,6 +244,8 @@ O Autopilot SDR e a camada de automacao comercial assistida e controlada.
 Implementado:
 
 - Pagina `/autopilot`.
+- Pagina `/autopilot/replies`.
+- Pagina `/autopilot/templates` no PR #20.
 - Regras de automacao.
 - Fila de mensagens.
 - Lotes de aprovacao.
@@ -255,10 +259,14 @@ Implementado:
 - Stop-on-reply.
 - Follow-ups assistidos.
 - Classificacao heuristica de respostas.
+- Central de respostas comerciais.
+- Templates comerciais por nicho/profissao.
 - Agendamento assistido.
 - Diagnostico/PDF base em Markdown.
 
 Regra atual: aprovar mensagem muda status para `approved`, mas nao envia mensagem automaticamente para lead. O envio real fica no modo avancado e exige `dry_run=false`, `confirm_send=true` e confirmacao visual.
+
+Templates comerciais atualizam textos no lead para revisao. Eles nao enviam WhatsApp automaticamente.
 
 Guia principal de uso: `docs/GUIA-USO-AUTOPILOT.md`.
 
@@ -304,11 +312,9 @@ npm run dev
 
 Principais proximos passos da V2 comercial:
 
-1. Guia de uso do Autopilot e mapa atualizado.
-2. Central de respostas e proxima acao recomendada.
-3. Templates comerciais por nicho e profissao.
-4. Diagnostico comercial avancado.
-5. Agendamento comercial assistido.
+1. Validar/mergear templates comerciais por nicho e profissao.
+2. Diagnostico comercial avancado.
+3. Agendamento comercial assistido.
 
 Lista completa em `docs/TODO.md`.
 
@@ -322,6 +328,7 @@ Lista completa em `docs/TODO.md`.
 - Nao usar rotacao de credenciais para burlar bloqueios.
 - Nunca enviar mensagem para lead apenas por aprovar lote.
 - Envio real do Autopilot exige confirmacao explicita.
+- Templates podem gerar/aplicar textos, mas nao enviar WhatsApp automaticamente.
 
 ## Fonte De Verdade
 

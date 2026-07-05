@@ -1,7 +1,7 @@
 # Prospect AI - Status Atual do Projeto
 
 **Data:** 04/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado e guia operacional mergeados. PR #19 adiciona a central de respostas comerciais.
+**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado, guia operacional e central de respostas mergeados. PR #20 adiciona templates comerciais por nicho e profissao.
 
 Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para operar a pagina `/autopilot`, leia `docs/GUIA-USO-AUTOPILOT.md`.
 
@@ -9,35 +9,41 @@ Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para o
 
 O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual, organiza o pipeline no CRM Kanban e possui Autopilot SDR controlado.
 
-O marco mais recente em `main` foi o merge do PR #18, que documentou o uso do Autopilot e atualizou o mapa interno. O PR #19 em producao adiciona `/autopilot/replies` para tratar respostas recebidas, sugerir proxima acao e atualizar CRM sem envio automatico.
+O marco mais recente em `main` foi o merge do PR #19, que adicionou a central `/autopilot/replies` para tratar respostas recebidas, sugerir proxima acao e atualizar CRM sem envio automatico. O PR #20 em producao adiciona `/autopilot/templates` para gerar mensagens por nicho, tom e contexto profissional.
 
-## Marco Mais Recente Em Main - PR #18
+## Marco Mais Recente Em Main - PR #19
 
-PR #18 foi validado e mergeado.
+PR #19 foi validado e mergeado.
 
 Resultado final:
 
-- Criado `docs/GUIA-USO-AUTOPILOT.md`.
-- Atualizados README, mapa interno, TODO e status.
-- Documentado fluxo diario seguro.
-- Documentada diferenca entre aprovar lote e enviar mensagem para lead.
-- Merge commit: `dc6dd77b4dd15dd602cf18e7b7876017b0d648e0`.
+- Criada pagina `/autopilot/replies`.
+- Criado inbox autenticado de respostas recebidas.
+- Filtros por busca, intencao e status.
+- Resposta sugerida copiavel.
+- Acoes seguras para CRM.
+- Registro em `lead_followups`.
+- Isolamento por usuario validado.
+- Nenhum envio automatico de WhatsApp no fluxo.
+- Merge commit: `c8ba8ab913e83b09b7b0ec843a1141753274d315`.
 
-## Em Producao - PR #19
+## Em Producao - PR #20
 
-Objetivo: centralizar respostas recebidas e transformar cada retorno em acao comercial.
+Objetivo: melhorar a qualidade da abordagem comercial antes do envio.
 
 Entregas:
 
-- Nova pagina `/autopilot/replies`.
-- Novo endpoint `GET /api/autopilot/replies/inbox`.
-- Novo endpoint `POST /api/autopilot/replies/:leadId/action`.
-- Classificacao heuristica de respostas.
-- Resposta sugerida copiavel.
-- Acoes seguras para CRM: respondeu, reuniao, sem interesse, proxima acao/tratar preco.
+- Nova pagina `/autopilot/templates`.
+- Novo endpoint `GET /api/autopilot/templates/catalog`.
+- Novo endpoint `POST /api/autopilot/templates/preview`.
+- Novo endpoint `POST /api/autopilot/templates/apply`.
+- Biblioteca de nichos e tons comerciais.
+- Deteccao de dores observaveis no lead.
+- Mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
+- Uso de `profession`, `primary_niche` e `internal_context` do usuario.
+- Aplicacao de template no lead sem envio automatico.
 - Registro em `lead_followups`.
-- Testes para inbox, isolamento por usuario e aplicacao de acao.
-- Sem envio automatico de resposta para lead.
+- Testes para catalogo, previa, isolamento por usuario e aplicacao.
 
 ## Stack Atual
 
@@ -65,7 +71,8 @@ Entregas:
 | CRM Kanban | Operacional | Drag-and-drop, filtros e edicao rapida. |
 | Dashboard | Operacional | Funil, fontes, periodo, nicho, cidade e conversao. |
 | Autopilot SDR | Operacional controlado | Regras, fila, lotes, scheduler, worker controlado, follow-ups, resposta, agendamento e diagnostico. |
-| Central de respostas | PR #19 | Inbox comercial em `/autopilot/replies`, sem envio automatico. |
+| Central de respostas | Operacional | Inbox comercial em `/autopilot/replies`, sem envio automatico. |
+| Templates comerciais | PR #20 | Mensagens por nicho/contexto em `/autopilot/templates`, sem envio automatico. |
 
 ## Validacoes Ja Realizadas
 
@@ -77,7 +84,7 @@ Entregas:
 - `docker compose build backend frontend` passando.
 - `docker compose up -d backend frontend` passando.
 - `/health` retornando 200.
-- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`.
+- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`, `/autopilot/replies`.
 
 ### Providers
 
@@ -103,7 +110,8 @@ Entregas:
 - Nenhum item de lote aprovado foi enviado automaticamente para lead.
 - Aprovacao em lote aceita apenas o `approval_whatsapp` do usuario.
 - Envio real do worker exige confirmacao explicita.
-- PR #19 mantem respostas como acao assistida/copia, sem envio automatico.
+- Central de respostas mantem respostas como acao assistida/copia, sem envio automatico.
+- PR #20 aplica templates no cadastro do lead, mas nao envia WhatsApp automaticamente.
 
 ## Autopilot SDR Atual
 
@@ -125,7 +133,8 @@ Entregas:
 - Classificacao heuristica.
 - Agendamento assistido.
 - Diagnostico Markdown.
-- Em PR #19: central de respostas e proxima acao recomendada.
+- Central de respostas e proxima acao recomendada.
+- Em PR #20: templates comerciais por nicho e profissao.
 
 ### Comandos Suportados
 
@@ -142,14 +151,15 @@ Aprovar lote ou mensagem apenas muda `message_queue.status` para `approved`. O e
 
 A central de respostas copia sugestoes e registra acoes no CRM. Ela nao envia resposta automatica para leads.
 
+A central de templates gera, copia e aplica textos no lead. Ela nao envia mensagem para leads.
+
 ## O Que Ainda Falta
 
 Prioridade alta da V2 comercial:
 
-1. Validar e mergear PR #19: central de respostas e proxima acao recomendada.
-2. PR #20: templates comerciais por nicho e profissao.
-3. PR #21: diagnostico comercial avancado.
-4. PR #22: agendamento comercial assistido.
+1. Validar e mergear PR #20: templates comerciais por nicho e profissao.
+2. PR #21: diagnostico comercial avancado.
+3. PR #22: agendamento comercial assistido.
 
 Prioridade media:
 
@@ -160,9 +170,9 @@ Prioridade media:
 
 ## Proximo Passo Recomendado
 
-Validar PR #19 pela CLI local.
+Validar PR #20 pela CLI local.
 
-Motivo: depois que a operacao de envio esta controlada e documentada, o maior ganho comercial vem de responder melhor e mais rapido quem demonstrou interesse.
+Motivo: templates por nicho melhoram a qualidade da abordagem antes de usar lotes, fila e envio controlado.
 
 ## Status Geral
 
@@ -170,6 +180,6 @@ Estimativa pragmatica:
 
 - Core de prospeccao: 98% pronto.
 - Operacao interna local: 97% pronta.
-- Autopilot assistido/controlado: 90% pronto.
-- Produto comercial: 65% pronto.
+- Autopilot assistido/controlado: 92% pronto.
+- Produto comercial: 68% pronto.
 - Documentacao: em atualizacao continua.
