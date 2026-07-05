@@ -20,6 +20,19 @@ function normalize(value) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function hasCompletedSiteAudit(lead) {
+  if (!lead.site) return false;
+
+  return Boolean(
+    lead.site_online === true
+    || clean(lead.status_site)
+    || clean(lead.erro_site)
+    || clean(lead.site_final)
+    || lead.tempo_carregamento_ms
+    || lead.tamanho_kb
+  );
+}
+
 const OFFER_LABELS = {
   tracking: 'Tracking e mensuracao',
   traffic: 'Trafego pago local',
@@ -76,6 +89,7 @@ function detectNiche(lead) {
 }
 
 function buildFacts(lead) {
+  const siteAuditCompleted = hasCompletedSiteAudit(lead);
   const facts = [
     { key: 'company', label: `Empresa: ${lead.nome_empresa || '-'}` },
     { key: 'city', label: `Cidade: ${lead.cidade || '-'}` },
@@ -85,6 +99,13 @@ function buildFacts(lead) {
   ];
 
   if (lead.site) {
+    facts.push({
+      key: 'site_audit',
+      label: `Auditoria do site: ${siteAuditCompleted ? 'concluida' : 'pendente'}`,
+    });
+  }
+
+  if (lead.site && siteAuditCompleted) {
     facts.push(
       { key: 'https', label: `HTTPS: ${boolLabel(lead.tem_https)}` },
       { key: 'pixel', label: `Pixel Meta: ${boolLabel(lead.tem_pixel_meta)}` },
@@ -96,7 +117,7 @@ function buildFacts(lead) {
     );
   }
 
-  if (lead.tempo_carregamento_ms) {
+  if (siteAuditCompleted && lead.tempo_carregamento_ms) {
     facts.push({ key: 'speed', label: `Tempo de carregamento: ${lead.tempo_carregamento_ms}ms` });
   }
 
@@ -109,32 +130,44 @@ function buildFacts(lead) {
 
 function buildGaps(lead) {
   const gaps = [];
+  const siteAuditCompleted = hasCompletedSiteAudit(lead);
 
   if (!lead.site) {
     gaps.push({ key: 'sem_site', label: 'Nao foi identificado site', impact: 'reduz controle sobre conversao, prova de autoridade e paginas especificas de campanha', offer: 'website' });
+    return gaps;
   }
 
-  if (lead.site && !lead.tem_pixel_meta) {
+  if (!siteAuditCompleted) {
+    gaps.push({
+      key: 'site_nao_auditado',
+      label: 'Site identificado, mas auditoria tecnica ainda nao foi concluida',
+      impact: 'nao e seguro afirmar ausencia de tags, WhatsApp ou formulario antes de auditar o site',
+      offer: 'consulting',
+    });
+    return gaps;
+  }
+
+  if (!lead.tem_pixel_meta) {
     gaps.push({ key: 'sem_pixel', label: 'Pixel Meta nao identificado', impact: 'limita remarketing, publicos personalizados e otimizacao de campanhas Meta', offer: 'tracking' });
   }
 
-  if (lead.site && !lead.tem_gtm) {
+  if (!lead.tem_gtm) {
     gaps.push({ key: 'sem_gtm', label: 'Google Tag Manager nao identificado', impact: 'dificulta organizacao e manutencao das tags de marketing', offer: 'tracking' });
   }
 
-  if (lead.site && !lead.tem_ga4) {
+  if (!lead.tem_ga4) {
     gaps.push({ key: 'sem_ga4', label: 'GA4 nao identificado', impact: 'limita leitura de origem, engajamento e conversoes no site', offer: 'tracking' });
   }
 
-  if (lead.site && !lead.tem_google_ads_tag) {
+  if (!lead.tem_google_ads_tag) {
     gaps.push({ key: 'sem_google_ads_tag', label: 'Google Ads Tag nao identificada', impact: 'pode dificultar mensuracao e otimizacao de campanhas Google Ads', offer: 'traffic' });
   }
 
-  if (lead.site && !lead.tem_whatsapp_site) {
+  if (!lead.tem_whatsapp_site) {
     gaps.push({ key: 'sem_whatsapp_site', label: 'WhatsApp nao parece estar visivel no site', impact: 'pode reduzir contatos diretos de visitantes prontos para conversar', offer: 'conversion' });
   }
 
-  if (lead.site && !lead.tem_formulario) {
+  if (!lead.tem_formulario) {
     gaps.push({ key: 'sem_formulario', label: 'Formulario de contato nao identificado', impact: 'cria dependencia de um unico canal de conversao', offer: 'conversion' });
   }
 
@@ -142,7 +175,7 @@ function buildGaps(lead) {
     gaps.push({ key: 'site_lento', label: 'Site com carregamento acima do ideal', impact: 'pode aumentar abandono antes do contato', offer: 'website' });
   }
 
-  if (asNumber(lead.total_avaliacoes) > 100 && lead.site && (!lead.tem_pixel_meta || !lead.tem_ga4)) {
+  if (asNumber(lead.total_avaliacoes) > 100 && (!lead.tem_pixel_meta || !lead.tem_ga4)) {
     gaps.push({ key: 'prova_social_sem_tracking', label: 'Boa prova social com mensuracao incompleta', impact: 'ha sinais de demanda/reputacao, mas pouca leitura do que vira oportunidade comercial', offer: 'tracking' });
   }
 
@@ -177,6 +210,9 @@ function buildInferences(lead, niche, gaps) {
   }
   if (gaps.some((gap) => ['sem_whatsapp_site', 'sem_formulario'].includes(gap.key))) {
     inferences.push('Inferencia: visitantes do site podem encontrar atrito para iniciar contato rapidamente.');
+  }
+  if (gaps.some((gap) => gap.key === 'site_nao_auditado')) {
+    inferences.push('Inferencia: antes de sugerir tracking ou conversao, vale concluir a auditoria tecnica do site para separar fatos de hipoteses.');
   }
   if (asNumber(lead.total_avaliacoes) > 100) {
     inferences.push('Inferencia: a quantidade de avaliacoes sugere presenca local relevante, mas isso nao indica faturamento ou investimento em midia.');
