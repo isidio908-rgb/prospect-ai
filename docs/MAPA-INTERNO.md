@@ -1,7 +1,7 @@
 # Mapa Interno - Prospect AI
 
 **Atualizado em:** 05/07/2026  
-**Estado atual:** produto interno operacional em `main`, com Autopilot SDR, guia de uso, central de respostas e templates comerciais mergeados. PR #21 prepara diagnostico comercial avancado.
+**Estado atual:** produto interno operacional em `main` com coleta, CRM, WhatsApp, Autopilot SDR, respostas, templates e diagnostico comercial avancado. PR atual prepara o Autopilot Comercial Semi-Automatico.
 
 Este documento e a bussola curta do projeto. Use ele para nao perder o fio entre prospeccao real, manutencao tecnica e proximas PRs.
 
@@ -18,7 +18,8 @@ A ferramenta deve:
 5. Organizar o funil no CRM/Kanban.
 6. Apoiar disparos e follow-ups pelo WhatsApp com controle humano.
 7. Tratar respostas recebidas e sugerir proxima acao comercial.
-8. Ajudar o usuario a marcar reunioes e vender servicos digitais.
+8. Automatizar a rotina diaria sem perder aprovacao humana nos pontos sensiveis.
+9. Ajudar o usuario a marcar reunioes e vender servicos digitais.
 
 ## Fonte De Verdade
 
@@ -26,11 +27,12 @@ Ordem de confianca:
 
 1. Codigo em `main`.
 2. `docs/MAPA-INTERNO.md`.
-3. `docs/GUIA-USO-AUTOPILOT.md`.
-4. `docs/STATUS-ATUAL.md`.
-5. `docs/TODO.md`.
-6. `docs/HISTORICO.md`.
-7. Documentos operacionais especificos.
+3. `docs/AUTOPILOT-SEMI-AUTO.md`.
+4. `docs/GUIA-USO-AUTOPILOT.md`.
+5. `docs/STATUS-ATUAL.md`.
+6. `docs/TODO.md`.
+7. `docs/HISTORICO.md`.
+8. Documentos operacionais especificos.
 
 Documentos antigos de sprint continuam no repositorio como historico, mas nao devem guiar decisoes atuais se divergirem destes arquivos.
 
@@ -46,40 +48,43 @@ Documentos antigos de sprint continuam no repositorio como historico, mas nao de
 | CRM Kanban | Concluido | Drag-and-drop, filtros e edicao rapida. |
 | Dashboard comercial | Concluido | Funil, fontes, periodo, conversao por nicho/cidade. |
 | IA contextual | Concluido | Prompts ajustados por profissao, nicho e contexto interno. |
-| Autopilot fundacao | Concluido | Regras, runs e fila. |
-| Autopilot API | Concluido | CRUD de regras, fila, lotes e comandos. |
 | Aprovacao em lote | Concluido | WhatsApp pessoal aprovou lote real via webhook. |
-| Autopilot completo controlado | Concluido | PR #17: central `/autopilot`, scheduler, worker controlado, stop-on-reply, follow-ups, classificacao, agendamento e diagnostico base. |
-| Guia operacional do Autopilot | Concluido | PR #18: documenta como usar `/autopilot` com seguranca. |
-| Central de respostas | Concluido | PR #19: `/autopilot/replies`, intencao, resposta sugerida e acoes CRM sem envio automatico. |
-| Templates comerciais | Concluido | PR #20: `/autopilot/templates`, mensagens por nicho/profissao sem envio automatico. |
+| Autopilot completo controlado | Concluido | Central `/autopilot`, scheduler, worker, stop-on-reply, follow-ups, respostas e diagnosticos. |
+| Guia operacional do Autopilot | Concluido | Documenta uso seguro da central manual. |
+| Central de respostas | Concluido | `/autopilot/replies`, intencao, resposta sugerida e acoes CRM sem envio automatico. |
+| Templates comerciais | Concluido | `/autopilot/templates`, mensagens por nicho/profissao sem envio automatico. |
+| Diagnostico comercial avancado | Concluido | `/autopilot/diagnostics`, diagnostico curto/completo, Loom, reuniao e oferta recomendada. |
 
-## Em Producao Agora - PR #21
+## Em Producao Agora - Autopilot Semi-Automatico
 
-Objetivo: transformar diagnostico base em material comercial para abordagem, Loom/audio e reuniao.
+Objetivo: transformar a rotina diaria em um cockpit que le historico, sugere o proximo recorte, coleta com aprovacao, analisa, gera mensagens, cria lote de aprovacao e trabalha apenas a fila aprovada.
 
 Entregas previstas:
 
-- Nova pagina `/autopilot/diagnostics`.
-- Endpoint `GET /api/autopilot/diagnostics/:leadId/advanced`.
-- Endpoint `POST /api/autopilot/diagnostics/:leadId/advanced/apply`.
-- Diagnostico curto para WhatsApp.
-- Diagnostico completo em Markdown.
-- Roteiro de Loom/audio.
-- Roteiro de reuniao de 15 minutos.
-- Oferta recomendada: tracking, trafego, site/landing page, conversao WhatsApp/formulario, criativos, CRM ou consultoria.
-- Separacao clara entre fatos observados e inferencias comerciais.
-- Aplicacao do diagnostico no lead sem criar fila e sem enviar WhatsApp.
+- Nova pagina `/autopilot/semi-auto`.
+- Endpoint `GET /api/autopilot/semi-auto/plan`.
+- Endpoint `POST /api/autopilot/semi-auto/run`.
+- Plano automatico baseado em historico de coletas, credenciais, fila e leads.
+- Simulacao `dry_run=true` por padrao.
+- Coleta real somente com `approve_collection=true`.
+- Analise automatica dos leads salvos.
+- Criacao/atualizacao de regra assistida.
+- Enfileiramento de mensagens `pending`.
+- Criacao de lote e envio opcional ao WhatsApp pessoal.
+- Stop-on-reply antes de qualquer worker.
+- Worker processando somente mensagens `approved`.
+- Guia operacional `docs/AUTOPILOT-SEMI-AUTO.md`.
 
-Papel no fluxo comercial:
+Fluxo alvo:
 
 ```mermaid
 flowchart TD
-  A[Lead qualificado] --> B[Diagnostico avancado]
-  B --> C[Resumo WhatsApp]
-  B --> D[Roteiro Loom]
-  B --> E[Roteiro reuniao]
-  C --> F[Revisar e abordar]
+  A[Historico] --> B[Plano sugerido]
+  B --> C[Simular]
+  C --> D[Aprovar coleta]
+  D --> E[Analisar e enfileirar]
+  E --> F[Lote no WhatsApp]
+  F --> G[Enviar aprovadas]
 ```
 
 ## Estado Operacional Atual
@@ -89,25 +94,30 @@ O sistema pode ser usado hoje para:
 - coletar leads reais em baixo volume;
 - validar WhatsApp antes de salvar;
 - revisar leads no CRM;
-- gerar abordagem com IA;
+- gerar abordagem com IA/templates;
+- preparar diagnosticos comerciais;
 - criar fila de mensagens pendentes;
 - aprovar lotes pelo WhatsApp pessoal;
-- simular envios antes de disparar;
-- enviar mensagens aprovadas somente com confirmacao avancada;
+- enviar mensagens aprovadas com worker controlado;
 - cancelar follow-ups quando houver resposta;
-- registrar reunioes e diagnosticos base;
 - tratar respostas em `/autopilot/replies`;
-- gerar e aplicar templates em `/autopilot/templates`;
-- apos PR #21, preparar diagnostico comercial em `/autopilot/diagnostics`.
+- medir funil no dashboard.
+
+Com o PR semi-automatico validado, o sistema tambem passa a:
+
+- sugerir a proxima coleta usando historico;
+- rodar o ciclo diario em um unico cockpit;
+- manter aprovacao humana antes da coleta e antes dos disparos novos;
+- trabalhar sozinho a fila que ja estiver aprovada.
 
 O sistema ainda nao deve:
 
-- rodar cron automatico em background sem uma decisao explicita;
+- rodar cron automatico em background sem configuracao explicita;
 - disparar em volume alto sem acompanhamento diario;
-- agendar reunioes em calendario externo sem confirmacao;
-- usar classificacao por LLM paga em background sem limites/custos claros;
-- responder leads automaticamente sem aprovacao e configuracao explicita;
-- inventar informacoes comerciais ou tecnicas que nao foram observadas no lead.
+- responder leads automaticamente sem revisao;
+- agendar em calendario externo sem confirmacao;
+- usar LLM paga em background sem limites claros;
+- inventar informacoes comerciais ou tecnicas que nao foram observadas.
 
 ## Mapa Dos Modulos
 
@@ -122,43 +132,44 @@ O sistema ainda nao deve:
 | Perfil | `/profile` | `/api/auth/me` | Operacional |
 | WhatsApp | `/whatsapp` | `/api/whatsapp` | Operacional |
 | IA | Detalhe do lead | `/api/ai` | Operacional |
-| Autopilot | `/autopilot` | `/api/autopilot` | Operacional controlado |
+| Autopilot manual | `/autopilot` | `/api/autopilot` | Operacional controlado |
+| Autopilot semi-auto | `/autopilot/semi-auto` | `/api/autopilot/semi-auto/*` | PR atual |
 | Respostas | `/autopilot/replies` | `/api/autopilot/replies/inbox` | Operacional |
 | Templates | `/autopilot/templates` | `/api/autopilot/templates/*` | Operacional |
-| Diagnostico | `/autopilot/diagnostics` | `/api/autopilot/diagnostics/:id/advanced` | PR #21 |
+| Diagnostico | `/autopilot/diagnostics` | `/api/autopilot/diagnostics/:id/advanced` | Operacional |
 
 ## Como Usar O Autopilot
 
-Guia principal: `docs/GUIA-USO-AUTOPILOT.md`.
+Guias principais:
 
-Resumo operacional:
+- `docs/AUTOPILOT-SEMI-AUTO.md`: rotina diaria semi-automatica.
+- `docs/GUIA-USO-AUTOPILOT.md`: central manual/avancada.
 
-1. Criar ou revisar regra assistida.
-2. Simular scheduler.
-3. Enfileirar mensagens `pending`.
-4. Criar lote.
-5. Aprovar pelo WhatsApp pessoal.
-6. Simular envio.
-7. Enviar aprovadas somente no modo avancado, com confirmacao.
-8. Rodar stop-on-reply.
-9. Criar/classificar follow-ups com cuidado.
-10. Registrar reunioes.
-11. Gerar diagnostico base.
-12. Tratar respostas em `/autopilot/replies`.
-13. Gerar/aplicar mensagens por nicho em `/autopilot/templates` antes de enfileirar novos contatos.
-14. Preparar material de venda em `/autopilot/diagnostics` antes de enviar diagnostico ou marcar reuniao.
+Resumo operacional semi-auto:
 
-## V2 Comercial - Sequencia De PRs
+1. Abrir `/autopilot/semi-auto`.
+2. Atualizar plano.
+3. Conferir query, credencial, cidade, nicho, score e lote.
+4. Simular ciclo completo.
+5. Aprovar coleta e preparar lote.
+6. Aprovar lote pelo WhatsApp pessoal.
+7. Enviar aprovadas agora.
+8. Acompanhar respostas e stop-on-reply.
+9. Usar CRM para reunioes/propostas.
 
-A V2 comercial deve melhorar conversao, nao apenas adicionar automacao.
+## V2 Comercial - Sequencia Atual
+
+A V2 comercial deve melhorar conversao e diminuir trabalho manual sem perder controle.
 
 | Ordem | PR sugerido | Objetivo | Resultado esperado |
 |---|---|---|---|
-| 18 | Guia e mapa do Autopilot | Ensinar uso, atualizar mapa e alinhar proximos PRs | Usuario entende como operar a pagina atual. |
-| 19 | Central de respostas | Mostrar respostas recebidas e proxima acao recomendada | Menos conversa perdida e mais reunioes. |
-| 20 | Templates por nicho/profissao | Mensagens por nicho e ponto de vista do gestor de trafego | Abordagens melhores por segmento. |
-| 21 | Diagnostico comercial avancado | Diagnostico curto, completo e roteiro de reuniao/Loom | Mais autoridade na abordagem. |
-| 22 | Agendamento comercial assistido | Sugestao de horarios, convite e confirmacao | Mais reunioes marcadas com menos trabalho manual. |
+| 18 | Guia e mapa do Autopilot | Ensinar uso e alinhar mapa | Usuario entende a central manual. |
+| 19 | Central de respostas | Tratar respostas e proxima acao | Menos conversa perdida. |
+| 20 | Templates por nicho/profissao | Melhorar abordagem por segmento | Mensagens mais fortes. |
+| 21 | Diagnostico comercial avancado | Preparar Loom/reuniao/oferta | Mais autoridade comercial. |
+| 22 | Autopilot semi-automatico | Orquestrar coleta, analise, lote e aprovadas | Rotina diaria com menos cliques. |
+| 23 | Agendamento comercial assistido | Sugerir horarios e confirmar reuniao | Mais reunioes marcadas. |
+| 24 | Cron controlado futuro | Rodar ciclos em horarios definidos | Operacao recorrente com limites. |
 
 ## Regras De Seguranca Que Nao Podem Quebrar
 
@@ -174,21 +185,21 @@ A V2 comercial deve melhorar conversao, nao apenas adicionar automacao.
 10. Toda PR precisa terminar com validacao de testes, build, Docker e scan basico de segredos.
 11. Central de respostas pode sugerir e copiar textos, mas nao deve enviar resposta automatica sem confirmacao explicita.
 12. Templates podem atualizar texto do lead, mas nao podem enviar WhatsApp automaticamente.
-13. Templates devem separar fatos observados de inferencias e nao prometer resultado financeiro.
-14. Diagnosticos podem atualizar texto do lead, mas nao podem criar fila nem enviar WhatsApp automaticamente.
-15. Diagnosticos devem separar fatos observados de inferencias e nao prometer resultado financeiro.
+13. Diagnosticos podem atualizar texto do lead, mas nao podem criar fila nem enviar WhatsApp automaticamente.
+14. Autopilot semi-auto pode processar mensagens aprovadas, mas somente `message_queue.status = approved`.
+15. Coleta semi-automatica real exige `approve_collection=true`.
 
 ## Operacao Comercial Enquanto Desenvolve
 
-1. Coletar pequenos lotes por cidade/nicho.
-2. Priorizar leads com WhatsApp confirmado e score alto.
-3. Usar CRM Kanban para status e proxima acao.
-4. Usar `/autopilot/templates` para ajustar mensagem por nicho.
-5. Usar `/autopilot/diagnostics` para preparar diagnostico antes de reuniao ou Loom.
-6. Usar `/autopilot` para aprovar, simular e enviar com controle.
-7. Usar `/autopilot/replies` para tratar respostas e marcar proximas acoes.
+1. Abrir `/autopilot/semi-auto` no inicio do dia.
+2. Simular o ciclo.
+3. Rodar coleta aprovada com lote pequeno.
+4. Aprovar lote pelo WhatsApp pessoal.
+5. Processar aprovadas.
+6. Usar `/autopilot/replies` para respostas.
+7. Usar `/crm` para reunioes, propostas e fechamentos.
 8. Medir respostas, reunioes e clientes fechados.
-9. Ajustar criterios de score e mensagens com base nas respostas reais.
+9. Ajustar score, nichos e mensagens com base nas respostas reais.
 
 ## Prompt De Validacao Padrao
 
@@ -213,6 +224,6 @@ Atualize o corpo do PR com resultados completos.
 
 ## Proxima Decisao
 
-Validar PR #21 e, depois, seguir para PR #22: agendamento comercial assistido.
+Validar o PR do Autopilot Comercial Semi-Automatico pela CLI local.
 
-Motivo: depois que a abordagem e o diagnostico estiverem bons, o proximo ganho vem de encurtar o caminho ate a reuniao marcada.
+Motivo: ele conecta coleta, analise, lote de aprovacao e processamento de aprovadas em uma rotina diaria simples, exatamente para acelerar a prospeccao sem abrir mao do controle.
