@@ -23,6 +23,10 @@ import {
   applyAdvancedCommercialDiagnostic,
   buildAdvancedCommercialDiagnostic,
 } from '../../services/autopilot/commercialDiagnosticService.mjs';
+import {
+  getSemiAutoCommercialPlan,
+  runSemiAutoCommercialCycle,
+} from '../../services/autopilot/semiAutoCommercialService.mjs';
 
 const router = express.Router();
 
@@ -43,6 +47,34 @@ const workerSchema = z.object({
 const simpleRunSchema = z.object({
   limit: z.number().int().min(1).max(200).optional().default(50),
   dry_run: z.boolean().optional().default(true),
+});
+
+const semiAutoRunSchema = z.object({
+  dry_run: z.boolean().optional().default(true),
+  approve_collection: z.boolean().optional().default(false),
+  credential_id: z.number().int().positive().optional(),
+  query: z.string().max(500).optional().or(z.literal('')),
+  city: z.string().max(255).optional().or(z.literal('')),
+  niche: z.string().max(255).optional().or(z.literal('')),
+  region: z.string().max(50).optional().or(z.literal('')),
+  language: z.string().max(20).optional().or(z.literal('')),
+  limit: z.number().int().min(1).max(100).optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+  zoom: z.number().int().min(1).max(20).optional(),
+  verify_whatsapp_exists: z.boolean().optional(),
+  force_refresh: z.boolean().optional(),
+  extract_emails_and_contacts: z.boolean().optional(),
+  analyze_saved_leads: z.boolean().optional().default(true),
+  analysis_limit: z.number().int().min(1).max(100).optional(),
+  min_score: z.number().int().min(0).max(100).optional(),
+  scheduler_limit: z.number().int().min(1).max(500).optional(),
+  create_approval_batch: z.boolean().optional().default(true),
+  send_approval_request: z.boolean().optional().default(true),
+  batch_limit: z.number().int().min(1).max(10).optional(),
+  batch_expires_in_minutes: z.number().int().min(10).max(1440).optional(),
+  process_approved: z.boolean().optional().default(true),
+  worker_limit: z.number().int().min(1).max(100).optional(),
 });
 
 const appointmentSchema = z.object({
@@ -88,6 +120,25 @@ router.get('/runs', async (req, res, next) => {
     res.json({ runs });
   } catch (error) {
     next(error);
+  }
+});
+
+router.get('/semi-auto/plan', async (req, res, next) => {
+  try {
+    const plan = await getSemiAutoCommercialPlan(req.user.id);
+    res.json({ plan });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/semi-auto/run', async (req, res, next) => {
+  try {
+    const data = semiAutoRunSchema.parse(req.body || {});
+    const result = await runSemiAutoCommercialCycle(req.user.id, req.user, data);
+    res.json(result);
+  } catch (error) {
+    handleServiceError(error, res, next);
   }
 });
 
