@@ -34,6 +34,7 @@ describe('advanced commercial diagnostics routes', () => {
   let token;
   let otherToken;
   let leadId;
+  let unauditedLeadId;
   const uniqueTag = Date.now();
 
   before(async () => {
@@ -90,6 +91,19 @@ describe('advanced commercial diagnostics routes', () => {
       [userId]
     );
     leadId = leadResult.rows[0].id;
+
+    const unauditedLeadResult = await query(
+      `INSERT INTO leads (
+        user_id, nome_empresa, site, telefone, whatsapp, cidade, nicho, categoria,
+        fonte, score, prioridade, status, data_coleta, rating, total_avaliacoes
+      ) VALUES (
+        $1, 'Clinica Sem Auditoria Teste', 'https://not-audited.example.com', '+5565999992222', '+5565999992222',
+        'Cuiaba', 'clinicas', 'Clinica', 'serper', 81, 'alta', 'novo', NOW(), 4.5, 130
+      )
+      RETURNING id`,
+      [userId]
+    );
+    unauditedLeadId = unauditedLeadResult.rows[0].id;
   });
 
   after(async () => {
@@ -114,6 +128,23 @@ describe('advanced commercial diagnostics routes', () => {
     assert.match(result.body.loom_script, /Nao significa|nao significa/i);
     assert.match(result.body.meeting_script, /15 minutos|Pergunta/);
     assert.match(result.body.llm_context, /Gestor de Trafego Pago/);
+    assert.equal(hasSecretPattern(result.body), false);
+  });
+
+  test('nao trata campos default de site nao auditado como ausencia confirmada', async () => {
+    const result = await request(baseUrl, `/api/autopilot/diagnostics/${unauditedLeadId}/advanced`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(result.response.status, 200);
+    assert.equal(result.body.facts.some((fact) => fact.label === 'Auditoria do site: pendente'), true);
+    assert.equal(result.body.gaps.some((gap) => gap.key === 'site_nao_auditado'), true);
+    assert.equal(result.body.gaps.some((gap) => gap.key === 'sem_pixel'), false);
+    assert.equal(result.body.gaps.some((gap) => gap.key === 'sem_gtm'), false);
+    assert.equal(result.body.gaps.some((gap) => gap.key === 'sem_ga4'), false);
+    assert.equal(result.body.gaps.some((gap) => gap.key === 'sem_whatsapp_site'), false);
+    assert.equal(result.body.gaps.some((gap) => gap.key === 'sem_formulario'), false);
+    assert.doesNotMatch(result.body.markdown, /Pixel Meta nao identificado|GA4 nao identificado|WhatsApp nao parece estar visivel/);
     assert.equal(hasSecretPattern(result.body), false);
   });
 
