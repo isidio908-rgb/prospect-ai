@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ClipboardList, Copy, RefreshCw, Save, Search } from 'lucide-react';
 import { autopilot, leads as leadsApi } from '../services/api';
@@ -11,18 +11,16 @@ export default function AutopilotDiagnostics() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
 
-  const filteredLeads = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return leads;
-    return leads.filter((lead) => [lead.nome_empresa, lead.cidade, lead.nicho, lead.categoria, lead.status]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(term)));
-  }, [leads, search]);
-
-  async function loadLeads() {
+  async function loadLeads(term = search) {
     setLoading(true);
     try {
-      const response = await leadsApi.list({ limit: 100, sortBy: 'score', sortOrder: 'DESC' });
+      const trimmed = term.trim();
+      const response = await leadsApi.list({
+        limit: 100,
+        search: trimmed || undefined,
+        sortBy: 'score',
+        sortOrder: 'DESC',
+      });
       setLeads(response.data.leads || []);
     } catch (error) {
       toast.error(error.response?.data?.error || 'Nao foi possivel carregar leads');
@@ -32,8 +30,12 @@ export default function AutopilotDiagnostics() {
   }
 
   useEffect(() => {
-    loadLeads();
-  }, []);
+    const timer = setTimeout(() => {
+      loadLeads(search);
+    }, search.trim() ? 350 : 0);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   async function generateDiagnostic() {
     if (!selectedLeadId) {
@@ -91,7 +93,7 @@ export default function AutopilotDiagnostics() {
           </p>
         </div>
         <button
-          onClick={loadLeads}
+          onClick={() => loadLeads(search)}
           disabled={loading}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
         >
@@ -123,6 +125,9 @@ export default function AutopilotDiagnostics() {
                   className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
                 />
               </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                A busca consulta o servidor para encontrar leads alem da primeira pagina carregada.
+              </p>
             </div>
 
             <div>
@@ -136,12 +141,15 @@ export default function AutopilotDiagnostics() {
                 className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
               >
                 <option value="">Selecione um lead</option>
-                {filteredLeads.map((lead) => (
+                {leads.map((lead) => (
                   <option key={lead.id} value={lead.id}>
                     {lead.nome_empresa} - {lead.cidade || '-'} - score {lead.score ?? '-'}
                   </option>
                 ))}
               </select>
+              {!loading && search.trim() && leads.length === 0 ? (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Nenhum lead encontrado para esta busca.</p>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
