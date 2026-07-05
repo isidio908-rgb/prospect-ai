@@ -117,7 +117,7 @@ O sistema pode:
 - enfileirar `pending`;
 - criar lote;
 - enviar solicitacao ao WhatsApp pessoal;
-- processar mensagens que ja estavam `approved` antes do ciclo.
+- processar mensagens que ja estavam `approved` antes do ciclo e dentro do horario agendado.
 
 Importante: os novos leads do lote continuam dependendo da aprovacao do lote.
 
@@ -144,6 +144,7 @@ Esse botao:
 - nao cria novo lote;
 - roda stop-on-reply;
 - envia apenas mensagens `approved`;
+- usa `ignore_schedule=true` para processar a fila aprovada imediatamente;
 - exige confirmacao visual no navegador.
 
 ## Contrato Dos Endpoints
@@ -188,6 +189,7 @@ Campos principais:
 | `create_approval_batch` | `true` | Cria lote de aprovacao. |
 | `send_approval_request` | `true` | Envia pedido ao WhatsApp pessoal. |
 | `process_approved` | `true` | Processa mensagens ja aprovadas. |
+| `ignore_schedule` | `false` | Quando `true`, processa aprovadas mesmo se `scheduled_at` estiver no futuro. Usar apenas no botao de envio imediato. |
 | `worker_limit` | `10` | Limite do worker de aprovadas. |
 
 ## Relacao Com A Pagina `/autopilot`
@@ -237,4 +239,5 @@ Validar tambem:
 - `POST /api/autopilot/semi-auto/run` com `dry_run=true`: nao cria coleta, lote nem envio.
 - `POST /api/autopilot/semi-auto/run` com `dry_run=false` e `approve_collection=false`: nao coleta.
 - `POST /api/autopilot/semi-auto/run` com `dry_run=false` e `approve_collection=true`: cria run/lote conforme parametros.
+- Botao **Enviar aprovadas agora** chama `ignore_schedule=true` e processa somente mensagens `approved`.
 - Logs e respostas sem `api_key`, `apiKey`, `api_key_encrypted`, `secret`, `Bearer`, `x-api-key`, `x-rapidapi-key` ou token real.
