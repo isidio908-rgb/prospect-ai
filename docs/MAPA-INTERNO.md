@@ -1,7 +1,7 @@
 # Mapa Interno - Prospect AI
 
-**Atualizado em:** 04/07/2026  
-**Estado atual:** produto interno operacional em `main`, com Autopilot SDR, guia de uso e central de respostas mergeados. PR #20 prepara templates comerciais por nicho e profissao.
+**Atualizado em:** 05/07/2026  
+**Estado atual:** produto interno operacional em `main`, com Autopilot SDR, guia de uso, central de respostas e templates comerciais mergeados. PR #21 prepara diagnostico comercial avancado.
 
 Este documento e a bussola curta do projeto. Use ele para nao perder o fio entre prospeccao real, manutencao tecnica e proximas PRs.
 
@@ -52,29 +52,34 @@ Documentos antigos de sprint continuam no repositorio como historico, mas nao de
 | Autopilot completo controlado | Concluido | PR #17: central `/autopilot`, scheduler, worker controlado, stop-on-reply, follow-ups, classificacao, agendamento e diagnostico base. |
 | Guia operacional do Autopilot | Concluido | PR #18: documenta como usar `/autopilot` com seguranca. |
 | Central de respostas | Concluido | PR #19: `/autopilot/replies`, intencao, resposta sugerida e acoes CRM sem envio automatico. |
+| Templates comerciais | Concluido | PR #20: `/autopilot/templates`, mensagens por nicho/profissao sem envio automatico. |
 
-## Em Producao Agora - PR #20
+## Em Producao Agora - PR #21
 
-Objetivo: criar templates comerciais por nicho e profissao em `/autopilot/templates`.
+Objetivo: transformar diagnostico base em material comercial para abordagem, Loom/audio e reuniao.
 
 Entregas previstas:
 
-- Biblioteca de nichos: imobiliarias, clinicas, odontologia, estetica, advocacia, escolas, energia solar, moveis planejados e negocio local.
-- Tons: consultivo, direto, diagnostico e oportunidade.
-- Deteccao de dores observaveis no lead: sem site, sem Pixel Meta, sem GTM, sem GA4, sem WhatsApp no site, sem formulario, site lento e prova social sem tracking.
-- Geracao de mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
-- Uso de `profession`, `primary_niche` e `internal_context` do usuario.
-- Aplicar template no lead sem enviar WhatsApp.
-- Registro de historico em `lead_followups`.
+- Nova pagina `/autopilot/diagnostics`.
+- Endpoint `GET /api/autopilot/diagnostics/:leadId/advanced`.
+- Endpoint `POST /api/autopilot/diagnostics/:leadId/advanced/apply`.
+- Diagnostico curto para WhatsApp.
+- Diagnostico completo em Markdown.
+- Roteiro de Loom/audio.
+- Roteiro de reuniao de 15 minutos.
+- Oferta recomendada: tracking, trafego, site/landing page, conversao WhatsApp/formulario, criativos, CRM ou consultoria.
+- Separacao clara entre fatos observados e inferencias comerciais.
+- Aplicacao do diagnostico no lead sem criar fila e sem enviar WhatsApp.
 
 Papel no fluxo comercial:
 
 ```mermaid
 flowchart TD
-  A[Lead qualificado] --> B[Templates]
-  B --> C[Mensagem por nicho]
-  C --> D[Revisar e aplicar]
-  D --> E[Autopilot ou WhatsApp manual]
+  A[Lead qualificado] --> B[Diagnostico avancado]
+  B --> C[Resumo WhatsApp]
+  B --> D[Roteiro Loom]
+  B --> E[Roteiro reuniao]
+  C --> F[Revisar e abordar]
 ```
 
 ## Estado Operacional Atual
@@ -92,7 +97,8 @@ O sistema pode ser usado hoje para:
 - cancelar follow-ups quando houver resposta;
 - registrar reunioes e diagnosticos base;
 - tratar respostas em `/autopilot/replies`;
-- apos PR #20, gerar e aplicar templates em `/autopilot/templates`.
+- gerar e aplicar templates em `/autopilot/templates`;
+- apos PR #21, preparar diagnostico comercial em `/autopilot/diagnostics`.
 
 O sistema ainda nao deve:
 
@@ -118,7 +124,8 @@ O sistema ainda nao deve:
 | IA | Detalhe do lead | `/api/ai` | Operacional |
 | Autopilot | `/autopilot` | `/api/autopilot` | Operacional controlado |
 | Respostas | `/autopilot/replies` | `/api/autopilot/replies/inbox` | Operacional |
-| Templates | `/autopilot/templates` | `/api/autopilot/templates/*` | PR #20 |
+| Templates | `/autopilot/templates` | `/api/autopilot/templates/*` | Operacional |
+| Diagnostico | `/autopilot/diagnostics` | `/api/autopilot/diagnostics/:id/advanced` | PR #21 |
 
 ## Como Usar O Autopilot
 
@@ -139,6 +146,7 @@ Resumo operacional:
 11. Gerar diagnostico base.
 12. Tratar respostas em `/autopilot/replies`.
 13. Gerar/aplicar mensagens por nicho em `/autopilot/templates` antes de enfileirar novos contatos.
+14. Preparar material de venda em `/autopilot/diagnostics` antes de enviar diagnostico ou marcar reuniao.
 
 ## V2 Comercial - Sequencia De PRs
 
@@ -167,6 +175,8 @@ A V2 comercial deve melhorar conversao, nao apenas adicionar automacao.
 11. Central de respostas pode sugerir e copiar textos, mas nao deve enviar resposta automatica sem confirmacao explicita.
 12. Templates podem atualizar texto do lead, mas nao podem enviar WhatsApp automaticamente.
 13. Templates devem separar fatos observados de inferencias e nao prometer resultado financeiro.
+14. Diagnosticos podem atualizar texto do lead, mas nao podem criar fila nem enviar WhatsApp automaticamente.
+15. Diagnosticos devem separar fatos observados de inferencias e nao prometer resultado financeiro.
 
 ## Operacao Comercial Enquanto Desenvolve
 
@@ -174,10 +184,11 @@ A V2 comercial deve melhorar conversao, nao apenas adicionar automacao.
 2. Priorizar leads com WhatsApp confirmado e score alto.
 3. Usar CRM Kanban para status e proxima acao.
 4. Usar `/autopilot/templates` para ajustar mensagem por nicho.
-5. Usar `/autopilot` para aprovar, simular e enviar com controle.
-6. Usar `/autopilot/replies` para tratar respostas e marcar proximas acoes.
-7. Medir respostas, reunioes e clientes fechados.
-8. Ajustar criterios de score e mensagens com base nas respostas reais.
+5. Usar `/autopilot/diagnostics` para preparar diagnostico antes de reuniao ou Loom.
+6. Usar `/autopilot` para aprovar, simular e enviar com controle.
+7. Usar `/autopilot/replies` para tratar respostas e marcar proximas acoes.
+8. Medir respostas, reunioes e clientes fechados.
+9. Ajustar criterios de score e mensagens com base nas respostas reais.
 
 ## Prompt De Validacao Padrao
 
@@ -202,6 +213,6 @@ Atualize o corpo do PR com resultados completos.
 
 ## Proxima Decisao
 
-Validar PR #20 e, depois, seguir para PR #21: diagnostico comercial avancado.
+Validar PR #21 e, depois, seguir para PR #22: agendamento comercial assistido.
 
-Motivo: depois que a mensagem por nicho estiver melhor, o proximo ganho vem de transformar diagnostico em material de venda.
+Motivo: depois que a abordagem e o diagnostico estiverem bons, o proximo ganho vem de encurtar o caminho ate a reuniao marcada.
