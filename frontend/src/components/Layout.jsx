@@ -19,7 +19,8 @@ import {
   Repeat2,
   Inbox,
   FileText,
-  ClipboardList
+  ClipboardList,
+  CalendarClock
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -41,6 +42,7 @@ export default function Layout({ children }) {
     { name: 'Respostas', href: '/autopilot/replies', icon: Inbox },
     { name: 'Templates', href: '/autopilot/templates', icon: FileText },
     { name: 'Diagnostico', href: '/autopilot/diagnostics', icon: ClipboardList },
+    { name: 'Agendamento', href: '/autopilot/scheduling', icon: CalendarClock },
     { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
     { name: 'Credenciais', href: '/credentials', icon: Key },
     { name: 'Perfil', href: '/profile', icon: User },
