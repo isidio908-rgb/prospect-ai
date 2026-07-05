@@ -7,7 +7,7 @@ O objetivo inicial e uso proprio, separado do Performance Hub. A arquitetura ja 
 ## Status Atual
 
 **Atualizado em:** 05/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR, guia operacional, central de respostas e templates comerciais mergeados. PR #21 adiciona diagnostico comercial avancado.
+**Estado:** produto interno operacional em `main`, com Autopilot SDR, guia operacional, central de respostas, templates comerciais, diagnostico comercial avancado e Autopilot Comercial Semi-Automatico mergeados. PR atual adiciona agendamento comercial assistido.
 
 Stack local validada com Docker:
 
@@ -20,6 +20,8 @@ Stack local validada com Docker:
 Documentacao principal:
 
 - `docs/MAPA-INTERNO.md`
+- `docs/AUTOPILOT-SEMI-AUTO.md`
+- `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`
 - `docs/GUIA-USO-AUTOPILOT.md`
 - `docs/STATUS-ATUAL.md`
 - `docs/TODO.md`
@@ -63,10 +65,12 @@ Documentacao principal:
 - Prompts internos de IA ajustados pela profissao, nicho foco e instrucoes internas do usuario.
 - Dashboard comercial com funil, fontes, WhatsApp confirmado, conversao por nicho/cidade e filtros por periodo/fonte.
 - Autopilot SDR completo controlado em `/autopilot`.
+- Autopilot Comercial Semi-Automatico em `/autopilot/semi-auto`.
 - Central de respostas em `/autopilot/replies`.
 - Templates comerciais por nicho/contexto em `/autopilot/templates`.
-- Diagnostico comercial avancado em `/autopilot/diagnostics` no PR #21.
-- Regras, fila, lotes, aprovacao em lote, scheduler assistido, worker controlado, stop-on-reply, follow-ups, classificacao de respostas, agendamento assistido e diagnostico base.
+- Diagnostico comercial avancado em `/autopilot/diagnostics`.
+- Agendamento comercial assistido em `/autopilot/scheduling` no PR atual.
+- Regras, fila, lotes, aprovacao em lote, scheduler assistido, worker controlado, stop-on-reply, follow-ups, classificacao de respostas, agendamento base e diagnostico base.
 - Aprovacao em lote validada com webhook real da Evolution API.
 - Documentacao operacional para WhatsApp, IA, coleta, credenciais e Autopilot.
 - Dark mode.
@@ -101,6 +105,8 @@ Gera diagnostico e mensagens conforme profissao/contexto do usuario
 Usa CRM Kanban, templates, diagnostico avancado, WhatsApp e IA para abordagem
       ↓
 Autopilot SDR organiza fila, aprovacao, simulacao, envio controlado, respostas e follow-ups
+      ↓
+Agendamento assistido ajuda a transformar resposta positiva em reuniao marcada
 ```
 
 ## Fontes De Coleta
@@ -245,9 +251,11 @@ O Autopilot SDR e a camada de automacao comercial assistida e controlada.
 Implementado:
 
 - Pagina `/autopilot`.
+- Pagina `/autopilot/semi-auto`.
 - Pagina `/autopilot/replies`.
 - Pagina `/autopilot/templates`.
-- Pagina `/autopilot/diagnostics` no PR #21.
+- Pagina `/autopilot/diagnostics`.
+- Pagina `/autopilot/scheduling` no PR atual.
 - Regras de automacao.
 - Fila de mensagens.
 - Lotes de aprovacao.
@@ -264,14 +272,21 @@ Implementado:
 - Central de respostas comerciais.
 - Templates comerciais por nicho/profissao.
 - Diagnostico comercial avancado.
-- Agendamento assistido.
+- Autopilot Comercial Semi-Automatico.
+- Agendamento comercial assistido.
 - Diagnostico/PDF base em Markdown.
 
 Regra atual: aprovar mensagem muda status para `approved`, mas nao envia mensagem automaticamente para lead. O envio real fica no modo avancado e exige `dry_run=false`, `confirm_send=true` e confirmacao visual.
 
 Templates comerciais e diagnosticos atualizam textos no lead para revisao. Eles nao enviam WhatsApp automaticamente.
 
-Guia principal de uso: `docs/GUIA-USO-AUTOPILOT.md`.
+Agendamento assistido registra reuniao no CRM e historico, mas nao envia WhatsApp e nao cria calendario externo automaticamente.
+
+Guias principais:
+
+- `docs/AUTOPILOT-SEMI-AUTO.md`
+- `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`
+- `docs/GUIA-USO-AUTOPILOT.md`
 
 ## Rodar Localmente
 
@@ -315,9 +330,9 @@ npm run dev
 
 Principais proximos passos da V2 comercial:
 
-1. Validar/mergear diagnostico comercial avancado.
-2. Agendamento comercial assistido.
-3. Cron controlado futuro.
+1. Validar/mergear agendamento comercial assistido.
+2. Cron controlado futuro.
+3. Agenda interna de reunioes e integracao futura com Google Calendar/Calendly.
 
 Lista completa em `docs/TODO.md`.
 
@@ -333,6 +348,7 @@ Lista completa em `docs/TODO.md`.
 - Envio real do Autopilot exige confirmacao explicita.
 - Templates podem gerar/aplicar textos, mas nao enviar WhatsApp automaticamente.
 - Diagnosticos podem gerar/aplicar textos, mas nao criar fila nem enviar WhatsApp automaticamente.
+- Agendamento assistido pode registrar reuniao no CRM, mas nao enviar WhatsApp nem criar calendario externo automaticamente.
 
 ## Fonte De Verdade
 
@@ -340,9 +356,11 @@ A fonte de verdade atual e:
 
 1. Codigo atual em `main`.
 2. `docs/MAPA-INTERNO.md`.
-3. `docs/GUIA-USO-AUTOPILOT.md`.
-4. `docs/STATUS-ATUAL.md`.
-5. `docs/TODO.md`.
-6. `docs/HISTORICO.md`.
+3. `docs/AUTOPILOT-SEMI-AUTO.md`.
+4. `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`.
+5. `docs/GUIA-USO-AUTOPILOT.md`.
+6. `docs/STATUS-ATUAL.md`.
+7. `docs/TODO.md`.
+8. `docs/HISTORICO.md`.
 
 Documentos antigos de sprint/backend foram mantidos como historico e podem estar parcialmente desatualizados.
