@@ -2,6 +2,46 @@
 
 Este arquivo consolida o historico operacional do projeto. Documentos antigos de sprint continuam no repositorio, mas este passa a ser o registro principal e atualizado.
 
+## 05/07/2026 - PR #21: Diagnostico Comercial Avancado
+
+### Implementado
+
+- Criado servico `commercialDiagnosticService.mjs`.
+- Criadas rotas autenticadas:
+  - `GET /api/autopilot/diagnostics/:leadId/advanced`
+  - `POST /api/autopilot/diagnostics/:leadId/advanced/apply`
+- Criada pagina `/autopilot/diagnostics`.
+- Adicionado item de menu `Diagnostico`.
+- Gerado diagnostico curto para WhatsApp.
+- Gerado diagnostico completo em Markdown.
+- Gerado roteiro de Loom/audio.
+- Gerado roteiro de reuniao de 15 minutos.
+- Gerada sugestao de oferta baseada nos pontos observados.
+- Separados fatos observados de inferencias comerciais.
+- Aplicar diagnostico salva texto no lead e registra `lead_followups`.
+- Adicionado teste HTTP cobrindo geracao, isolamento por usuario e garantia de que nenhuma fila de mensagem e criada.
+
+### Regras De Seguranca
+
+- Diagnostico avancado nao envia WhatsApp.
+- Diagnostico avancado nao cria item em `message_queue`.
+- Usuario nao acessa diagnostico de lead de terceiro.
+- Diagnostico diferencia fatos observados de inferencias.
+- Diagnostico nao promete faturamento, ROI, volume de leads ou investimento sem dados confirmados.
+
+## 05/07/2026 - PR #20: Templates Comerciais Por Nicho E Profissao
+
+### Implementado e mergeado
+
+- Criada pagina `/autopilot/templates`.
+- Criado catalogo de nichos e tons comerciais.
+- Criada deteccao de dores observaveis por lead.
+- Gerada mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
+- Usados `profession`, `primary_niche` e `internal_context` do usuario.
+- Aplicar template atualiza lead e registra `lead_followups`.
+- Nenhum envio automatico de WhatsApp no fluxo.
+- Merge commit: `99bc8d786884a53b64876670044926a0df355982`.
+
 ## 03/07/2026 - Aprovacao Em Lote Via WhatsApp
 
 ### Implementado
@@ -284,8 +324,7 @@ O projeto esta pronto para uso interno controlado, desde que:
 
 ## Proximos Marcos
 
-1. UI do Autopilot SDR e fila/lotes de aprovacao.
-2. Scheduler assistido para enfileirar leads elegiveis.
-3. Worker de envio WhatsApp com limites e stop-on-reply.
-4. Resposta IA e agendamento automatico.
-5. Exportacao PDF com diagnostico por lead.
+1. Validar e mergear PR #21: diagnostico comercial avancado.
+2. PR #22: agendamento comercial assistido.
+3. Cron controlado futuro.
+4. PDF binario com template visual.
