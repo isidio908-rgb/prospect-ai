@@ -9,6 +9,7 @@ import LeadDetails from './pages/LeadDetails';
 import CrmKanban from './pages/CrmKanban';
 import CollectionHistory from './pages/CollectionHistory';
 import Autopilot from './pages/Autopilot';
+import AutopilotSemiAuto from './pages/AutopilotSemiAuto';
 import AutopilotReplies from './pages/AutopilotReplies';
 import AutopilotTemplates from './pages/AutopilotTemplates';
 import AutopilotDiagnostics from './pages/AutopilotDiagnostics';
@@ -116,6 +117,17 @@ function App() {
             <PrivateRoute>
               <Layout>
                 <Autopilot />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/autopilot/semi-auto"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <AutopilotSemiAuto />
               </Layout>
             </PrivateRoute>
           }

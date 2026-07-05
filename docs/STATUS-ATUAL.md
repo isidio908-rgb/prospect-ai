@@ -1,49 +1,53 @@
 # Prospect AI - Status Atual do Projeto
 
 **Data:** 05/07/2026  
-**Estado:** produto interno operacional em `main`, com Autopilot SDR completo controlado, guia operacional, central de respostas e templates comerciais mergeados. PR #21 adiciona diagnostico comercial avancado.
+**Estado:** produto interno operacional em `main` com Autopilot SDR controlado, respostas, templates e diagnostico comercial avancado. PR atual adiciona o Autopilot Comercial Semi-Automatico em `/autopilot/semi-auto`.
 
-Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para operar a pagina `/autopilot`, leia `docs/GUIA-USO-AUTOPILOT.md`.
+Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para operar o novo cockpit diario, leia `docs/AUTOPILOT-SEMI-AUTO.md`. Para operar a central manual/avancada, leia `docs/GUIA-USO-AUTOPILOT.md`.
 
 ## Resumo Executivo
 
 O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual, organiza o pipeline no CRM Kanban e possui Autopilot SDR controlado.
 
-O marco mais recente em `main` foi o merge do PR #20, que adicionou `/autopilot/templates` para gerar mensagens por nicho, tom e contexto profissional sem envio automatico. O PR #21 em producao adiciona `/autopilot/diagnostics` para transformar dados do lead em material comercial: resumo WhatsApp, Markdown, roteiro de Loom/audio, roteiro de reuniao e oferta recomendada.
+A evolucao atual conecta esses blocos em uma rotina semi-automatica: o sistema le historico, sugere o proximo recorte, simula o ciclo, coleta somente com aprovacao, analisa os leads, gera mensagens, cria lote de aprovacao e processa apenas mensagens ja aprovadas.
 
-## Marco Mais Recente Em Main - PR #20
+## Marco Mais Recente Em Main
 
-PR #20 foi validado e mergeado.
+PR #21 foi validado e mergeado antes desta etapa.
 
 Resultado final:
 
-- Criada pagina `/autopilot/templates`.
-- Criado catalogo de nichos e tons comerciais.
-- Criada deteccao de dores observaveis por lead.
-- Gerada mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
-- Usados `profession`, `primary_niche` e `internal_context` do usuario.
-- Aplicar template atualiza lead e registra `lead_followups`.
+- Criada pagina `/autopilot/diagnostics`.
+- Criado diagnostico curto para WhatsApp.
+- Criado diagnostico completo em Markdown.
+- Criado roteiro de Loom/audio.
+- Criado roteiro de reuniao.
+- Criada sugestao de oferta baseada em dados observados.
+- Aplicar diagnostico atualiza lead e registra historico.
 - Nenhum envio automatico de WhatsApp no fluxo.
-- Merge commit: `99bc8d786884a53b64876670044926a0df355982`.
 
-## Em Producao - PR #21
+## PR Atual - Autopilot Comercial Semi-Automatico
 
-Objetivo: transformar diagnostico em material de venda consultivo.
+Objetivo: deixar o sistema trabalhar a rotina diaria com menos cliques e mais controle.
 
 Entregas:
 
-- Nova pagina `/autopilot/diagnostics`.
-- Novo endpoint `GET /api/autopilot/diagnostics/:leadId/advanced`.
-- Novo endpoint `POST /api/autopilot/diagnostics/:leadId/advanced/apply`.
-- Diagnostico curto para WhatsApp.
-- Diagnostico completo em Markdown.
-- Roteiro de Loom/audio.
-- Roteiro de reuniao de 15 minutos.
-- Sugestao de oferta: tracking, trafego, site/landing page, conversao WhatsApp/formulario, criativos, CRM ou consultoria.
-- Separacao entre fatos observados e inferencias comerciais.
-- Aplicacao de diagnostico no lead sem fila e sem envio automatico.
-- Registro em `lead_followups`.
-- Testes para geracao, isolamento por usuario e garantia de que nenhuma mensagem entra em `message_queue`.
+- Nova pagina `/autopilot/semi-auto`.
+- Novo endpoint `GET /api/autopilot/semi-auto/plan`.
+- Novo endpoint `POST /api/autopilot/semi-auto/run`.
+- Novo servico `semiAutoCommercialService.mjs`.
+- Plano baseado em historico de coletas, credenciais, estatisticas da fila e leads.
+- Botao de simulacao segura com `dry_run=true`.
+- Execucao real protegida por `approve_collection=true`.
+- Coleta, WhatsApp check, deduplicacao e persistencia.
+- Analise dos leads salvos.
+- Criacao/atualizacao de regra assistida.
+- Enfileiramento de mensagens `pending`.
+- Criacao de lote e envio opcional para WhatsApp pessoal.
+- Stop-on-reply antes do worker.
+- Worker processando apenas mensagens `approved`.
+- Testes puros do plano semi-automatico.
+- Guia operacional `docs/AUTOPILOT-SEMI-AUTO.md`.
 
 ## Stack Atual
 
@@ -71,9 +75,10 @@ Entregas:
 | CRM Kanban | Operacional | Drag-and-drop, filtros e edicao rapida. |
 | Dashboard | Operacional | Funil, fontes, periodo, nicho, cidade e conversao. |
 | Autopilot SDR | Operacional controlado | Regras, fila, lotes, scheduler, worker controlado, follow-ups, resposta, agendamento e diagnostico. |
+| Autopilot semi-auto | PR atual | Cockpit diario em `/autopilot/semi-auto`. |
 | Central de respostas | Operacional | Inbox comercial em `/autopilot/replies`, sem envio automatico. |
 | Templates comerciais | Operacional | Mensagens por nicho/contexto em `/autopilot/templates`, sem envio automatico. |
-| Diagnostico avancado | PR #21 | Material comercial em `/autopilot/diagnostics`, sem envio automatico. |
+| Diagnostico avancado | Operacional | Material comercial em `/autopilot/diagnostics`, sem envio automatico. |
 
 ## Validacoes Ja Realizadas
 
@@ -85,7 +90,7 @@ Entregas:
 - `docker compose build backend frontend` passando.
 - `docker compose up -d backend frontend` passando.
 - `/health` retornando 200.
-- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`, `/autopilot/replies`, `/autopilot/templates`.
+- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`, `/autopilot/replies`, `/autopilot/templates`, `/autopilot/diagnostics`.
 
 ### Providers
 
@@ -113,9 +118,10 @@ Entregas:
 - Envio real do worker exige confirmacao explicita.
 - Central de respostas mantem respostas como acao assistida/copia, sem envio automatico.
 - Templates aplicam textos no cadastro do lead, mas nao enviam WhatsApp automaticamente.
-- PR #21 aplica diagnostico no lead, mas nao cria fila nem envia WhatsApp automaticamente.
+- Diagnostico avancado aplica texto no lead, mas nao cria fila nem envia WhatsApp automaticamente.
+- Semi-auto deve processar somente fila `approved` e exigir aprovacao para coleta real.
 
-## Autopilot SDR Atual
+## Autopilot Atual
 
 ### Implementado
 
@@ -137,7 +143,8 @@ Entregas:
 - Diagnostico Markdown.
 - Central de respostas e proxima acao recomendada.
 - Templates comerciais por nicho e profissao.
-- Em PR #21: diagnostico comercial avancado.
+- Diagnostico comercial avancado.
+- Em PR atual: ciclo semi-automatico completo.
 
 ### Comandos Suportados
 
@@ -150,20 +157,16 @@ CANCELAR 42:2,4
 
 ### Importante
 
-Aprovar lote ou mensagem apenas muda `message_queue.status` para `approved`. O envio real para lead acontece somente pelo worker controlado, em modo avancado, com confirmacao explicita.
+Aprovar lote ou mensagem apenas muda `message_queue.status` para `approved`. O envio real para lead acontece somente pelo worker controlado.
 
-A central de respostas copia sugestoes e registra acoes no CRM. Ela nao envia resposta automatica para leads.
-
-A central de templates gera, copia e aplica textos no lead. Ela nao envia mensagem para leads.
-
-A central de diagnostico avancado gera, copia e aplica diagnostico no lead. Ela nao cria fila nem envia mensagem para leads.
+No semi-auto, o botao **Enviar aprovadas agora** processa somente itens `approved` e roda stop-on-reply antes.
 
 ## O Que Ainda Falta
 
-Prioridade alta da V2 comercial:
+Prioridade alta:
 
-1. Validar e mergear PR #21: diagnostico comercial avancado.
-2. PR #22: agendamento comercial assistido.
+1. Validar PR atual: Autopilot Comercial Semi-Automatico.
+2. Proximo PR: agendamento comercial assistido.
 
 Prioridade media:
 
@@ -174,16 +177,16 @@ Prioridade media:
 
 ## Proximo Passo Recomendado
 
-Validar PR #21 pela CLI local.
+Validar o PR semi-automatico pela CLI local.
 
-Motivo: o diagnostico avancado aumenta autoridade na abordagem e facilita transformar resposta positiva em reuniao.
+Motivo: ele conecta coleta, analise, lote de aprovacao e worker de aprovadas em uma rotina diaria clara para vender mais com menos operacao manual.
 
 ## Status Geral
 
 Estimativa pragmatica:
 
 - Core de prospeccao: 98% pronto.
-- Operacao interna local: 97% pronta.
-- Autopilot assistido/controlado: 94% pronto.
-- Produto comercial: 70% pronto.
+- Operacao interna local: 98% pronta.
+- Autopilot assistido/controlado: 96% pronto.
+- Produto comercial: 72% pronto.
 - Documentacao: em atualizacao continua.

@@ -6,34 +6,39 @@ Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, esta
 
 ## Prioridade Alta
 
-### 1. PR #21 - Diagnostico comercial avancado
+### 1. PR atual - Autopilot Comercial Semi-Automatico
 
-Objetivo: transformar o diagnostico base em material de venda pronto para abordagem consultiva.
+Objetivo: reduzir o trabalho manual da rotina diaria de prospeccao sem perder aprovacao humana nos pontos sensiveis.
 
 Escopo:
 
-- Criar pagina `/autopilot/diagnostics`.
-- Criar endpoint `GET /api/autopilot/diagnostics/:leadId/advanced`.
-- Criar endpoint `POST /api/autopilot/diagnostics/:leadId/advanced/apply`.
-- Gerar diagnostico curto para WhatsApp.
-- Gerar diagnostico completo em Markdown.
-- Gerar roteiro de Loom/audio.
-- Gerar roteiro de reuniao de 15 minutos.
-- Gerar sugestao de oferta: trafego, tracking, site/landing page, CRM, WhatsApp/conversao, criativos ou consultoria.
-- Separar fatos observados de inferencias comerciais.
-- Permitir copiar cada bloco na interface.
-- Aplicar diagnostico no lead sem criar fila e sem enviar WhatsApp.
-- Registrar historico em `lead_followups`.
+- Criar pagina `/autopilot/semi-auto`.
+- Criar endpoint `GET /api/autopilot/semi-auto/plan`.
+- Criar endpoint `POST /api/autopilot/semi-auto/run`.
+- Ler historico de coletas, credenciais, fila e leads.
+- Sugerir query, cidade, nicho, fonte e credencial.
+- Permitir simular ciclo completo com `dry_run=true`.
+- Exigir `approve_collection=true` para coleta real.
+- Coletar leads, verificar WhatsApp, deduplicar e salvar.
+- Analisar leads salvos e gerar score, prioridade, diagnostico e mensagens.
+- Criar/atualizar regra assistida para o recorte comercial.
+- Enfileirar mensagens como `pending`.
+- Criar lote de aprovacao e enviar ao WhatsApp pessoal quando configurado.
+- Rodar stop-on-reply antes do worker.
+- Processar somente mensagens `approved`.
+- Documentar o uso em `docs/AUTOPILOT-SEMI-AUTO.md`.
 
 Criterios de aceite:
 
-- Usuario consegue usar o diagnostico na abordagem.
-- Diagnostico diferencia fatos observados de inferencias.
-- Diagnostico nao promete resultado financeiro sem dados.
-- Aplicar diagnostico nao envia mensagem automaticamente.
-- Outro usuario nao acessa diagnostico de lead de terceiro.
+- Usuario entende claramente o que sera automatico e o que exige aprovacao.
+- Simulacao nao cria coleta, lote, fila ou envio real.
+- Coleta real so acontece com `dry_run=false` e `approve_collection=true`.
+- Itens novos entram como `pending` e precisam de lote aprovado.
+- Worker envia somente mensagens `approved`.
+- Stop-on-reply roda antes do envio de aprovadas.
+- Logs/respostas nao expoem segredos.
 
-### 2. PR #22 - Agendamento comercial assistido
+### 2. Proximo PR - Agendamento comercial assistido
 
 Objetivo: deixar o caminho de resposta positiva ate reuniao mais curto.
 
@@ -52,25 +57,7 @@ Criterios de aceite:
 
 ## Prioridade Media
 
-### 3. Operacao controlada de prospeccao real
-
-Objetivo: continuar gerando oportunidades enquanto o produto evolui.
-
-Checklist:
-
-- Definir nicho do dia.
-- Definir cidade/regiao do dia.
-- Coletar lotes pequenos por provider ativo.
-- Priorizar leads com WhatsApp confirmado e score alto.
-- Usar CRM Kanban para registrar status e proxima acao.
-- Usar `/autopilot/templates` para ajustar mensagem por nicho.
-- Usar `/autopilot/diagnostics` para preparar diagnostico comercial antes de reuniao.
-- Usar `/autopilot` para aprovar, simular e enviar com controle.
-- Usar `/autopilot/replies` para tratar respostas recebidas.
-- Medir respostas, reunioes e clientes fechados.
-- Ajustar mensagens e criterios de score com base em respostas reais.
-
-### 4. Cron controlado futuro
+### 3. Cron controlado futuro
 
 Objetivo: automatizar horarios diarios sem perder controle.
 
@@ -80,9 +67,44 @@ Escopo futuro:
 - Limite por regra.
 - Logs por execucao.
 - Pausa automatica em erro.
+- Opcao de rodar apenas simulacao em horarios automaticos.
 - Nunca enviar direto sem configuracao explicita.
 
+### 4. Operacao controlada de prospeccao real
+
+Objetivo: continuar gerando oportunidades enquanto o produto evolui.
+
+Checklist:
+
+- Definir nicho do dia.
+- Definir cidade/regiao do dia.
+- Abrir `/autopilot/semi-auto`.
+- Atualizar plano e simular ciclo.
+- Rodar coleta aprovada em lote pequeno.
+- Aprovar lote pelo WhatsApp pessoal.
+- Processar aprovadas.
+- Usar `/autopilot/replies` para tratar respostas recebidas.
+- Usar `/crm` para registrar reunioes, propostas e fechamentos.
+- Medir respostas, reunioes e clientes fechados.
+- Ajustar mensagens e criterios de score com base em respostas reais.
+
 ## Concluido Recentemente
+
+### PR #21 - Diagnostico comercial avancado
+
+Validado e mergeado.
+
+Resultado:
+
+- Criada pagina `/autopilot/diagnostics`.
+- Criado diagnostico curto para WhatsApp.
+- Criado diagnostico completo em Markdown.
+- Criado roteiro de Loom/audio.
+- Criado roteiro de reuniao.
+- Criada oferta recomendada por dores observadas.
+- Separados fatos observados de inferencias.
+- Aplicar diagnostico atualiza lead e registra `lead_followups`.
+- Nenhum envio automatico de WhatsApp no fluxo.
 
 ### PR #20 - Templates comerciais por nicho e profissao
 
@@ -172,4 +194,6 @@ Resultado:
 - Worker automatico so pode existir com limite diario, limite horario, janela de envio e stop-on-reply.
 - Template comercial pode gerar, copiar e aplicar textos no lead, mas nao pode enviar WhatsApp automaticamente.
 - Diagnostico comercial pode gerar, copiar e aplicar texto no lead, mas nao pode criar fila nem enviar WhatsApp automaticamente.
+- Autopilot semi-auto pode processar fila aprovada, mas somente itens `approved`.
+- Coleta semi-automatica real exige aprovacao explicita.
 - Toda PR deve terminar com testes, build, Docker e scan basico de segredos.

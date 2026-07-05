@@ -314,6 +314,7 @@ export async function processApprovedMessages(userId, options = {}) {
   const limit = asInt(options.limit, 10, 1, 100);
   const dryRun = options.dry_run !== false;
   const confirmSend = options.confirm_send === true;
+  const ignoreSchedule = options.ignore_schedule === true || options.ignoreSchedule === true;
   const canSend = !dryRun && confirmSend;
 
   const result = await query(
@@ -324,16 +325,25 @@ export async function processApprovedMessages(userId, options = {}) {
      LEFT JOIN automation_rules ar ON ar.id = mq.automation_rule_id AND ar.user_id = mq.user_id
      WHERE mq.user_id = $1
        AND mq.status = 'approved'
-       AND mq.scheduled_at <= NOW()
+       AND ($3::boolean = TRUE OR mq.scheduled_at <= NOW())
      ORDER BY mq.scheduled_at ASC, mq.created_at ASC
      LIMIT $2`,
-    [userId, limit]
+    [userId, limit, ignoreSchedule]
   );
 
   const items = [];
   for (const row of result.rows) {
     const text = buildMessageText(row, row.message_type);
-    const item = { id: row.id, lead_id: row.lead_id, nome_empresa: row.nome_empresa, status: row.status, would_send: true, sent: false };
+    const item = {
+      id: row.id,
+      lead_id: row.lead_id,
+      nome_empresa: row.nome_empresa,
+      status: row.status,
+      scheduled_at: row.scheduled_at,
+      ignore_schedule: ignoreSchedule,
+      would_send: true,
+      sent: false,
+    };
 
     if (!canSend) {
       items.push({ ...item, dry_run: true, reason: dryRun ? 'dry_run' : 'confirm_send_required' });
@@ -375,7 +385,14 @@ export async function processApprovedMessages(userId, options = {}) {
     }
   }
 
-  return { dryRun, confirmSend, sentCount: items.filter((item) => item.sent).length, total: items.length, items };
+  return {
+    dryRun,
+    confirmSend,
+    ignoreSchedule,
+    sentCount: items.filter((item) => item.sent).length,
+    total: items.length,
+    items,
+  };
 }
 
 export async function applyStopOnReply(userId) {
