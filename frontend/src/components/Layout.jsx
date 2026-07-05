@@ -16,6 +16,7 @@ import {
   History,
   User,
   Bot,
+  Repeat2,
   Inbox,
   FileText,
   ClipboardList
@@ -36,6 +37,7 @@ export default function Layout({ children }) {
     { name: 'Leads', href: '/leads', icon: Users },
     { name: 'CRM Kanban', href: '/crm', icon: Columns3 },
     { name: 'Autopilot', href: '/autopilot', icon: Bot },
+    { name: 'Semi-auto', href: '/autopilot/semi-auto', icon: Repeat2 },
     { name: 'Respostas', href: '/autopilot/replies', icon: Inbox },
     { name: 'Templates', href: '/autopilot/templates', icon: FileText },
     { name: 'Diagnostico', href: '/autopilot/diagnostics', icon: ClipboardList },
