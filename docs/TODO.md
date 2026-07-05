@@ -6,71 +6,79 @@ Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, esta
 
 ## Prioridade Alta
 
-### 1. PR atual - Autopilot Comercial Semi-Automatico
-
-Objetivo: reduzir o trabalho manual da rotina diaria de prospeccao sem perder aprovacao humana nos pontos sensiveis.
-
-Escopo:
-
-- Criar pagina `/autopilot/semi-auto`.
-- Criar endpoint `GET /api/autopilot/semi-auto/plan`.
-- Criar endpoint `POST /api/autopilot/semi-auto/run`.
-- Ler historico de coletas, credenciais, fila e leads.
-- Sugerir query, cidade, nicho, fonte e credencial.
-- Permitir simular ciclo completo com `dry_run=true`.
-- Exigir `approve_collection=true` para coleta real.
-- Coletar leads, verificar WhatsApp, deduplicar e salvar.
-- Analisar leads salvos e gerar score, prioridade, diagnostico e mensagens.
-- Criar/atualizar regra assistida para o recorte comercial.
-- Enfileirar mensagens como `pending`.
-- Criar lote de aprovacao e enviar ao WhatsApp pessoal quando configurado.
-- Rodar stop-on-reply antes do worker.
-- Processar somente mensagens `approved`.
-- Documentar o uso em `docs/AUTOPILOT-SEMI-AUTO.md`.
-
-Criterios de aceite:
-
-- Usuario entende claramente o que sera automatico e o que exige aprovacao.
-- Simulacao nao cria coleta, lote, fila ou envio real.
-- Coleta real so acontece com `dry_run=false` e `approve_collection=true`.
-- Itens novos entram como `pending` e precisam de lote aprovado.
-- Worker envia somente mensagens `approved`.
-- Stop-on-reply roda antes do envio de aprovadas.
-- Logs/respostas nao expoem segredos.
-
-### 2. Proximo PR - Agendamento comercial assistido
+### 1. PR atual - Agendamento comercial assistido
 
 Objetivo: deixar o caminho de resposta positiva ate reuniao mais curto.
 
-Escopo recomendado:
+Escopo:
 
-- Sugerir horarios disponiveis manualmente cadastrados.
-- Gerar mensagem de convite para reuniao.
-- Confirmar data/horario combinado.
-- Registrar no lead e no historico.
-- Preparar futura integracao Google Calendar/Calendly.
+- Criar pagina `/autopilot/scheduling`.
+- Criar endpoint `POST /api/autopilot/scheduling/preview`.
+- Criar endpoint `POST /api/autopilot/scheduling/confirm`.
+- Sugerir horarios por timezone, duracao e periodo preferido.
+- Gerar mensagem de convite para reuniao usando lead e perfil profissional.
+- Permitir copiar a mensagem para envio manual.
+- Registrar horario combinado no CRM.
+- Atualizar lead para `reuniao_marcada`.
+- Gravar historico em `lead_followups`.
+- Documentar uso em `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`.
 
 Criterios de aceite:
 
 - Lead interessado vira `reuniao_marcada` com menos cliques.
+- Gerar previa nao altera banco.
+- Confirmar reuniao exige `scheduled_for`.
+- Nenhum WhatsApp e enviado automaticamente.
 - Nenhum evento externo e criado sem confirmacao.
+- Outro usuario nao acessa lead de terceiro.
 
-## Prioridade Media
-
-### 3. Cron controlado futuro
+### 2. Proximo PR - Cron controlado futuro
 
 Objetivo: automatizar horarios diarios sem perder controle.
 
 Escopo futuro:
 
 - Scheduler configuravel por horario.
-- Limite por regra.
+- Limite por regra e por janela.
 - Logs por execucao.
 - Pausa automatica em erro.
 - Opcao de rodar apenas simulacao em horarios automaticos.
 - Nunca enviar direto sem configuracao explicita.
 
-### 4. Operacao controlada de prospeccao real
+Criterios de aceite:
+
+- Cron nasce desligado por padrao.
+- Toda regra automatica tem limite diario.
+- Envio real continua exigindo status `approved` e janela segura.
+- Stop-on-reply roda antes de qualquer envio.
+
+## Prioridade Media
+
+### 3. Agenda interna de reunioes
+
+Objetivo: visualizar reunioes marcadas sem depender de Google Calendar no primeiro momento.
+
+Escopo futuro:
+
+- Filtro de leads `reuniao_marcada`.
+- Lista por data/periodo.
+- Proxima acao e responsavel.
+- Link para detalhe do lead.
+- Campo de observacao da reuniao.
+
+### 4. Integracao Google Calendar/Calendly
+
+Objetivo: criar evento externo somente quando o fluxo assistido ja estiver validado.
+
+Escopo futuro:
+
+- Cadastro de provider de agenda.
+- Teste de credencial.
+- Criacao de evento com confirmacao explicita.
+- Registro do link no lead.
+- Sem envio automatico de convite sem revisao.
+
+### 5. Operacao controlada de prospeccao real
 
 Objetivo: continuar gerando oportunidades enquanto o produto evolui.
 
@@ -84,11 +92,34 @@ Checklist:
 - Aprovar lote pelo WhatsApp pessoal.
 - Processar aprovadas.
 - Usar `/autopilot/replies` para tratar respostas recebidas.
-- Usar `/crm` para registrar reunioes, propostas e fechamentos.
+- Usar `/autopilot/scheduling` para marcar reunioes.
+- Usar `/crm` para registrar propostas e fechamentos.
 - Medir respostas, reunioes e clientes fechados.
 - Ajustar mensagens e criterios de score com base em respostas reais.
 
 ## Concluido Recentemente
+
+### PR #22 - Autopilot Comercial Semi-Automatico
+
+Validado e mergeado.
+
+Resultado:
+
+- Criada pagina `/autopilot/semi-auto`.
+- Criado endpoint `GET /api/autopilot/semi-auto/plan`.
+- Criado endpoint `POST /api/autopilot/semi-auto/run`.
+- Criado servico `semiAutoCommercialService.mjs`.
+- Plano baseado em historico de coletas, credenciais, estatisticas da fila e leads.
+- Simulacao `dry_run=true` por padrao.
+- Coleta real somente com `approve_collection=true`.
+- Analise automatica dos leads salvos.
+- Criacao/atualizacao de regra assistida.
+- Enfileiramento de mensagens `pending`.
+- Criacao de lote e envio opcional ao WhatsApp pessoal.
+- Stop-on-reply antes de qualquer worker.
+- Worker processando somente mensagens `approved`.
+- Guia operacional `docs/AUTOPILOT-SEMI-AUTO.md`.
+- Merge commit: `2b7775239faf3dfa2edd769c5b9d980b953b803d`.
 
 ### PR #21 - Diagnostico comercial avancado
 
@@ -196,4 +227,5 @@ Resultado:
 - Diagnostico comercial pode gerar, copiar e aplicar texto no lead, mas nao pode criar fila nem enviar WhatsApp automaticamente.
 - Autopilot semi-auto pode processar fila aprovada, mas somente itens `approved`.
 - Coleta semi-automatica real exige aprovacao explicita.
+- Agendamento assistido pode registrar reuniao no CRM, mas nao pode enviar WhatsApp nem criar calendario externo automaticamente.
 - Toda PR deve terminar com testes, build, Docker e scan basico de segredos.
