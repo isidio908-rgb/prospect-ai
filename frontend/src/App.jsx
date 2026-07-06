@@ -9,11 +9,6 @@ import LeadDetails from './pages/LeadDetails';
 import CrmKanban from './pages/CrmKanban';
 import CollectionHistory from './pages/CollectionHistory';
 import Autopilot from './pages/Autopilot';
-import AutopilotSemiAuto from './pages/AutopilotSemiAuto';
-import AutopilotReplies from './pages/AutopilotReplies';
-import AutopilotTemplates from './pages/AutopilotTemplates';
-import AutopilotDiagnostics from './pages/AutopilotDiagnostics';
-import AutopilotScheduling from './pages/AutopilotScheduling';
 import Profile from './pages/Profile';
 import Credentials from './pages/Credentials';
 import WhatsAppSettings from './pages/WhatsAppSettings';
@@ -123,61 +118,6 @@ function App() {
           }
         />
 
-        <Route
-          path="/autopilot/semi-auto"
-          element={
-            <PrivateRoute>
-              <Layout>
-                <AutopilotSemiAuto />
-              </Layout>
-            </PrivateRoute>
-          }
-        />
-
-        <Route
-          path="/autopilot/replies"
-          element={
-            <PrivateRoute>
-              <Layout>
-                <AutopilotReplies />
-              </Layout>
-            </PrivateRoute>
-          }
-        />
-
-        <Route
-          path="/autopilot/templates"
-          element={
-            <PrivateRoute>
-              <Layout>
-                <AutopilotTemplates />
-              </Layout>
-            </PrivateRoute>
-          }
-        />
-
-        <Route
-          path="/autopilot/diagnostics"
-          element={
-            <PrivateRoute>
-              <Layout>
-                <AutopilotDiagnostics />
-              </Layout>
-            </PrivateRoute>
-          }
-        />
-
-        <Route
-          path="/autopilot/scheduling"
-          element={
-            <PrivateRoute>
-              <Layout>
-                <AutopilotScheduling />
-              </Layout>
-            </PrivateRoute>
-          }
-        />
-        
         <Route
           path="/leads/:id"
           element={
