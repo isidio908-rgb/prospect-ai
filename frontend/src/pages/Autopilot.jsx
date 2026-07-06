@@ -135,7 +135,7 @@ export default function Autopilot() {
   const [editingRuleId, setEditingRuleId] = useState(null);
   const [ruleForm, setRuleForm] = useState(EMPTY_RULE);
   const [automationForm, setAutomationForm] = useState(EMPTY_AUTOMATION_FORM);
-  const [safetyOpen, setSafetyOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(true);
 
   useEffect(() => {
     loadAutopilot();
