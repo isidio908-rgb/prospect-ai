@@ -7,18 +7,18 @@ O Autopilot e a central que prepara oportunidades comerciais para voce. Ele pode
 
 ## Ideia Principal
 
-Voce nao precisa operar paginas separadas de respostas, templates, diagnostico ou agendamento. Essas partes viraram motores internos do Autopilot.
+Voce nao precisa operar paginas separadas de respostas, templates, diagnostico ou agendamento. Essas partes sao motores internos ou aparecem dentro do CRM/detalhe do lead quando fizer sentido.
 
 Pense assim:
 
 | Voce faz | O sistema faz por tras |
 |---|---|
-| Escolhe nicho/cidade/fonte | Busca e organiza leads. |
-| Define limite e score minimo | Prioriza quem parece melhor. |
-| Roda o Autopilot | Coleta, analisa, gera mensagem e cria lote. |
+| Define o alvo do dia | Monta a busca e prepara parametros tecnicos. |
+| Clica em verificar | Confere o plano sem criar coleta, lote, fila ou envio. |
+| Clica em preparar oportunidades | Coleta, analisa, pontua e cria lote de aprovacao. |
 | Aprova no WhatsApp pessoal | Libera apenas as mensagens boas. |
-| Envia aprovadas | Dispara somente itens aprovados. |
-| Acompanha o CRM | Organiza respostas, reunioes e proximas acoes. |
+| Clica em enviar aprovadas | Dispara somente itens aprovados. |
+| Trabalha o CRM | Organiza respostas, reunioes e proximas acoes. |
 
 ## Rotina Mais Simples
 
@@ -34,26 +34,40 @@ Antes de operar, veja:
 
 Entre em `/autopilot`.
 
-Use essa tela para configurar o alvo do dia:
+O bloco principal agora e **Operacao diaria guiada**. Use ele antes das configuracoes detalhadas.
 
-- credencial de coleta;
+Preencha:
+
 - busca do dia;
+- credencial de coleta;
 - cidade;
 - nicho;
 - limite de leads;
 - score minimo;
-- tamanho do lote;
-- se quer enviar lote para seu WhatsApp pessoal.
+- se quer receber pedido de aprovacao no WhatsApp pessoal.
 
-### 3. Verifique antes de executar
+### 3. Leia a proxima acao recomendada
+
+No topo da tela, o Autopilot mostra o que falta ou o que voce deve fazer agora.
+
+Exemplos:
+
+- informar credencial;
+- informar busca/cidade/nicho;
+- verificar sem executar;
+- preparar oportunidades;
+- aprovar lote;
+- enviar mensagens aprovadas.
+
+### 4. Verifique antes de executar
 
 Clique em **Verificar sem executar** quando quiser conferir se a configuracao faz sentido.
 
 Essa acao nao deve criar coleta, lote, fila nem envio. Ela serve para reduzir erro antes de rodar de verdade.
 
-### 4. Rode o Autopilot
+### 5. Prepare oportunidades
 
-Clique em **Rodar Autopilot agora**.
+Clique em **Preparar oportunidades**.
 
 O sistema pode:
 
@@ -68,7 +82,7 @@ O sistema pode:
 
 Mensagens novas ficam aguardando aprovacao. Elas nao sao enviadas automaticamente para leads.
 
-### 5. Aprove pelo WhatsApp pessoal
+### 6. Aprove pelo WhatsApp pessoal
 
 Quando o lote chegar no seu WhatsApp, responda com:
 
@@ -81,9 +95,9 @@ CANCELAR 42:2
 
 Aprovacao de lote apenas muda mensagens para `approved`. Ainda nao envia para o lead.
 
-### 6. Envie somente as aprovadas
+### 7. Envie somente as aprovadas
 
-Quando quiser disparar, use **Enviar aprovadas agora**.
+Quando quiser disparar, use **Enviar aprovadas**.
 
 Essa acao deve processar somente mensagens com status `approved`.
 
@@ -94,16 +108,21 @@ Antes de enviar, o sistema deve respeitar:
 - WhatsApp conectado;
 - confirmacao visual do usuario.
 
-### 7. Trabalhe o CRM
+### 8. Trabalhe respostas e reunioes no CRM
 
 Depois dos disparos, use `/crm` para acompanhar:
 
-- quem respondeu;
-- quem precisa de follow-up;
-- quem quer reuniao;
+- leads para responder agora;
+- reunioes marcadas;
+- proximas acoes;
 - propostas enviadas;
 - clientes fechados;
 - leads sem interesse.
+
+O CRM tem um painel de foco com:
+
+- **Responder agora**;
+- **Agenda interna**.
 
 ## Onde Cada Coisa Fica
 
@@ -113,7 +132,7 @@ Depois dos disparos, use `/crm` para acompanhar:
 | Buscar novos leads manualmente | Coletar |
 | Ver historico e logs | Historico |
 | Ver lista completa | Leads |
-| Trabalhar funil comercial | CRM Kanban |
+| Trabalhar respostas, reunioes e funil | CRM Kanban |
 | Rodar automacao controlada | Autopilot |
 | Conectar WhatsApp | WhatsApp |
 | Cadastrar APIs | Credenciais |
@@ -140,7 +159,7 @@ O Autopilot deve acelerar sua prospeccao, mas nao tirar seu controle.
 Fluxo seguro:
 
 ```text
-Configurar alvo -> Rodar Autopilot -> Aprovar lote -> Enviar aprovadas -> Trabalhar CRM
+Configurar alvo -> Verificar -> Preparar oportunidades -> Aprovar lote -> Enviar aprovadas -> Trabalhar CRM
 ```
 
 Nada deve ir para o lead antes da etapa de envio de mensagens aprovadas.
@@ -157,12 +176,11 @@ Para testar sem risco:
 6. Envie aprovadas apenas se o lead for seu numero de teste.
 7. Confira se o CRM e historico foram atualizados.
 
-## Melhorias Planejadas
+## Melhorias Entregues Nesta Rodada
 
-Proximas melhorias de UX:
-
-- wizard de primeiro uso;
+- wizard de operacao diaria;
 - proxima acao recomendada no topo;
-- respostas e agendamento dentro do CRM/detalhe do lead;
-- agenda interna de reunioes;
-- cron controlado com limites e logs.
+- checagem de prontidao;
+- respostas e reunioes destacadas no CRM;
+- agenda interna inicial no CRM;
+- cron automatico mantido desligado por seguranca.
