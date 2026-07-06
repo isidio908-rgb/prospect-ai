@@ -97,6 +97,8 @@ export const autopilot = {
   applyTemplate: (data) => api.post('/api/autopilot/templates/apply', data),
   advancedDiagnostic: (leadId) => api.get(`/api/autopilot/diagnostics/${leadId}/advanced`),
   applyAdvancedDiagnostic: (leadId) => api.post(`/api/autopilot/diagnostics/${leadId}/advanced/apply`),
+  schedulingPreview: (data) => api.post('/api/autopilot/scheduling/preview', data),
+  confirmScheduling: (data) => api.post('/api/autopilot/scheduling/confirm', data),
   createAppointment: (data) => api.post('/api/autopilot/appointments', data),
   diagnostic: (leadId) => api.get(`/api/autopilot/diagnostics/${leadId}`),
 };

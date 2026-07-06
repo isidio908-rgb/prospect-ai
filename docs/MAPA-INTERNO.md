@@ -1,7 +1,7 @@
 # Mapa Interno - Prospect AI
 
 **Atualizado em:** 05/07/2026  
-**Estado atual:** produto interno operacional em `main` com coleta, CRM, WhatsApp, Autopilot SDR, respostas, templates e diagnostico comercial avancado. PR atual prepara o Autopilot Comercial Semi-Automatico.
+**Estado atual:** produto interno operacional em `main` com coleta, CRM, WhatsApp, Autopilot SDR, respostas, templates, diagnostico comercial avancado e Autopilot Comercial Semi-Automatico. PR atual adiciona agendamento comercial assistido.
 
 Este documento e a bussola curta do projeto. Use ele para nao perder o fio entre prospeccao real, manutencao tecnica e proximas PRs.
 
@@ -28,11 +28,12 @@ Ordem de confianca:
 1. Codigo em `main`.
 2. `docs/MAPA-INTERNO.md`.
 3. `docs/AUTOPILOT-SEMI-AUTO.md`.
-4. `docs/GUIA-USO-AUTOPILOT.md`.
-5. `docs/STATUS-ATUAL.md`.
-6. `docs/TODO.md`.
-7. `docs/HISTORICO.md`.
-8. Documentos operacionais especificos.
+4. `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`.
+5. `docs/GUIA-USO-AUTOPILOT.md`.
+6. `docs/STATUS-ATUAL.md`.
+7. `docs/TODO.md`.
+8. `docs/HISTORICO.md`.
+9. Documentos operacionais especificos.
 
 Documentos antigos de sprint continuam no repositorio como historico, mas nao devem guiar decisoes atuais se divergirem destes arquivos.
 
@@ -54,37 +55,35 @@ Documentos antigos de sprint continuam no repositorio como historico, mas nao de
 | Central de respostas | Concluido | `/autopilot/replies`, intencao, resposta sugerida e acoes CRM sem envio automatico. |
 | Templates comerciais | Concluido | `/autopilot/templates`, mensagens por nicho/profissao sem envio automatico. |
 | Diagnostico comercial avancado | Concluido | `/autopilot/diagnostics`, diagnostico curto/completo, Loom, reuniao e oferta recomendada. |
+| Autopilot semi-automatico | Concluido | `/autopilot/semi-auto`, plano por historico, coleta aprovada, lote e worker para aprovadas. |
 
-## Em Producao Agora - Autopilot Semi-Automatico
+## Em Producao Agora - Agendamento Comercial Assistido
 
-Objetivo: transformar a rotina diaria em um cockpit que le historico, sugere o proximo recorte, coleta com aprovacao, analisa, gera mensagens, cria lote de aprovacao e trabalha apenas a fila aprovada.
+Objetivo: transformar respostas positivas em reunioes marcadas com menos atrito, mantendo tudo assistido e controlado.
 
-Entregas previstas:
+Entregas previstas no PR atual:
 
-- Nova pagina `/autopilot/semi-auto`.
-- Endpoint `GET /api/autopilot/semi-auto/plan`.
-- Endpoint `POST /api/autopilot/semi-auto/run`.
-- Plano automatico baseado em historico de coletas, credenciais, fila e leads.
-- Simulacao `dry_run=true` por padrao.
-- Coleta real somente com `approve_collection=true`.
-- Analise automatica dos leads salvos.
-- Criacao/atualizacao de regra assistida.
-- Enfileiramento de mensagens `pending`.
-- Criacao de lote e envio opcional ao WhatsApp pessoal.
-- Stop-on-reply antes de qualquer worker.
-- Worker processando somente mensagens `approved`.
-- Guia operacional `docs/AUTOPILOT-SEMI-AUTO.md`.
+- Nova pagina `/autopilot/scheduling`.
+- Endpoint `POST /api/autopilot/scheduling/preview`.
+- Endpoint `POST /api/autopilot/scheduling/confirm`.
+- Servico `commercialSchedulingService.mjs`.
+- Sugestao de horarios por timezone, duracao e periodo.
+- Mensagem de convite personalizada por lead e perfil profissional do usuario.
+- Copia manual da mensagem.
+- Confirmacao explicita da reuniao.
+- Atualizacao do lead para `reuniao_marcada`.
+- Registro em `lead_followups`.
+- Guia `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`.
 
 Fluxo alvo:
 
 ```mermaid
 flowchart TD
-  A[Historico] --> B[Plano sugerido]
-  B --> C[Simular]
-  C --> D[Aprovar coleta]
-  D --> E[Analisar e enfileirar]
-  E --> F[Lote no WhatsApp]
-  F --> G[Enviar aprovadas]
+  A[Resposta positiva] --> B[Selecionar lead]
+  B --> C[Gerar convite]
+  C --> D[Copiar e enviar manualmente]
+  D --> E[Lead aceita horario]
+  E --> F[Confirmar no CRM]
 ```
 
 ## Estado Operacional Atual
@@ -101,21 +100,22 @@ O sistema pode ser usado hoje para:
 - enviar mensagens aprovadas com worker controlado;
 - cancelar follow-ups quando houver resposta;
 - tratar respostas em `/autopilot/replies`;
+- rodar a rotina semi-automatica em `/autopilot/semi-auto`;
 - medir funil no dashboard.
 
-Com o PR semi-automatico validado, o sistema tambem passa a:
+Com o PR de agendamento validado, o sistema tambem passa a:
 
-- sugerir a proxima coleta usando historico;
-- rodar o ciclo diario em um unico cockpit;
-- manter aprovacao humana antes da coleta e antes dos disparos novos;
-- trabalhar sozinho a fila que ja estiver aprovada.
+- gerar convite de reuniao com horarios sugeridos;
+- copiar mensagem pronta para enviar manualmente;
+- registrar reuniao no CRM e historico;
+- deixar o lead pronto para proposta/reuniao.
 
 O sistema ainda nao deve:
 
 - rodar cron automatico em background sem configuracao explicita;
 - disparar em volume alto sem acompanhamento diario;
 - responder leads automaticamente sem revisao;
-- agendar em calendario externo sem confirmacao;
+- criar evento em calendario externo sem confirmacao;
 - usar LLM paga em background sem limites claros;
 - inventar informacoes comerciais ou tecnicas que nao foram observadas.
 
@@ -133,16 +133,18 @@ O sistema ainda nao deve:
 | WhatsApp | `/whatsapp` | `/api/whatsapp` | Operacional |
 | IA | Detalhe do lead | `/api/ai` | Operacional |
 | Autopilot manual | `/autopilot` | `/api/autopilot` | Operacional controlado |
-| Autopilot semi-auto | `/autopilot/semi-auto` | `/api/autopilot/semi-auto/*` | PR atual |
+| Autopilot semi-auto | `/autopilot/semi-auto` | `/api/autopilot/semi-auto/*` | Operacional |
 | Respostas | `/autopilot/replies` | `/api/autopilot/replies/inbox` | Operacional |
 | Templates | `/autopilot/templates` | `/api/autopilot/templates/*` | Operacional |
 | Diagnostico | `/autopilot/diagnostics` | `/api/autopilot/diagnostics/:id/advanced` | Operacional |
+| Agendamento | `/autopilot/scheduling` | `/api/autopilot/scheduling/*` | PR atual |
 
 ## Como Usar O Autopilot
 
 Guias principais:
 
 - `docs/AUTOPILOT-SEMI-AUTO.md`: rotina diaria semi-automatica.
+- `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`: convite e confirmacao de reuniao.
 - `docs/GUIA-USO-AUTOPILOT.md`: central manual/avancada.
 
 Resumo operacional semi-auto:
@@ -155,7 +157,8 @@ Resumo operacional semi-auto:
 6. Aprovar lote pelo WhatsApp pessoal.
 7. Enviar aprovadas agora.
 8. Acompanhar respostas e stop-on-reply.
-9. Usar CRM para reunioes/propostas.
+9. Usar `/autopilot/scheduling` para transformar respostas positivas em reuniao.
+10. Usar CRM para propostas e fechamentos.
 
 ## V2 Comercial - Sequencia Atual
 
@@ -188,6 +191,7 @@ A V2 comercial deve melhorar conversao e diminuir trabalho manual sem perder con
 13. Diagnosticos podem atualizar texto do lead, mas nao podem criar fila nem enviar WhatsApp automaticamente.
 14. Autopilot semi-auto pode processar mensagens aprovadas, mas somente `message_queue.status = approved`.
 15. Coleta semi-automatica real exige `approve_collection=true`.
+16. Agendamento assistido pode registrar CRM/historico, mas nao pode enviar WhatsApp nem criar calendario externo automaticamente.
 
 ## Operacao Comercial Enquanto Desenvolve
 
@@ -197,9 +201,10 @@ A V2 comercial deve melhorar conversao e diminuir trabalho manual sem perder con
 4. Aprovar lote pelo WhatsApp pessoal.
 5. Processar aprovadas.
 6. Usar `/autopilot/replies` para respostas.
-7. Usar `/crm` para reunioes, propostas e fechamentos.
-8. Medir respostas, reunioes e clientes fechados.
-9. Ajustar score, nichos e mensagens com base nas respostas reais.
+7. Usar `/autopilot/scheduling` para confirmar reunioes.
+8. Usar `/crm` para propostas e fechamentos.
+9. Medir respostas, reunioes e clientes fechados.
+10. Ajustar score, nichos e mensagens com base nas respostas reais.
 
 ## Prompt De Validacao Padrao
 
@@ -224,6 +229,6 @@ Atualize o corpo do PR com resultados completos.
 
 ## Proxima Decisao
 
-Validar o PR do Autopilot Comercial Semi-Automatico pela CLI local.
+Validar o PR de agendamento comercial assistido pela CLI local.
 
-Motivo: ele conecta coleta, analise, lote de aprovacao e processamento de aprovadas em uma rotina diaria simples, exatamente para acelerar a prospeccao sem abrir mao do controle.
+Motivo: ele fecha o caminho entre resposta positiva e reuniao marcada, sem depender de calendario externo ou envio automatico.

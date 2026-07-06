@@ -27,6 +27,10 @@ import {
   getSemiAutoCommercialPlan,
   runSemiAutoCommercialCycle,
 } from '../../services/autopilot/semiAutoCommercialService.mjs';
+import {
+  confirmAssistedScheduling,
+  previewAssistedScheduling,
+} from '../../services/autopilot/commercialSchedulingService.mjs';
 
 const router = express.Router();
 
@@ -82,6 +86,23 @@ const semiAutoRunSchema = z.object({
 const appointmentSchema = z.object({
   lead_id: z.number().int().positive(),
   scheduled_for: z.string().max(255).optional().or(z.literal('')),
+  note: z.string().max(1000).optional().or(z.literal('')),
+});
+
+const schedulingPreviewSchema = z.object({
+  lead_id: z.number().int().positive(),
+  timezone: z.string().max(80).optional().or(z.literal('')),
+  duration_minutes: z.number().int().min(10).max(120).optional().default(15),
+  preferred_period: z.enum(['all', 'morning', 'afternoon']).optional().default('all'),
+  count: z.number().int().min(1).max(10).optional().default(5),
+  note: z.string().max(1000).optional().or(z.literal('')),
+});
+
+const schedulingConfirmSchema = z.object({
+  lead_id: z.number().int().positive(),
+  scheduled_for: z.string().min(1).max(255),
+  timezone: z.string().max(80).optional().or(z.literal('')),
+  duration_minutes: z.number().int().min(10).max(120).optional().default(15),
   note: z.string().max(1000).optional().or(z.literal('')),
 });
 
@@ -258,6 +279,26 @@ router.post('/diagnostics/:leadId/advanced/apply', async (req, res, next) => {
   try {
     const result = await applyAdvancedCommercialDiagnostic(req.user.id, req.user, Number(req.params.leadId));
     res.json(result);
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+});
+
+router.post('/scheduling/preview', async (req, res, next) => {
+  try {
+    const data = schedulingPreviewSchema.parse(req.body || {});
+    const result = await previewAssistedScheduling(req.user.id, req.user, data);
+    res.json(result);
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+});
+
+router.post('/scheduling/confirm', async (req, res, next) => {
+  try {
+    const data = schedulingConfirmSchema.parse(req.body || {});
+    const result = await confirmAssistedScheduling(req.user.id, data);
+    res.status(201).json(result);
   } catch (error) {
     handleServiceError(error, res, next);
   }
