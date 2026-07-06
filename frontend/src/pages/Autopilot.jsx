@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Ban,
   Bot,
-  CalendarClock,
   CheckCircle2,
   ChevronDown,
   Clock,
-  FileText,
   Inbox,
   Play,
   RefreshCw,
@@ -92,33 +89,6 @@ const STATUS_BADGES = {
   cancelled: 'badge-danger',
   expired: 'badge-danger',
 };
-
-const MODULES = [
-  {
-    title: 'Respostas',
-    description: 'Classificar retornos e definir proxima acao.',
-    href: '/autopilot/replies',
-    icon: Inbox,
-  },
-  {
-    title: 'Templates',
-    description: 'Ajustar mensagens por nicho e contexto.',
-    href: '/autopilot/templates',
-    icon: FileText,
-  },
-  {
-    title: 'Diagnostico',
-    description: 'Gerar material comercial para abordagem e reuniao.',
-    href: '/autopilot/diagnostics',
-    icon: Target,
-  },
-  {
-    title: 'Agendamento',
-    description: 'Transformar resposta positiva em reuniao marcada.',
-    href: '/autopilot/scheduling',
-    icon: CalendarClock,
-  },
-];
 
 function toNumber(value, fallback) {
   const parsed = Number(value);
@@ -368,8 +338,6 @@ export default function Autopilot() {
 
       <SummaryCards summary={summary} onSendApproved={sendApprovedNow} busyAction={busyAction} />
 
-      <ModuleShortcuts />
-
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <AutomationRunPanel
           form={automationForm}
@@ -476,25 +444,6 @@ function SummaryCards({ summary, onSendApproved, busyAction }) {
         );
       })}
     </div>
-  );
-}
-
-function ModuleShortcuts() {
-  return (
-    <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-      {MODULES.map((module) => {
-        const Icon = module.icon;
-        return (
-          <Link key={module.href} to={module.href} className="rounded-lg border border-gray-200 bg-white p-4 transition hover:border-primary-300 hover:bg-primary-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-primary-900/20">
-            <div className="flex items-center gap-2 font-semibold text-gray-900 dark:text-gray-100">
-              <Icon className="h-5 w-5 text-primary-600 dark:text-primary-300" />
-              {module.title}
-            </div>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{module.description}</p>
-          </Link>
-        );
-      })}
-    </section>
   );
 }
 
@@ -754,6 +703,7 @@ function SafetyList() {
         <li>Aprovar lote nao envia automaticamente; so libera para a fila aprovada.</li>
         <li>Enviar aprovadas processa somente itens com status `approved`.</li>
         <li>Stop-on-reply deve cancelar follow-ups quando o lead respondeu.</li>
+        <li>Respostas, templates, diagnostico e agendamento sao motores internos do Autopilot.</li>
         <li>Configuracoes de regra definem limites, janela e filtros comerciais.</li>
       </ul>
     </div>
