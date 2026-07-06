@@ -2,88 +2,120 @@
 
 **Atualizado em:** 06/07/2026
 
-Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, estado atual e sequencia de PRs, use `docs/MAPA-INTERNO.md`. Para a revisao focada em usuario leigo, use `docs/REVISAO-UX-USUARIO-LEIGO.md`.
+Este arquivo lista as proximas acoes praticas. Para visao geral do projeto, estado atual e sequencia de PRs, use `docs/MAPA-INTERNO.md`. Para uso diario do Autopilot, use `docs/GUIA-USO-AUTOPILOT.md`.
 
-## Prioridade Alta
+## Entregue Nesta Rodada
 
-### 1. Wizard de operacao diaria no Autopilot
+### 1. Wizard De Operacao Diaria No Autopilot
 
-Objetivo: deixar o Autopilot simples para uma pessoa leiga operar sem entender motores internos.
+Estado: implementado em `/autopilot`.
+
+Resultado:
+
+- Bloco **Operacao diaria guiada** no topo da tela.
+- Campos simples: busca do dia, credencial, cidade, nicho, limite e score minimo.
+- Acoes principais: verificar sem executar, preparar oportunidades e enviar aprovadas.
+- Configuracoes detalhadas continuam abaixo, mas nao sao mais o primeiro contato do usuario.
+
+### 2. Estado Operacional Claro No Topo Do Autopilot
+
+Estado: implementado em `/autopilot`.
+
+Resultado:
+
+- Proxima acao recomendada.
+- Checagem de credencial.
+- Checagem de alvo comercial.
+- Checagem de aprovacao por WhatsApp pessoal.
+- Checagem de plano do Autopilot.
+- Checagem de mensagens aprovadas para envio.
+
+### 3. Respostas E Agendamento Dentro Do CRM
+
+Estado: primeira versao implementada em `/crm`.
+
+Resultado:
+
+- Card **Responder agora** para leads que responderam ou estao em contato enviado.
+- Card **Agenda interna** para leads em reuniao marcada ou com proxima acao ligada a reuniao.
+- Links levam ao detalhe do lead, onde o comercial pode editar status, proxima acao e historico.
+- As antigas paginas tecnicas continuam fora do menu.
+
+### 4. Agenda Interna Inicial
+
+Estado: primeira versao implementada em `/crm`.
+
+Resultado:
+
+- Lista de reunioes e proximas acoes sem depender de Google Calendar/Calendly.
+- Mantem reuniao como atividade interna ate o fluxo estar maduro.
+
+### 5. Cron Controlado Futuro
+
+Estado: documentado e mantido desligado por padrao.
+
+Resultado:
+
+- Nenhum cron automatico foi ligado nesta rodada.
+- Regra de seguranca preservada: envio real exige `approved`, janela segura, limites e stop-on-reply.
+
+## Prioridade Alta Seguinte
+
+### 1. Validar PR De UX Guiada Na CLI
+
+Executar a validacao completa indicada em `docs/PR-25-AUTOPILOT-GUIADO.md`.
+
+Criterios de aceite:
+
+- Backend tests passam.
+- Frontend build passa.
+- Docker build/up passa.
+- `/health` retorna ok.
+- `/autopilot` mostra wizard, prontidao e proxima acao.
+- `/crm` mostra Responder agora e Agenda interna.
+- Nao existe envio real em dry-run.
+- Logs/respostas nao expoem segredos reais.
+
+### 2. Melhorar Detalhe Do Lead Como Mesa De Trabalho
+
+Objetivo: o detalhe do lead virar o lugar de fechamento comercial.
 
 Escopo sugerido:
 
-- Criar bloco guiado dentro de `/autopilot`.
-- Perguntar nicho, cidade/regiao, credencial, limite e score minimo.
-- Mostrar checagem de prontidao: WhatsApp, credencial, leads existentes e aprovacao pessoal.
-- Preencher parametros tecnicos internamente.
-- Rodar verificacao segura sem efeitos reais.
-- Preparar oportunidades quando aprovado.
-- Enviar lote para o WhatsApp pessoal.
-- Processar apenas mensagens aprovadas.
+- Mostrar resposta recebida mais recente.
 - Mostrar proxima acao recomendada.
+- Botao rapido: marcar reuniao.
+- Botao rapido: marcar sem interesse.
+- Botao rapido: gerar diagnostico comercial.
+- Registrar acoes em `lead_followups`.
 
-Criterios de aceite:
+### 3. Melhorar Autopilot Com Seletor De Credencial Amigavel
 
-- Usuario consegue entender o fluxo sem ler documentacao longa.
-- Nenhum termo tecnico aparece como acao principal.
-- Nao existe envio real sem confirmacao.
-- Mensagens novas continuam exigindo aprovacao em lote.
-- Os motores internos nao voltam ao menu.
-
-### 2. Estado operacional claro no topo do Autopilot
-
-Objetivo: mostrar rapidamente o que falta para o sistema trabalhar.
+Objetivo: evitar que usuario precise digitar ID numerico da credencial.
 
 Escopo sugerido:
 
-- Card `WhatsApp conectado` ou `Conectar WhatsApp`.
-- Card `Credencial pronta` ou `Cadastrar credencial`.
-- Card `Leads bons hoje`.
-- Card `Aguardando minha aprovacao`.
-- Card `Aprovadas para envio`.
-- Card `Proxima acao recomendada`.
+- Buscar credenciais ativas no frontend.
+- Exibir select com nome/fonte/status.
+- Bloquear preparacao se nao houver credencial ativa.
+- Linkar para `/credentials` quando faltar credencial.
 
-Criterios de aceite:
+### 4. Prontidao Real De WhatsApp
 
-- O usuario sabe qual e o proximo clique.
-- Erros comuns viram orientacao clara.
-- Nao precisa abrir logs para entender bloqueios simples.
-
-### 3. Respostas e agendamento dentro do CRM/detalhe do lead
-
-Objetivo: tratar resposta positiva sem abrir tela tecnica separada.
+Objetivo: mostrar no Autopilot se o WhatsApp esta conectado antes de enviar pedido de aprovacao ou mensagens aprovadas.
 
 Escopo sugerido:
 
-- No card do CRM ou detalhe do lead, mostrar resposta recebida e intencao provavel.
-- Exibir proxima acao recomendada.
-- Permitir marcar reuniao direto no lead.
-- Permitir gerar diagnostico direto no lead.
-- Registrar tudo em `lead_followups`.
-
-Criterios de aceite:
-
-- Lead interessado vira reuniao com poucos cliques.
-- Nao ha tela separada para o comercial operar `respostas` ou `agendamento`.
-- Nenhum WhatsApp e enviado automaticamente por diagnostico/agendamento.
+- Consultar status do WhatsApp.
+- Mostrar conectado/desconectado na checagem de prontidao.
+- Linkar para `/whatsapp` quando desconectado.
+- Manter bloqueio backend como fonte de verdade.
 
 ## Prioridade Media
 
-### 4. Agenda interna de reunioes
+### 5. Cron Controlado Com Interface Simples
 
-Objetivo: visualizar reunioes marcadas sem depender de Google Calendar no primeiro momento.
-
-Escopo futuro:
-
-- Filtro de leads `reuniao_marcada`.
-- Lista por data/periodo.
-- Proxima acao e responsavel.
-- Link para detalhe do lead.
-- Campo de observacao da reuniao.
-
-### 5. Cron controlado futuro
-
-Objetivo: automatizar horarios diarios sem perder controle.
+Objetivo: rodar ciclos em horarios definidos sem perder controle.
 
 Escopo futuro:
 
@@ -113,7 +145,7 @@ Escopo futuro:
 - Registro do link no lead.
 - Sem envio automatico de convite sem revisao.
 
-### 7. PDF comercial visual
+### 7. PDF Comercial Visual
 
 Objetivo: transformar diagnostico em material apresentavel para reuniao ou follow-up.
 
@@ -130,95 +162,10 @@ Escopo futuro:
 
 1. Abrir `/dashboard` para ver resultado geral.
 2. Abrir `/collect` quando quiser buscar novos leads manualmente.
-3. Abrir `/autopilot` para preparar oportunidades, pedir aprovacao e enviar somente aprovadas.
+3. Abrir `/autopilot` para configurar alvo, verificar, preparar oportunidades, aprovar lotes e enviar aprovadas.
 4. Aprovar ou cancelar lotes pelo WhatsApp pessoal.
 5. Abrir `/crm` para trabalhar respostas, reunioes, propostas e fechamentos.
-6. Abrir o detalhe do lead quando precisar ajustar mensagem, diagnostico ou proxima acao.
-
-## Concluido Recentemente
-
-### PR #23 - Autopilot como superficie unica de automacao
-
-Validado e mergeado.
-
-Resultado:
-
-- Agendamento comercial assistido criado.
-- Autopilot simplificado como central unica.
-- Menu lateral sem `Semi-auto`, `Respostas`, `Templates`, `Diagnostico` e `Agendamento`.
-- Motores internos deixam de ser superficie principal do produto.
-- Travas e auditoria visiveis para explicar comportamento seguro.
-
-### PR #22 - Autopilot Comercial Semi-Automatico
-
-Validado e mergeado.
-
-Resultado:
-
-- Plano baseado em historico de coletas, credenciais, estatisticas da fila e leads.
-- Simulacao `dry_run=true` por padrao.
-- Coleta real somente com `approve_collection=true`.
-- Analise automatica dos leads salvos.
-- Criacao/atualizacao de regra assistida.
-- Enfileiramento de mensagens `pending`.
-- Criacao de lote e envio opcional ao WhatsApp pessoal.
-- Stop-on-reply antes de qualquer worker.
-- Worker processando somente mensagens `approved`.
-
-### PR #21 - Diagnostico comercial avancado
-
-Validado e mergeado.
-
-Resultado:
-
-- Diagnostico curto para WhatsApp.
-- Diagnostico completo em Markdown.
-- Roteiro de Loom/audio.
-- Roteiro de reuniao.
-- Oferta recomendada por dores observadas.
-- Separacao entre fatos observados e inferencias.
-- Nenhum envio automatico de WhatsApp no fluxo.
-
-### PR #20 - Templates comerciais por nicho e profissao
-
-Validado e mergeado.
-
-Resultado:
-
-- Catalogo de nichos e tons comerciais.
-- Deteccao de dores observaveis por lead.
-- Mensagem inicial, follow-up, diagnostico curto e contexto profissional para LLM.
-- Uso de `profession`, `primary_niche` e `internal_context` do usuario.
-- Nenhum envio automatico de WhatsApp no fluxo.
-
-### PR #19 - Central de respostas e proxima acao recomendada
-
-Validado e mergeado.
-
-Resultado:
-
-- Inbox autenticado de respostas recebidas.
-- Classificacao de intencao.
-- Resposta sugerida copiavel.
-- Acoes seguras para CRM.
-- Registro em `lead_followups`.
-- Isolamento por usuario validado.
-- Nenhum envio automatico de WhatsApp no fluxo.
-
-### Outros blocos concluidos
-
-- Fundacao do Autopilot SDR.
-- API autenticada do Autopilot SDR.
-- Historico persistente de coletas.
-- Logs persistentes de execucao.
-- Cache de busca/coleta com TTL visual e limpeza manual.
-- Validacao de Serper, Apify e RapidAPI.
-- Mensagens amigaveis para erros comuns de providers.
-- Dashboard comercial com filtros por periodo e fonte.
-- CRM Kanban com drag-and-drop, filtros e edicao rapida.
-- Documentacao operacional de WhatsApp, IA, coleta e credenciais.
-- Atualizacao de `bcrypt` para remover vulnerabilidades do backend.
-- `npm audit --json` do backend limpo com 0 vulnerabilidades.
+6. Abrir o detalhe do lead quando precisar ajustar status, mensagem, diagnostico ou proxima acao.
 
 ## Regras Permanentes
 

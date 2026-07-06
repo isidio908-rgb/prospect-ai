@@ -193,6 +193,7 @@ export default function Autopilot() {
     needAnalysis: plan?.leads?.need_analysis ?? 0,
   }), [batches, plan, queue, rules, stats]);
 
+  const readiness = useMemo(() => buildReadiness(automationForm, summary, plan), [automationForm, summary, plan]);
   const pendingMessages = useMemo(() => queue.filter((message) => message.status === 'pending').slice(0, 8), [queue]);
   const approvedMessages = useMemo(() => queue.filter((message) => message.status === 'approved').slice(0, 8), [queue]);
 
@@ -268,7 +269,7 @@ export default function Autopilot() {
 
   async function runAutomation(dryRun = false) {
     if (!automationForm.query || !automationForm.credential_id) {
-      toast.error('Informe query e credencial antes de rodar o Autopilot');
+      toast.error('Informe busca do dia e credencial antes de rodar o Autopilot');
       return;
     }
 
@@ -322,9 +323,9 @@ export default function Autopilot() {
             <Bot className="h-5 w-5" />
             <span className="text-sm font-semibold uppercase">Autopilot</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 sm:text-3xl">Automacoes comerciais</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 sm:text-3xl">Assistente diario de prospeccao</h1>
           <p className="max-w-3xl text-sm text-gray-600 dark:text-gray-400">
-            Configure o que o sistema pode fazer sozinho, acompanhe aprovacoes e controle os envios com seguranca.
+            Escolha o alvo do dia, deixe o sistema preparar oportunidades e aprove os lotes antes de qualquer envio.
           </p>
         </div>
 
@@ -335,6 +336,17 @@ export default function Autopilot() {
       </div>
 
       <SecurityNotice />
+
+      <DailyOperationWizard
+        form={automationForm}
+        summary={summary}
+        readiness={readiness}
+        busyAction={busyAction}
+        onChange={updateAutomationField}
+        onCheck={() => runAutomation(true)}
+        onRun={() => runAutomation(false)}
+        onSendApproved={sendApprovedNow}
+      />
 
       <SummaryCards summary={summary} onSendApproved={sendApprovedNow} busyAction={busyAction} />
 
@@ -414,6 +426,78 @@ function SecurityNotice() {
   );
 }
 
+function DailyOperationWizard({ form, summary, readiness, busyAction, onChange, onCheck, onRun, onSendApproved }) {
+  return (
+    <section className="card border-primary-200 dark:border-primary-900/60">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <SectionHeader icon={Target} title="Operacao diaria guiada" description="Preencha o alvo, confira a prontidao e execute a rotina sem abrir motores tecnicos." compact />
+        <div className="rounded-lg bg-primary-50 px-4 py-3 text-sm text-primary-950 dark:bg-primary-900/20 dark:text-primary-100">
+          <p className="font-semibold">Proxima acao recomendada</p>
+          <p>{readiness.nextAction}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Field label="1. Busca do dia">
+              <input className="input" value={form.query} onChange={(event) => onChange('query', event.target.value)} placeholder="Ex.: advogados em Cuiaba, MT" />
+            </Field>
+            <Field label="2. Credencial de coleta">
+              <input className="input" value={form.credential_id} onChange={(event) => onChange('credential_id', event.target.value)} placeholder="ID da credencial" />
+            </Field>
+            <Field label="Cidade">
+              <input className="input" value={form.city} onChange={(event) => onChange('city', event.target.value)} placeholder="Cidade principal" />
+            </Field>
+            <Field label="Nicho">
+              <input className="input" value={form.niche} onChange={(event) => onChange('niche', event.target.value)} placeholder="Nicho principal" />
+            </Field>
+            <Field label="Limite de leads">
+              <input className="input" type="number" min="1" max="100" value={form.limit} onChange={(event) => onChange('limit', event.target.value)} />
+            </Field>
+            <Field label="Score minimo">
+              <input className="input" type="number" min="0" max="100" value={form.min_score} onChange={(event) => onChange('min_score', event.target.value)} />
+            </Field>
+          </div>
+
+          <label className="flex items-start gap-2 rounded-lg bg-gray-50 p-3 text-sm dark:bg-gray-900/40">
+            <input className="mt-1" type="checkbox" checked={form.send_approval_request} onChange={(event) => onChange('send_approval_request', event.target.checked)} />
+            <span>Enviar pedido de aprovacao do lote para meu WhatsApp pessoal</span>
+          </label>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <button type="button" onClick={onCheck} className="btn btn-secondary" disabled={busyAction === 'check-automation'}>
+              {busyAction === 'check-automation' ? 'Verificando...' : 'Verificar sem executar'}
+            </button>
+            <button type="button" onClick={onRun} className="btn btn-primary" disabled={busyAction === 'run-automation'}>
+              {busyAction === 'run-automation' ? 'Rodando...' : 'Preparar oportunidades'}
+            </button>
+            <button type="button" onClick={onSendApproved} className="btn btn-secondary" disabled={busyAction === 'send-approved' || !summary.approved}>
+              Enviar aprovadas
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">Prontidao</h3>
+          <div className="mt-3 space-y-2">
+            {readiness.checks.map((check) => (
+              <div key={check.label} className="flex items-start justify-between gap-3 rounded-md bg-gray-50 p-2 text-sm dark:bg-gray-900/40">
+                <span>{check.label}</span>
+                <span className={`font-semibold ${check.ok ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'}`}>{check.status}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-md bg-gray-50 p-3 text-sm text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+            <p className="font-semibold text-gray-900 dark:text-gray-100">Resumo seguro</p>
+            <p>Novas mensagens ficam pendentes, aprovacao libera a fila e envio real processa somente itens aprovados.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SummaryCards({ summary, onSendApproved, busyAction }) {
   const cards = [
     { icon: Settings, label: 'Automacoes ativas', value: summary.rulesActive, tone: 'blue' },
@@ -454,7 +538,7 @@ function AutomationRunPanel({ form, plan, busyAction, onChange, onRun, onCheck, 
   return (
     <section className="card">
       <div className="mb-5 flex items-start justify-between gap-4">
-        <SectionHeader icon={Play} title="Rodar Autopilot" description="Rotina automatica: coleta aprovada, analise, score, mensagens, lote de aprovacao e fila aprovada." compact />
+        <SectionHeader icon={Play} title="Configuracao detalhada" description="Ajustes finos usados pela rotina guiada: coleta, analise, lote, aprovacao e fila aprovada." compact />
         <span className={`badge ${plan?.ready ? 'badge-success' : 'badge-warning'}`}>{plan?.ready ? 'Pronto' : 'Revisar'}</span>
       </div>
 
@@ -509,7 +593,7 @@ function AutomationRunPanel({ form, plan, busyAction, onChange, onRun, onCheck, 
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <button type="button" onClick={onRun} className="btn btn-primary flex-1" disabled={busyAction === 'run-automation'}>
-          {busyAction === 'run-automation' ? 'Rodando...' : 'Rodar Autopilot agora'}
+          {busyAction === 'run-automation' ? 'Rodando...' : 'Preparar oportunidades'}
         </button>
         <button type="button" onClick={onSendApproved} className="btn btn-secondary flex-1" disabled={busyAction === 'send-approved'}>
           Enviar aprovadas agora
@@ -526,7 +610,7 @@ function AutomationRulesPanel({ rules, form, editingRuleId, busyAction, onChange
   return (
     <section className="card">
       <div className="mb-4 flex items-start justify-between gap-3">
-        <SectionHeader icon={Settings} title="Configuracao da automacao" description="Define quais leads o Autopilot pode escolher, quando pode atuar e quais limites deve obedecer." compact />
+        <SectionHeader icon={Settings} title="Limites da automacao" description="Define onde, quando e com que seguranca o Autopilot pode atuar." compact />
         {editingRuleId ? <button type="button" onClick={onReset} className="btn btn-secondary px-2 py-1 text-xs">Nova</button> : null}
       </div>
 
@@ -754,6 +838,32 @@ function normalizeRulePayload(form) {
     max_hourly_sends: Number(form.max_hourly_sends || 1),
     followup_1_delay_hours: Number(form.followup_1_delay_hours || 24),
     followup_2_delay_hours: Number(form.followup_2_delay_hours || 48),
+  };
+}
+
+function buildReadiness(form, summary, plan) {
+  const hasCredential = Boolean(form.credential_id);
+  const hasTarget = Boolean(form.query || form.city || form.niche);
+  const hasApprovalPath = Boolean(form.send_approval_request);
+  const hasApproved = Number(summary.approved || 0) > 0;
+  const planReady = Boolean(plan?.ready || (hasCredential && hasTarget));
+
+  let nextAction = 'Preencha a busca do dia e a credencial de coleta.';
+  if (hasCredential && !hasTarget) nextAction = 'Informe a cidade, nicho ou busca que o Autopilot deve trabalhar.';
+  if (hasCredential && hasTarget && !planReady) nextAction = 'Clique em Verificar sem executar para conferir se a rotina esta pronta.';
+  if (hasCredential && hasTarget && planReady && Number(summary.pending || 0) > 0) nextAction = 'Revise o lote pendente pelo WhatsApp pessoal ou pela lista de aprovacoes.';
+  if (hasApproved) nextAction = 'Existem mensagens aprovadas. Use Enviar aprovadas quando quiser disparar com seguranca.';
+  if (hasCredential && hasTarget && planReady && !summary.pending && !hasApproved) nextAction = 'Clique em Preparar oportunidades para coletar, analisar e criar o proximo lote.';
+
+  return {
+    nextAction,
+    checks: [
+      { label: 'Credencial de coleta', ok: hasCredential, status: hasCredential ? 'Informada' : 'Falta informar' },
+      { label: 'Alvo comercial', ok: hasTarget, status: hasTarget ? 'Definido' : 'Falta busca/cidade/nicho' },
+      { label: 'Aprovacao de lote', ok: hasApprovalPath, status: hasApprovalPath ? 'Vai para WhatsApp pessoal' : 'Somente lote interno' },
+      { label: 'Plano do Autopilot', ok: planReady, status: planReady ? 'Pronto para conferir' : 'Precisa revisar' },
+      { label: 'Fila aprovada', ok: hasApproved, status: hasApproved ? `${summary.approved} pronta(s)` : 'Nada para enviar' },
+    ],
   };
 }
 
