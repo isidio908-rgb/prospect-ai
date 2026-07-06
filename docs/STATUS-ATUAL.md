@@ -1,52 +1,37 @@
 # Prospect AI - Status Atual do Projeto
 
-**Data:** 05/07/2026  
-**Estado:** produto interno operacional em `main` com Autopilot SDR controlado, respostas, templates, diagnostico comercial avancado e Autopilot Comercial Semi-Automatico. PR atual adiciona agendamento comercial assistido em `/autopilot/scheduling`.
+**Data:** 06/07/2026  
+**Estado:** produto interno operacional em `main`, com Autopilot consolidado como a unica superficie visivel de automacao comercial.
 
-Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para operar o cockpit diario, leia `docs/AUTOPILOT-SEMI-AUTO.md`. Para transformar resposta positiva em reuniao, leia `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`.
+Para a visao curta de continuidade, leia primeiro `docs/MAPA-INTERNO.md`. Para operar o Autopilot, leia `docs/GUIA-USO-AUTOPILOT.md`. Para a revisao de produto do ponto de vista de usuario leigo, leia `docs/REVISAO-UX-USUARIO-LEIGO.md`.
 
 ## Resumo Executivo
 
-O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual, organiza o pipeline no CRM Kanban e possui Autopilot SDR controlado.
+O Prospect AI ja funciona como uma maquina interna de prospeccao comercial. O sistema coleta empresas locais, salva leads com deduplicacao, audita sites, calcula score, gera diagnostico comercial, prepara mensagens, gerencia credenciais, opera WhatsApp via Evolution API, usa IA contextual, organiza o pipeline no CRM Kanban e possui Autopilot controlado.
 
-A evolucao atual fecha o trecho comercial entre resposta positiva e reuniao marcada: o sistema gera convite, sugere horarios, permite copiar a mensagem e registra a reuniao no CRM com historico, sem envio automatico e sem calendario externo.
+A decisao atual de produto e simplificar a experiencia: o usuario nao deve operar motores internos como paginas separadas. O caminho normal passa por Dashboard, Coletar, Historico, Leads, CRM Kanban, Autopilot, WhatsApp, Credenciais e Perfil.
 
 ## Marco Mais Recente Em Main
 
-PR #22 foi validado e mergeado antes desta etapa.
+PR #23 foi validado e mergeado.
 
 Resultado final:
 
-- Criada pagina `/autopilot/semi-auto`.
-- Criado plano automatico baseado em historico de coletas, credenciais, fila e leads.
-- Criada simulacao segura com `dry_run=true`.
-- Coleta real protegida por `approve_collection=true`.
-- Leads salvos podem ser analisados automaticamente.
-- Regra assistida pode ser criada/atualizada para o recorte comercial.
-- Mensagens novas entram como `pending`.
-- Lotes podem ser enviados ao WhatsApp pessoal para aprovacao.
-- Stop-on-reply roda antes do worker.
-- Worker processa apenas mensagens `approved`.
-- Guia operacional `docs/AUTOPILOT-SEMI-AUTO.md` criado.
+- Autopilot virou a central unica de automacao comercial.
+- Menu lateral deixou de mostrar `Semi-auto`, `Respostas`, `Templates`, `Diagnostico` e `Agendamento`.
+- Agendamento comercial assistido foi implementado como motor interno/fluxo controlado.
+- Travas e auditoria ficaram visiveis no Autopilot.
+- Mensagens novas continuam exigindo aprovacao em lote.
+- Envio real continua restrito a mensagens `approved`.
 
-## PR Atual - Agendamento Comercial Assistido
+## Limpeza Em Andamento
 
-Objetivo: reduzir atrito entre resposta positiva e reuniao marcada.
+Branch atual de limpeza UX:
 
-Entregas:
-
-- Nova pagina `/autopilot/scheduling`.
-- Novo endpoint `POST /api/autopilot/scheduling/preview`.
-- Novo endpoint `POST /api/autopilot/scheduling/confirm`.
-- Novo servico `commercialSchedulingService.mjs`.
-- Sugestao de horarios por timezone, duracao e periodo preferido.
-- Mensagem de convite personalizada com nome do lead e contexto profissional do usuario.
-- Copia manual do convite.
-- Confirmacao explicita de reuniao.
-- Atualizacao do lead para `reuniao_marcada`.
-- Registro em `lead_followups`.
-- Testes puros dos helpers de agendamento.
-- Guia operacional `docs/AGENDAMENTO-COMERCIAL-ASSISTIDO.md`.
+- remove rotas frontend antigas dos motores internos;
+- remove arquivos de paginas antigas de Autopilot standalone;
+- atualiza documentacao para orientar usuario leigo;
+- adiciona `docs/REVISAO-UX-USUARIO-LEIGO.md`.
 
 ## Stack Atual
 
@@ -58,7 +43,7 @@ Entregas:
 - Autenticacao: JWT.
 - Criptografia: AES-256-GCM para API keys.
 
-## Modulos Operacionais
+## Modulos Operacionais Visiveis
 
 | Modulo | Estado | Observacao |
 |---|---|---|
@@ -73,12 +58,19 @@ Entregas:
 | WhatsApp | Operacional | Conexao, chat, midia/audio, webhook e verificacao de numero. |
 | CRM Kanban | Operacional | Drag-and-drop, filtros e edicao rapida. |
 | Dashboard | Operacional | Funil, fontes, periodo, nicho, cidade e conversao. |
-| Autopilot SDR | Operacional controlado | Regras, fila, lotes, scheduler, worker, follow-ups, respostas, agendamento base e diagnostico. |
-| Autopilot semi-auto | Operacional | Cockpit diario em `/autopilot/semi-auto`. |
-| Central de respostas | Operacional | Inbox comercial em `/autopilot/replies`, sem envio automatico. |
-| Templates comerciais | Operacional | Mensagens por nicho/contexto em `/autopilot/templates`, sem envio automatico. |
-| Diagnostico avancado | Operacional | Material comercial em `/autopilot/diagnostics`, sem envio automatico. |
-| Agendamento assistido | PR atual | Convite, horarios sugeridos e confirmacao CRM em `/autopilot/scheduling`. |
+| Autopilot | Operacional controlado | Coleta, analise, score, lotes, aprovacao, envio de aprovadas, respostas, follow-ups e agendamento como motores internos. |
+
+## Motores Internos Do Autopilot
+
+| Motor | Estado | Exposicao correta |
+|---|---|---|
+| Semi-auto | Operacional | Interno ao Autopilot. |
+| Respostas | Operacional | CRM/detalhe do lead. |
+| Templates | Operacional | Interno ao Autopilot/lead. |
+| Diagnostico avancado | Operacional | Detalhe do lead/CRM. |
+| Agendamento assistido | Operacional | CRM/detalhe do lead. |
+| Scheduler | Operacional | Auditoria/log. |
+| Worker | Operacional | Acao controlada no Autopilot. |
 
 ## Validacoes Ja Realizadas
 
@@ -90,7 +82,7 @@ Entregas:
 - `docker compose build backend frontend` passando.
 - `docker compose up -d backend frontend` passando.
 - `/health` retornando 200.
-- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`, `/autopilot/replies`, `/autopilot/templates`, `/autopilot/diagnostics`, `/autopilot/semi-auto`.
+- Frontend validado em rotas principais: `/`, `/collections`, `/profile`, `/leads`, `/dashboard`, `/crm`, `/autopilot`.
 
 ### Providers
 
@@ -116,10 +108,8 @@ Entregas:
 - Nenhum item de lote aprovado foi enviado automaticamente para lead.
 - Aprovacao em lote aceita apenas o `approval_whatsapp` do usuario.
 - Envio real do worker exige confirmacao explicita.
-- Central de respostas mantem respostas como acao assistida/copia, sem envio automatico.
-- Templates aplicam textos no cadastro do lead, mas nao enviam WhatsApp automaticamente.
-- Diagnostico avancado aplica texto no lead, mas nao cria fila nem envia WhatsApp automaticamente.
-- Semi-auto processa somente fila `approved` e exige aprovacao para coleta real.
+- Motores internos nao devem enviar WhatsApp automaticamente sem confirmacao/aprovacao.
+- Autopilot processa somente fila `approved` para envio.
 - Agendamento assistido nao deve enviar WhatsApp nem criar calendario externo automaticamente.
 
 ## Autopilot Atual
@@ -140,13 +130,9 @@ Entregas:
 - Stop-on-reply.
 - Follow-ups assistidos.
 - Classificacao heuristica.
-- Agendamento base.
-- Diagnostico Markdown.
-- Central de respostas e proxima acao recomendada.
-- Templates comerciais por nicho e profissao.
-- Diagnostico comercial avancado.
+- Agendamento assistido.
+- Diagnostico comercial.
 - Ciclo semi-automatico completo.
-- Em PR atual: agendamento comercial assistido.
 
 ### Comandos Suportados
 
@@ -161,7 +147,7 @@ CANCELAR 42:2,4
 
 Aprovar lote ou mensagem apenas muda `message_queue.status` para `approved`. O envio real para lead acontece somente pelo worker controlado.
 
-No semi-auto, o botao **Enviar aprovadas agora** processa somente itens `approved` e roda stop-on-reply antes.
+No Autopilot, o botao **Enviar aprovadas agora** processa somente itens `approved` e roda stop-on-reply antes.
 
 No agendamento assistido, confirmar reuniao apenas atualiza CRM/historico. Nao envia WhatsApp e nao cria evento externo.
 
@@ -169,8 +155,9 @@ No agendamento assistido, confirmar reuniao apenas atualiza CRM/historico. Nao e
 
 Prioridade alta:
 
-1. Validar PR atual: agendamento comercial assistido.
-2. Proximo PR: cron controlado futuro.
+1. Wizard de operacao diaria no Autopilot.
+2. Estado operacional claro no topo do Autopilot.
+3. Respostas e agendamento dentro do CRM/detalhe do lead.
 
 Prioridade media:
 
@@ -178,12 +165,13 @@ Prioridade media:
 2. Classificacao por LLM com custo/limite.
 3. Integracao Google Calendar/Calendly com confirmacao explicita.
 4. Agenda interna de reunioes marcadas.
+5. Cron controlado futuro.
 
 ## Proximo Passo Recomendado
 
-Validar o PR de agendamento comercial assistido pela CLI local.
+Validar e mergear a limpeza de UX para usuario leigo.
 
-Motivo: ele fecha o caminho resposta positiva -> convite -> confirmacao -> reuniao marcada no CRM.
+Depois, criar o wizard de operacao diaria dentro do Autopilot.
 
 ## Status Geral
 
@@ -192,5 +180,6 @@ Estimativa pragmatica:
 - Core de prospeccao: 98% pronto.
 - Operacao interna local: 98% pronta.
 - Autopilot assistido/controlado: 97% pronto.
+- Clareza para usuario leigo: 72% pronto.
 - Produto comercial: 74% pronto.
 - Documentacao: em atualizacao continua.
