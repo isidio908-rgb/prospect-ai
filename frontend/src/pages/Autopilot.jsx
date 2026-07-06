@@ -10,7 +10,6 @@ import {
   Clock,
   FileText,
   Inbox,
-  MessageCircle,
   Play,
   RefreshCw,
   Send,
