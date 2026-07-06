@@ -1,7 +1,7 @@
 # Mapa Interno - Prospect AI
 
 **Atualizado em:** 06/07/2026  
-**Estado atual:** produto interno operacional em `main`, com Autopilot como superficie unica de automacao comercial.
+**Estado atual:** produto interno operacional em `main`, com Autopilot como superficie unica de automacao comercial e fluxo guiado em validacao.
 
 Este documento e a bussola curta do projeto. Use ele para nao perder o fio entre prospeccao real, manutencao tecnica e proximas PRs.
 
@@ -40,16 +40,29 @@ As funcoes abaixo continuam existindo como motores internos do Autopilot, mas na
 - worker;
 - fila tecnica.
 
+## Como A Automacao Deve Parecer Para O Usuario
+
+A experiencia deve ser explicada assim:
+
+| Etapa visivel | O que acontece por tras |
+|---|---|
+| Configurar alvo do dia | Define busca, cidade, nicho, credencial, limite e score. |
+| Verificar sem executar | Simula a rotina sem criar coleta, lote, fila ou envio. |
+| Preparar oportunidades | Coleta, analisa, pontua, gera mensagens e cria lote. |
+| Aprovar lote | Usuario aprova no WhatsApp pessoal; itens viram `approved`. |
+| Enviar aprovadas | Worker processa somente mensagens `approved`. |
+| Trabalhar CRM | Usuario trata respostas, reunioes, proposta e fechamento. |
+
 ## Fonte De Verdade
 
 Ordem de confianca:
 
 1. Codigo em `main`.
 2. `docs/MAPA-INTERNO.md`.
-3. `docs/REVISAO-UX-USUARIO-LEIGO.md`.
-4. `docs/GUIA-USO-AUTOPILOT.md`.
-5. `docs/STATUS-ATUAL.md`.
-6. `docs/TODO.md`.
+3. `docs/GUIA-USO-AUTOPILOT.md`.
+4. `docs/TODO.md`.
+5. `docs/REVISAO-UX-USUARIO-LEIGO.md`.
+6. `docs/STATUS-ATUAL.md`.
 7. `docs/HISTORICO.md`.
 8. Documentos operacionais especificos.
 
@@ -64,12 +77,13 @@ Documentos antigos de sprint continuam no repositorio como historico, mas nao de
 | Historico de coletas | Concluido | Runs, logs persistentes, cache e limpeza manual. |
 | Credenciais | Concluido | Scrapers e LLMs com chave criptografada e mascarada. |
 | WhatsApp Evolution | Concluido | Conexao, chat, envio, webhook e verificacao de numero. |
-| CRM Kanban | Concluido | Drag-and-drop, filtros e edicao rapida. |
+| CRM Kanban | Concluido | Drag-and-drop, filtros, edicao rapida, respostas em foco e agenda interna inicial. |
 | Dashboard comercial | Concluido | Funil, fontes, periodo, conversao por nicho/cidade. |
 | IA contextual | Concluido | Prompts ajustados por profissao, nicho e contexto interno. |
 | Aprovacao em lote | Concluido | WhatsApp pessoal aprovou lote real via webhook. |
 | Autopilot controlado | Concluido | Coleta, analise, score, lotes, aprovacao, envio de aprovadas, respostas, follow-ups e agendamento como motores internos. |
-| UX simplificada | Em validacao | Menu e roteamento frontend focados em Autopilot como tela unica de automacao. |
+| UX simplificada | Concluido | Menu focado, rotas tecnicas removidas da operacao normal. |
+| Autopilot guiado | Em validacao | Wizard diario, prontidao e proxima acao recomendada. |
 
 ## Estado Operacional Atual
 
@@ -85,7 +99,9 @@ O sistema pode ser usado hoje para:
 - enviar mensagens aprovadas com worker controlado;
 - cancelar follow-ups quando houver resposta;
 - medir funil no dashboard;
-- registrar reunioes e proximas acoes no CRM.
+- registrar reunioes e proximas acoes no CRM;
+- mostrar respostas e reunioes em foco no CRM;
+- guiar a rotina diaria pelo Autopilot.
 
 O sistema ainda nao deve:
 
@@ -105,8 +121,8 @@ O sistema ainda nao deve:
 | Coleta | `/collect` | `/api/leads/collect` | Operacional |
 | Historico | `/collections` | `/api/collections` | Operacional |
 | Leads | `/leads` e `/leads/:id` | `/api/leads` | Operacional |
-| CRM | `/crm` | `/api/leads/:id` | Operacional |
-| Autopilot | `/autopilot` | `/api/autopilot` | Operacional controlado |
+| CRM | `/crm` | `/api/leads/:id` | Operacional, com foco de respostas e agenda interna |
+| Autopilot | `/autopilot` | `/api/autopilot` | Operacional controlado, com fluxo guiado |
 | Credenciais | `/credentials` | `/api/credentials` | Operacional |
 | Perfil | `/profile` | `/api/auth/me` | Operacional |
 | WhatsApp | `/whatsapp` | `/api/whatsapp` | Operacional |
@@ -129,22 +145,24 @@ O sistema ainda nao deve:
 1. Abrir `Credenciais` e conectar fontes.
 2. Abrir `WhatsApp` e conectar numero.
 3. Preencher `Perfil` para ensinar contexto a IA.
-4. Usar `Coletar` para busca manual ou `Autopilot` para rotina assistida.
-5. Aprovar lotes pelo WhatsApp pessoal.
-6. Enviar somente mensagens aprovadas.
-7. Trabalhar respostas e reunioes no `CRM Kanban`.
-8. Medir resultado no `Dashboard`.
+4. Abrir `Autopilot` e preencher a operacao diaria guiada.
+5. Clicar em `Verificar sem executar`.
+6. Clicar em `Preparar oportunidades`.
+7. Aprovar lotes pelo WhatsApp pessoal.
+8. Enviar somente mensagens aprovadas.
+9. Trabalhar respostas e reunioes no `CRM Kanban`.
+10. Medir resultado no `Dashboard`.
 
 ## Proximas PRs Sugeridas
 
 | Prioridade | PR sugerido | Objetivo |
 |---|---|---|
-| Alta | Wizard de operacao diaria | Transformar configuracao do Autopilot em perguntas simples. |
-| Alta | Estado operacional claro | Mostrar WhatsApp, credencial, leads bons, fila e proxima acao. |
-| Alta | Respostas/agendamento no CRM | Levar a proxima acao para onde o comercial trabalha. |
-| Media | Agenda interna | Ver reunioes marcadas por data. |
+| Alta | Detalhe do lead comercial | Colocar resposta recente, diagnostico, reuniao e proxima acao no detalhe do lead. |
+| Alta | Seletor amigavel de credencial | Evitar digitar ID numerico no Autopilot. |
+| Alta | Prontidao real de WhatsApp | Mostrar conectado/desconectado no Autopilot. |
 | Media | Cron controlado | Rodar ciclos em horarios definidos com limites. |
 | Media | PDF comercial visual | Transformar diagnostico em material apresentavel. |
+| Media | Google Calendar/Calendly | Criar evento externo somente com confirmacao explicita. |
 
 ## Regras De Seguranca Que Nao Podem Quebrar
 
