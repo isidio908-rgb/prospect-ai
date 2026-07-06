@@ -104,10 +104,24 @@ export default function CrmKanban() {
   const totals = useMemo(() => ({
     total: filteredLeads.length,
     open: filteredLeads.filter((lead) => !CLOSED_LEAD_STATUSES.includes(lead.status)).length,
-    won: filteredLeads.filter((lead) => lead.status === 'cliente_fechado').length,
+    answered: filteredLeads.filter((lead) => lead.status === 'respondeu').length,
     meetings: filteredLeads.filter((lead) => lead.status === 'reuniao_marcada').length,
+    nextActions: filteredLeads.filter((lead) => String(lead.proxima_acao || '').trim()).length,
+    won: filteredLeads.filter((lead) => lead.status === 'cliente_fechado').length,
     potential: filteredLeads.reduce((sum, lead) => sum + Number(lead.valor_potencial || 0), 0),
   }), [filteredLeads]);
+
+  const replyQueue = useMemo(() => {
+    return filteredLeads
+      .filter((lead) => ['respondeu', 'contato_enviado'].includes(lead.status))
+      .slice(0, 5);
+  }, [filteredLeads]);
+
+  const upcomingMeetings = useMemo(() => {
+    return filteredLeads
+      .filter((lead) => lead.status === 'reuniao_marcada' || String(lead.proxima_acao || '').toLowerCase().includes('reuni'))
+      .slice(0, 5);
+  }, [filteredLeads]);
 
   async function updateLead(leadId, patch, successMessage = 'Lead atualizado') {
     setUpdatingId(leadId);
@@ -194,7 +208,7 @@ export default function CrmKanban() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">CRM Kanban</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Pipeline comercial dos leads, com filtros, drag-and-drop e edição rápida.
+            Pipeline comercial dos leads, com respostas, próximas ações, reuniões e edição rápida no mesmo lugar.
           </p>
         </div>
 
@@ -204,13 +218,17 @@ export default function CrmKanban() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
         <Metric label="Leads no filtro" value={totals.total} />
         <Metric label="Em aberto" value={totals.open} />
+        <Metric label="Responder" value={totals.answered} />
         <Metric label="Reuniões" value={totals.meetings} />
+        <Metric label="Ações" value={totals.nextActions} />
         <Metric label="Fechados" value={totals.won} />
         <Metric label="Valor potencial" value={formatMoney(totals.potential)} />
       </div>
+
+      <CrmFocusPanel replyQueue={replyQueue} upcomingMeetings={upcomingMeetings} />
 
       <div className="card space-y-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -442,6 +460,57 @@ export default function CrmKanban() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function CrmFocusPanel({ replyQueue, upcomingMeetings }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <section className="card">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-5 w-5 text-primary-600 dark:text-primary-300" />
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100">Responder agora</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Leads que responderam ou ainda estao em contato enviado.</p>
+          </div>
+        </div>
+        <LeadFocusList leads={replyQueue} empty="Nenhuma resposta pendente no filtro." />
+      </section>
+
+      <section className="card">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="h-5 w-5 text-primary-600 dark:text-primary-300" />
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100">Agenda interna</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Reunioes marcadas ou leads com proxima acao de reuniao.</p>
+          </div>
+        </div>
+        <LeadFocusList leads={upcomingMeetings} empty="Nenhuma reuniao encontrada no filtro." />
+      </section>
+    </div>
+  );
+}
+
+function LeadFocusList({ leads, empty }) {
+  if (leads.length === 0) {
+    return <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{empty}</p>;
+  }
+
+  return (
+    <div className="mt-4 space-y-2">
+      {leads.map((lead) => (
+        <Link key={lead.id} to={`/leads/${lead.id}`} className="block rounded-lg border border-gray-200 p-3 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/40">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{lead.nome_empresa}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{[lead.cidade, lead.nicho || lead.categoria].filter(Boolean).join(' • ') || 'Sem segmentacao'}</div>
+            </div>
+            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-200">{lead.status || 'novo'}</span>
+          </div>
+          {lead.proxima_acao ? <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{lead.proxima_acao}</p> : null}
+        </Link>
+      ))}
     </div>
   );
 }
