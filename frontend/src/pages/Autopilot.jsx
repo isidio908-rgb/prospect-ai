@@ -6,14 +6,17 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  Download,
   Inbox,
   Play,
   RefreshCw,
+  RotateCcw,
   Send,
   Settings,
   ShieldCheck,
   Target,
   Trash2,
+  TrendingUp,
 } from 'lucide-react';
 import { autopilot } from '../services/api';
 
@@ -60,6 +63,12 @@ const EMPTY_AUTOMATION_FORM = {
   process_approved: true,
   ignore_schedule: false,
   worker_limit: 10,
+};
+
+const DEFAULT_LLM_FILTERS = {
+  purpose: '',
+  provider: '',
+  status: '',
 };
 
 const STATUS_LABELS = {
@@ -128,6 +137,11 @@ export default function Autopilot() {
   const [runs, setRuns] = useState([]);
   const [stats, setStats] = useState(null);
   const [plan, setPlan] = useState(null);
+  const [daemonStatus, setDaemonStatus] = useState(null);
+  const [collectionRules, setCollectionRules] = useState([]);
+  const [nicheOptimization, setNicheOptimization] = useState(null);
+  const [llmUsage, setLlmUsage] = useState(null);
+  const [llmFilters, setLlmFilters] = useState(DEFAULT_LLM_FILTERS);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [lastResult, setLastResult] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -144,13 +158,28 @@ export default function Autopilot() {
   async function loadAutopilot() {
     setLoading(true);
     try {
-      const [rulesResponse, queueResponse, batchesResponse, statsResponse, runsResponse, planResponse] = await Promise.all([
+      const [
+        rulesResponse,
+        queueResponse,
+        batchesResponse,
+        statsResponse,
+        runsResponse,
+        planResponse,
+        daemonResponse,
+        collectionRulesResponse,
+        nicheOptimizationResponse,
+        llmUsageResponse,
+      ] = await Promise.all([
         autopilot.listRules(),
         autopilot.listQueue({ limit: 150 }),
         autopilot.listApprovalBatches({ limit: 30 }),
         autopilot.stats(),
         autopilot.runs({ limit: 10 }),
         autopilot.semiAutoPlan(),
+        autopilot.daemonStatus(),
+        autopilot.listCollectionRules(),
+        autopilot.nicheOptimization(),
+        autopilot.llmUsage({ ...llmFilters, limit: 12 }),
       ]);
 
       setRules(rulesResponse.data.rules || []);
@@ -159,6 +188,10 @@ export default function Autopilot() {
       setStats(statsResponse.data.stats || null);
       setRuns(runsResponse.data.runs || []);
       setPlan(planResponse.data.plan || null);
+      setDaemonStatus(daemonResponse.data.status || null);
+      setCollectionRules(collectionRulesResponse.data.rules || []);
+      setNicheOptimization(nicheOptimizationResponse.data || null);
+      setLlmUsage(llmUsageResponse.data || null);
       hydrateAutomationForm(planResponse.data.plan || null);
     } catch (error) {
       toast.error(error.response?.data?.error || 'Erro ao carregar Autopilot');
@@ -315,6 +348,96 @@ export default function Autopilot() {
     await runAction(`cancel-batch-${batch.id}`, 'Lote cancelado', () => autopilot.processApprovalCommand({ text: `CANCELAR LOTE ${batch.id}` }));
   }
 
+  async function saveAutomaticCollectionRule() {
+    if (!automationForm.credential_id || !(automationForm.query || (automationForm.city && automationForm.niche))) {
+      toast.error('Informe credencial e uma busca ou cidade + nicho para ligar a coleta automatica');
+      return;
+    }
+
+    const payload = {
+      credential_id: Number(automationForm.credential_id),
+      name: automationForm.query || `${automationForm.niche} em ${automationForm.city}`,
+      enabled: true,
+      query: automationForm.query,
+      city: automationForm.city,
+      niche: automationForm.niche,
+      region: automationForm.region,
+      language: automationForm.language,
+      limit_requested: Number(automationForm.limit || 20),
+      verify_whatsapp_exists: Boolean(automationForm.verify_whatsapp_exists),
+      extract_emails_and_contacts: Boolean(automationForm.extract_emails_and_contacts),
+      force_refresh: Boolean(automationForm.force_refresh),
+      min_interval_minutes: 1440,
+      next_run_at: new Date().toISOString(),
+    };
+
+    await runAction('save-collection-rule', 'Coleta automatica ligada', () => autopilot.createCollectionRule(payload));
+  }
+
+  async function toggleCollectionRule(rule) {
+    await runAction(
+      `collection-rule-${rule.id}`,
+      rule.enabled ? 'Coleta automatica pausada' : 'Coleta automatica ativada',
+      () => autopilot.updateCollectionRule(rule.id, { enabled: !rule.enabled })
+    );
+  }
+
+  async function toggleDaemon(enabled) {
+    await runAction(
+      'daemon-toggle',
+      enabled ? 'Daemon automatico ligado' : 'Daemon automatico pausado',
+      () => autopilot.updateDaemonSettings({ enabled, reason: enabled ? null : 'Pausado pela tela Autopilot' })
+    );
+  }
+
+  async function runDaemonOnce() {
+    await runAction('daemon-once', 'Ciclo automatico executado agora', () => autopilot.runDaemonOnce({ dry_run: false }));
+  }
+
+  async function toggleNicheOptimization(enabled) {
+    const current = nicheOptimization?.settings || {};
+    await runAction(
+      'niche-settings',
+      enabled ? 'Otimização automática ativada' : 'Otimização automática pausada',
+      () => autopilot.updateNicheOptimizationSettings({
+        enabled,
+        min_sample_size: Number(current.min_sample_size || 10),
+        max_weight_delta_percent: Number(current.max_weight_delta_percent || 20),
+      })
+    );
+  }
+
+  async function applyNicheRecommendation(scopeKey) {
+    await runAction(
+      `niche-apply-${scopeKey}`,
+      'Peso de coleta ajustado',
+      () => autopilot.applyNicheOptimization({ mode: 'approved', scope_keys: [scopeKey] })
+    );
+  }
+
+  async function rollbackNicheRecommendation() {
+    await runAction('niche-rollback', 'Último ajuste revertido', () => autopilot.rollbackNicheOptimization({}));
+  }
+
+  function updateLlmFilter(field, value) {
+    setLlmFilters((current) => ({ ...current, [field]: value }));
+  }
+
+  async function exportLlmUsage() {
+    await runAction('llm-export', 'CSV de LLM gerado', async () => {
+      const response = await autopilot.exportLlmUsage(llmFilters);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'llm-usage.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      return { data: { exported: true } };
+    }, false);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -337,6 +460,17 @@ export default function Autopilot() {
 
       <SecurityNotice />
 
+      <AutopilotAutomaticPanel
+        daemonStatus={daemonStatus}
+        collectionRules={collectionRules}
+        form={automationForm}
+        busyAction={busyAction}
+        onSaveCollectionRule={saveAutomaticCollectionRule}
+        onToggleCollectionRule={toggleCollectionRule}
+        onToggleDaemon={toggleDaemon}
+        onRunDaemonOnce={runDaemonOnce}
+      />
+
       <DailyOperationWizard
         form={automationForm}
         summary={summary}
@@ -349,6 +483,23 @@ export default function Autopilot() {
       />
 
       <SummaryCards summary={summary} onSendApproved={sendApprovedNow} busyAction={busyAction} />
+
+      <NicheOptimizationPanel
+        optimization={nicheOptimization}
+        busyAction={busyAction}
+        onToggle={toggleNicheOptimization}
+        onApply={applyNicheRecommendation}
+        onRollback={rollbackNicheRecommendation}
+      />
+
+      <LlmUsagePanel
+        usage={llmUsage}
+        filters={llmFilters}
+        busyAction={busyAction}
+        onChange={updateLlmFilter}
+        onRefresh={loadAutopilot}
+        onExport={exportLlmUsage}
+      />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <AutomationRunPanel
@@ -419,10 +570,124 @@ function SecurityNotice() {
         <ShieldCheck className="h-5 w-5 flex-shrink-0" />
         <div>
           <p className="font-semibold">Autopilot controlado</p>
-          <p>O sistema pode coletar, analisar, criar lote e trabalhar fila aprovada. Mensagens novas continuam passando por aprovacao em lote antes de qualquer envio.</p>
+          <p>Ao ativar uma regra, o daemon do backend agenda oportunidades automaticamente. Mensagens novas continuam passando por aprovacao quando a regra exigir, e somente itens aprovados sao enviados.</p>
         </div>
       </div>
     </div>
+  );
+}
+
+function AutopilotAutomaticPanel({
+  daemonStatus,
+  collectionRules,
+  form,
+  busyAction,
+  onSaveCollectionRule,
+  onToggleCollectionRule,
+  onToggleDaemon,
+  onRunDaemonOnce,
+}) {
+  const globalEnabled = daemonStatus?.global?.enabled !== false;
+  const userEnabled = daemonStatus?.user?.enabled !== false;
+  const automaticEnabled = globalEnabled && userEnabled;
+  const schedule = daemonStatus?.global?.schedule || '*/5 * * * *';
+  const activeCollectionRules = collectionRules.filter((rule) => rule.enabled).length;
+  const canCreateRule = Boolean(form.credential_id && (form.query || (form.city && form.niche)));
+
+  return (
+    <section className="card border-green-200 dark:border-green-900/60">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <SectionHeader
+          icon={Bot}
+          title="Modo automatico real"
+          description="Quando ligado, o backend roda sozinho: coleta recorrente, analisa leads, cria fila e envia apenas mensagens aprovadas dentro das travas."
+          compact
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onToggleDaemon(!userEnabled)}
+            disabled={busyAction === 'daemon-toggle' || !globalEnabled}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            {automaticEnabled ? 'Pausar automatico' : 'Ligar automatico'}
+          </button>
+          <button
+            type="button"
+            onClick={onRunDaemonOnce}
+            disabled={busyAction === 'daemon-once' || !automaticEnabled}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <Play className="h-4 w-4" />
+            Rodar ciclo agora
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
+        <MetricPill label="Daemon" value={automaticEnabled ? 'Ligado' : 'Pausado'} />
+        <MetricPill label="Agenda" value={schedule} />
+        <MetricPill label="Coletas ativas" value={activeCollectionRules} />
+        <MetricPill label="Mensagens novas" value={form.send_approval_request ? 'Com aprovacao' : 'Internas'} />
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">Como usar sem pensar em motor tecnico</h3>
+          <ol className="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+            <li>1. Preencha busca, cidade/nicho e ID da credencial na operacao diaria.</li>
+            <li>2. Clique em <strong>Ligar coleta automatica desse alvo</strong>.</li>
+            <li>3. Deixe <strong>Ligar automatico</strong> ativo.</li>
+            <li>4. Aprove lotes pelo WhatsApp pessoal ou pela fila; o envio real trabalha somente o que estiver aprovado.</li>
+          </ol>
+          <button
+            type="button"
+            onClick={onSaveCollectionRule}
+            disabled={busyAction === 'save-collection-rule' || !canCreateRule}
+            className="btn btn-primary mt-4 w-full"
+          >
+            {busyAction === 'save-collection-rule' ? 'Ligando...' : 'Ligar coleta automatica desse alvo'}
+          </button>
+          {!canCreateRule ? (
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Preencha credencial e busca ou cidade + nicho para liberar.</p>
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">Coletas automaticas</h3>
+          <div className="mt-3 space-y-3">
+            {collectionRules.slice(0, 5).map((rule) => (
+              <div key={rule.id} className="rounded-lg bg-gray-50 p-3 text-sm dark:bg-gray-900/40">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-gray-900 dark:text-gray-100">{rule.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {rule.query || `${rule.niche || '-'} em ${rule.city || '-'}`} · limite {rule.limit_requested}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Proxima: {rule.next_run_at ? new Date(rule.next_run_at).toLocaleString('pt-BR') : '-'}
+                    </p>
+                  </div>
+                  <StatusBadge status={rule.enabled ? 'approved' : 'cancelled'} label={rule.enabled ? 'ativa' : 'pausada'} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onToggleCollectionRule(rule)}
+                  disabled={busyAction === `collection-rule-${rule.id}`}
+                  className="btn btn-secondary mt-3 px-2 py-1 text-xs"
+                >
+                  {rule.enabled ? 'Pausar coleta' : 'Ativar coleta'}
+                </button>
+              </div>
+            ))}
+            {collectionRules.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma coleta recorrente ligada ainda.</p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -531,6 +796,120 @@ function SummaryCards({ summary, onSendApproved, busyAction }) {
   );
 }
 
+function formatUsd(value) {
+  const amount = Number(value || 0);
+  return amount.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 4, maximumFractionDigits: 4 });
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('pt-BR');
+}
+
+function LlmUsagePanel({ usage, filters, busyAction, onChange, onRefresh, onExport }) {
+  const summary = usage?.summary || {};
+  const groups = usage?.groups || [];
+  const generations = usage?.generations || [];
+
+  return (
+    <section className="card">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <SectionHeader
+          icon={Bot}
+          title="Custos e histórico LLM"
+          description="Auditoria sanitizada de tokens, custo estimado, modelo, tarefa e falhas por agente."
+          compact
+        />
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onRefresh} className="btn btn-secondary flex items-center gap-2" disabled={busyAction === 'llm-refresh'}>
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
+          </button>
+          <button type="button" onClick={onExport} className="btn btn-secondary flex items-center gap-2" disabled={busyAction === 'llm-export' || !generations.length}>
+            <Download className="h-4 w-4" />
+            CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+        <MetricPill label="Gerações" value={formatNumber(summary.total_count)} />
+        <MetricPill label="Tokens" value={formatNumber(summary.total_tokens)} />
+        <MetricPill label="Custo estimado" value={formatUsd(summary.estimated_cost_usd)} />
+        <MetricPill label="Erro" value={`${Number(summary.error_rate || 0).toFixed(1)}%`} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Field label="Tarefa">
+          <select className="input" value={filters.purpose} onChange={(event) => onChange('purpose', event.target.value)}>
+            <option value="">Todas</option>
+            <option value="assistant">Assistente</option>
+            <option value="bdr_initial">BDR inicial</option>
+            <option value="followup_1">Follow-up 1</option>
+            <option value="followup_2">Follow-up 2</option>
+            <option value="sdr_reply">SDR resposta</option>
+          </select>
+        </Field>
+        <Field label="Provider">
+          <input className="input" value={filters.provider} onChange={(event) => onChange('provider', event.target.value)} placeholder="openai, anthropic..." />
+        </Field>
+        <Field label="Status">
+          <select className="input" value={filters.status} onChange={(event) => onChange('status', event.target.value)}>
+            <option value="">Todos</option>
+            <option value="success">Sucesso</option>
+            <option value="error_provider">Erro provider</option>
+          </select>
+        </Field>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-900 dark:bg-gray-900/40 dark:text-gray-100">Provider/modelo</div>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {groups.length ? groups.slice(0, 6).map((group) => (
+              <div key={`${group.provider}-${group.model}-${group.purpose}`} className="grid grid-cols-[minmax(0,1fr)_110px] gap-3 p-3 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-gray-900 dark:text-gray-100">{group.provider} / {group.model}</p>
+                  <p className="text-gray-500 dark:text-gray-400">{group.purpose_label} · {formatNumber(group.total_tokens)} tokens</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatUsd(group.estimated_cost_usd)}</p>
+                  <p className={group.error_count ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-gray-400'}>{group.error_rate}% erro</p>
+                </div>
+              </div>
+            )) : (
+              <p className="p-3 text-sm text-gray-500 dark:text-gray-400">Nenhuma geração encontrada para os filtros.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-900 dark:bg-gray-900/40 dark:text-gray-100">Histórico recente</div>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {generations.length ? generations.slice(0, 8).map((generation) => (
+              <div key={generation.id} className="grid grid-cols-[minmax(0,1fr)_120px] gap-3 p-3 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-gray-900 dark:text-gray-100">{generation.purpose_label} · {generation.provider}/{generation.model}</p>
+                  <p className="truncate text-gray-500 dark:text-gray-400">
+                    {generation.lead_name || 'Sem lead vinculado'} · {new Date(generation.created_at).toLocaleString('pt-BR')}
+                  </p>
+                  {generation.error_message ? <p className="mt-1 truncate text-red-600 dark:text-red-300">{generation.error_message}</p> : null}
+                </div>
+                <div className="text-right">
+                  <span className={`badge ${generation.status === 'success' ? 'badge-success' : 'badge-danger'}`}>{generation.status}</span>
+                  <p className="mt-1 text-gray-500 dark:text-gray-400">{formatNumber(generation.total_tokens)} tokens</p>
+                  <p className="text-gray-500 dark:text-gray-400">{formatUsd(generation.estimated_cost_usd)}{generation.usage_estimated ? ' est.' : ''}</p>
+                </div>
+              </div>
+            )) : (
+              <p className="p-3 text-sm text-gray-500 dark:text-gray-400">Ainda não há histórico LLM auditado.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function AutomationRunPanel({ form, plan, busyAction, onChange, onRun, onCheck, onSendApproved }) {
   const reasons = plan?.reasons || [];
   const safety = plan?.safety || [];
@@ -603,6 +982,111 @@ function AutomationRunPanel({ form, plan, busyAction, onChange, onRun, onCheck, 
         </button>
       </div>
     </section>
+  );
+}
+
+function NicheOptimizationPanel({ optimization, busyAction, onToggle, onApply, onRollback }) {
+  const settings = optimization?.settings || {};
+  const rankings = optimization?.rankings || [];
+  const recommendations = optimization?.recommendations || [];
+  const enabled = settings.enabled === true;
+
+  return (
+    <section className="card">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <SectionHeader
+          icon={TrendingUp}
+          title="Otimização de nichos"
+          description="Ranking por resultado real para ajustar a prioridade das coletas sem mudar nada sem amostra mínima."
+          compact
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onToggle(!enabled)}
+            disabled={busyAction === 'niche-settings'}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            {enabled ? 'Pausar automático' : 'Ativar automático'}
+          </button>
+          <button
+            type="button"
+            onClick={onRollback}
+            disabled={busyAction === 'niche-rollback'}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Rollback
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+        <MetricPill label="Escopos" value={optimization?.summary?.scopes || 0} />
+        <MetricPill label="Elegíveis" value={optimization?.summary?.eligible_scopes || 0} />
+        <MetricPill label="Recomendações" value={recommendations.length} />
+        <MetricPill label="Amostra mínima" value={settings.min_sample_size || 10} />
+      </div>
+
+      <div className="mt-5 overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
+          <thead>
+            <tr className="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+              <th className="py-2 pr-3">Nicho</th>
+              <th className="py-2 pr-3">Leads</th>
+              <th className="py-2 pr-3">Resposta</th>
+              <th className="py-2 pr-3">Agenda</th>
+              <th className="py-2 pr-3">Score</th>
+              <th className="py-2 pr-3">Peso</th>
+              <th className="py-2 pr-3">Ação</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            {rankings.slice(0, 6).map((item) => {
+              const busy = busyAction === `niche-apply-${item.scope_key}`;
+              const canApply = item.recommendation?.eligible && item.recommendation?.direction !== 'hold';
+              return (
+                <tr key={item.scope_key}>
+                  <td className="py-3 pr-3">
+                    <div className="font-medium text-gray-900 dark:text-gray-100">{item.niche}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{item.city} • {item.source_type}</div>
+                    <div className="mt-1 max-w-md text-xs text-gray-500 dark:text-gray-400">{item.recommendation?.reason}</div>
+                  </td>
+                  <td className="py-3 pr-3 text-gray-700 dark:text-gray-300">{item.leads_count}</td>
+                  <td className="py-3 pr-3 text-gray-700 dark:text-gray-300">{Math.round((item.response_rate || 0) * 100)}%</td>
+                  <td className="py-3 pr-3 text-gray-700 dark:text-gray-300">{Math.round((item.meeting_rate || 0) * 100)}%</td>
+                  <td className="py-3 pr-3 font-semibold text-gray-900 dark:text-gray-100">{item.performance_score}</td>
+                  <td className="py-3 pr-3 text-gray-700 dark:text-gray-300">
+                    {item.current_weight} → {item.recommendation?.proposed_weight || item.current_weight}
+                  </td>
+                  <td className="py-3 pr-3">
+                    <button
+                      type="button"
+                      onClick={() => onApply(item.scope_key)}
+                      disabled={!canApply || busy}
+                      className="btn btn-secondary px-2 py-1 text-xs"
+                    >
+                      {busy ? 'Aplicando...' : canApply ? 'Aplicar' : 'Aguardar'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {rankings.length === 0 ? <p className="py-4 text-sm text-gray-500 dark:text-gray-400">Ainda não há dados suficientes para ranquear nichos.</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function MetricPill({ label, value }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+      <div className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{label}</div>
+      <div className="mt-1 text-xl font-semibold text-gray-900 dark:text-gray-100">{value}</div>
+    </div>
   );
 }
 
@@ -782,10 +1266,10 @@ function SafetyList() {
     <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
       <h3 className="font-semibold text-gray-900 dark:text-gray-100">Como o Autopilot deve se comportar</h3>
       <ul className="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+        <li>Regras ativas sao avaliadas automaticamente pelo daemon do backend.</li>
         <li>Coleta real so acontece quando voce roda o Autopilot com coleta aprovada.</li>
-        <li>Mensagens novas entram em lote e precisam de aprovacao.</li>
-        <li>Aprovar lote nao envia automaticamente; so libera para a fila aprovada.</li>
-        <li>Enviar aprovadas processa somente itens com status `approved`.</li>
+        <li>Mensagens novas entram em lote quando a regra exige aprovacao.</li>
+        <li>O daemon envia somente itens com status `approved` e horario permitido.</li>
         <li>Stop-on-reply deve cancelar follow-ups quando o lead respondeu.</li>
         <li>Respostas, templates, diagnostico e agendamento sao motores internos do Autopilot.</li>
         <li>Configuracoes de regra definem limites, janela e filtros comerciais.</li>

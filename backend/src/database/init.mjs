@@ -10,10 +10,23 @@ export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+let initDatabasePromise = null;
+
 export async function initDatabase() {
+  if (initDatabasePromise) return initDatabasePromise;
+  initDatabasePromise = runInitDatabase();
+  try {
+    return await initDatabasePromise;
+  } finally {
+    initDatabasePromise = null;
+  }
+}
+
+async function runInitDatabase() {
   const client = await pool.connect();
   
   try {
+    await client.query(`SELECT pg_advisory_lock(hashtext('prospect_ai_init_database'))`);
     // Criar tabela de usuários
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -35,6 +48,127 @@ export async function initDatabase() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_niche VARCHAR(255)`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS internal_context TEXT`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS approval_whatsapp VARCHAR(50)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS organizations (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS organization_members (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(50) NOT NULL DEFAULT 'member',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(organization_id, user_id)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_organization_members_user ON organization_members(user_id)`);
+
+    await client.query(`
+      WITH inserted AS (
+        INSERT INTO organizations (name, owner_user_id)
+        SELECT COALESCE(NULLIF(u.name, ''), u.email, 'Prospect AI') || ' Workspace', u.id
+        FROM users u
+        WHERE NOT EXISTS (
+          SELECT 1 FROM organization_members om WHERE om.user_id = u.id
+        )
+        RETURNING id, owner_user_id
+      )
+      INSERT INTO organization_members (organization_id, user_id, role)
+      SELECT id, owner_user_id, 'owner'
+      FROM inserted
+      ON CONFLICT (organization_id, user_id) DO NOTHING
+    `);
+
+    await client.query(`
+      UPDATE users u
+      SET default_organization_id = om.organization_id
+      FROM organization_members om
+      WHERE om.user_id = u.id
+        AND u.default_organization_id IS NULL
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS audit_events (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+        entity_type VARCHAR(100) NOT NULL,
+        entity_id VARCHAR(100),
+        action VARCHAR(100) NOT NULL,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_events_org_created ON audit_events(organization_id, created_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_events_user_created ON audit_events(user_id, created_at DESC)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS billing_plans (
+        id SERIAL PRIMARY KEY,
+        slug VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        limits JSONB NOT NULL DEFAULT '{}'::jsonb,
+        price_cents INTEGER NOT NULL DEFAULT 0,
+        currency VARCHAR(10) NOT NULL DEFAULT 'BRL',
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      INSERT INTO billing_plans (slug, name, limits, price_cents, currency)
+      VALUES
+        ('starter', 'Starter', '{"users":1,"leads":500,"imports":20,"integrations":2}'::jsonb, 0, 'BRL'),
+        ('pro', 'Pro', '{"users":3,"leads":5000,"imports":200,"integrations":10}'::jsonb, 9900, 'BRL'),
+        ('business', 'Business', '{"users":10,"leads":25000,"imports":1000,"integrations":30}'::jsonb, 29900, 'BRL')
+      ON CONFLICT (slug) DO UPDATE SET
+        name = EXCLUDED.name,
+        limits = EXCLUDED.limits,
+        price_cents = EXCLUDED.price_cents,
+        currency = EXCLUDED.currency,
+        active = TRUE,
+        updated_at = NOW()
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS organization_subscriptions (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        plan_id INTEGER REFERENCES billing_plans(id) ON DELETE RESTRICT,
+        status VARCHAR(50) NOT NULL DEFAULT 'active',
+        provider VARCHAR(50) DEFAULT 'internal',
+        provider_customer_id VARCHAR(255),
+        provider_subscription_id VARCHAR(255),
+        current_period_end TIMESTAMP,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(organization_id)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_org_subscriptions_status ON organization_subscriptions(status)`);
+
+    await client.query(`
+      INSERT INTO organization_subscriptions (organization_id, plan_id, status)
+      SELECT o.id, bp.id, 'active'
+      FROM organizations o
+      CROSS JOIN billing_plans bp
+      WHERE bp.slug = 'starter'
+        AND NOT EXISTS (
+          SELECT 1 FROM organization_subscriptions os WHERE os.organization_id = o.id
+        )
+    `);
 
     // Criar tabela de configurações do usuário (credenciais RapidAPI)
     await client.query(`
@@ -94,6 +228,8 @@ export async function initDatabase() {
     // Migração: garante as colunas category/model em bancos já existentes
     await client.query(`ALTER TABLE credentials ADD COLUMN IF NOT EXISTS category VARCHAR(20) DEFAULT 'scraper'`);
     await client.query(`ALTER TABLE credentials ADD COLUMN IF NOT EXISTS model VARCHAR(255)`);
+    await client.query(`ALTER TABLE credentials ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL`);
+    await client.query(`UPDATE credentials c SET organization_id = u.default_organization_id FROM users u WHERE c.user_id = u.id AND c.organization_id IS NULL`);
 
     // Criar tabela de uso de credenciais
     await client.query(`
@@ -142,6 +278,8 @@ export async function initDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_runs_user_started ON collection_runs(user_id, started_at DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_runs_status ON collection_runs(user_id, status)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_runs_cache_key ON collection_runs(user_id, cache_key) WHERE cache_key IS NOT NULL`);
+    await client.query(`ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL`);
+    await client.query(`UPDATE collection_runs cr SET organization_id = u.default_organization_id FROM users u WHERE cr.user_id = u.id AND cr.organization_id IS NULL`);
 
     // Logs persistentes das execuções de coleta.
     await client.query(`
@@ -180,6 +318,8 @@ export async function initDatabase() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_cache_user_key ON collection_cache(user_id, cache_key)`);
+    await client.query(`ALTER TABLE collection_cache ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL`);
+    await client.query(`UPDATE collection_cache cc SET organization_id = u.default_organization_id FROM users u WHERE cc.user_id = u.id AND cc.organization_id IS NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_collection_cache_expires ON collection_cache(expires_at)`);
 
     // Criar tabela de leads
@@ -282,6 +422,37 @@ export async function initDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_leads_business_id ON leads(user_id, business_id) WHERE business_id IS NOT NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_leads_google_id ON leads(user_id, google_id) WHERE google_id IS NOT NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_leads_responsavel ON leads(user_id, responsavel) WHERE responsavel IS NOT NULL`);
+    await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS ultimo_contato TIMESTAMP`);
+    await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL`);
+    await client.query(`UPDATE leads l SET organization_id = u.default_organization_id FROM users u WHERE l.user_id = u.id AND l.organization_id IS NULL`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS llm_generations (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+        credential_id INTEGER REFERENCES credentials(id) ON DELETE SET NULL,
+        task_id VARCHAR(100),
+        purpose VARCHAR(100) NOT NULL DEFAULT 'assistant',
+        provider VARCHAR(50) NOT NULL,
+        model VARCHAR(255) NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'success',
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        total_tokens INTEGER,
+        usage_estimated BOOLEAN DEFAULT FALSE,
+        estimated_cost_usd DECIMAL(12,8),
+        prompt_chars INTEGER,
+        response_chars INTEGER,
+        duration_ms INTEGER,
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_llm_generations_user_created ON llm_generations(user_id, created_at DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_llm_generations_credential_created ON llm_generations(credential_id, created_at DESC)`);
+    await client.query(`ALTER TABLE llm_generations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL`);
+    await client.query(`UPDATE llm_generations lg SET organization_id = u.default_organization_id FROM users u WHERE lg.user_id = u.id AND lg.organization_id IS NULL`);
 
     // Criar tabela de histórico de follow-up (CRM interno, spec seção 11)
     await client.query(`
@@ -298,15 +469,13 @@ export async function initDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_lead_followups_lead_id ON lead_followups(lead_id, created_at DESC)`);
 
-    // Criar tabelas do Autopilot SDR. A fundação nasce passiva: regras e fila,
-    // sem disparo automático ativo até existir configuração explícita do usuário.
-    await ensureAutopilotTables(client);
-
     // Criar tabela de instâncias WhatsApp (Evolution API)
     await client.query(`
       CREATE TABLE IF NOT EXISTS whatsapp_instances (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        label VARCHAR(255),
+        is_default BOOLEAN DEFAULT FALSE,
         instance_name VARCHAR(255) NOT NULL UNIQUE,
         instance_token_encrypted TEXT,
         phone_number VARCHAR(50),
@@ -327,12 +496,38 @@ export async function initDatabase() {
         connected_at TIMESTAMP,
         disconnected_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW(),
-
-        UNIQUE(user_id)
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`ALTER TABLE whatsapp_instances DROP CONSTRAINT IF EXISTS whatsapp_instances_user_id_key`);
+    await client.query(`ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS label VARCHAR(255)`);
+    await client.query(`ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL`);
+    await client.query(`UPDATE whatsapp_instances wi SET organization_id = u.default_organization_id FROM users u WHERE wi.user_id = u.id AND wi.organization_id IS NULL`);
+    await client.query(`
+      UPDATE whatsapp_instances wi
+      SET is_default = TRUE
+      WHERE wi.id = (
+        SELECT id FROM whatsapp_instances wi2
+        WHERE wi2.user_id = wi.user_id
+        ORDER BY wi2.created_at ASC, wi2.id ASC
+        LIMIT 1
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM whatsapp_instances wid
+        WHERE wid.user_id = wi.user_id AND wid.is_default = TRUE
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_whatsapp_instances_user_id ON whatsapp_instances(user_id)`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_instances_user_default ON whatsapp_instances(user_id) WHERE is_default = TRUE`);
+    await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp_instance_id INTEGER REFERENCES whatsapp_instances(id) ON DELETE SET NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_leads_whatsapp_instance ON leads(user_id, whatsapp_instance_id) WHERE whatsapp_instance_id IS NOT NULL`);
+
+    // Criar tabelas do Autopilot SDR. A fundação nasce passiva: regras e fila,
+    // sem disparo automático ativo até existir configuração explícita do usuário.
+    // Deve rodar depois de whatsapp_instances porque regras e fila podem apontar
+    // para um número específico.
+    await ensureAutopilotTables(client);
 
     // Criar tabela de mensagens WhatsApp, vinculadas a um lead
     await client.query(`
@@ -364,12 +559,19 @@ export async function initDatabase() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_instance_id ON whatsapp_messages(instance_id, created_at DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_remote_jid ON whatsapp_messages(instance_id, remote_jid)`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_messages_wa_id ON whatsapp_messages(instance_id, whatsapp_message_id) WHERE whatsapp_message_id IS NOT NULL`);
+    await client.query(`ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL`);
+    await client.query(`UPDATE whatsapp_messages wm SET organization_id = u.default_organization_id FROM users u WHERE wm.user_id = u.id AND wm.organization_id IS NULL`);
 
     console.log('✅ Tabelas criadas/verificadas com sucesso!');
   } catch (error) {
     console.error('❌ Erro ao inicializar banco:', error);
     throw error;
   } finally {
+    try {
+      await client.query(`SELECT pg_advisory_unlock(hashtext('prospect_ai_init_database'))`);
+    } catch {
+      // ignore unlock errors while releasing the client after an init failure
+    }
     client.release();
   }
 }

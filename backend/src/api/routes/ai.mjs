@@ -3,7 +3,8 @@ import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
 import { decrypt } from '../../services/encryption.mjs';
 import { listLlmProviders, isLlmType } from '../../services/llm/providers.mjs';
-import { chatComplete } from '../../services/llm/client.mjs';
+import { chatCompleteDetailed } from '../../services/llm/client.mjs';
+import { buildGenerationAudit, recordLlmGeneration } from '../../services/llm/audit.mjs';
 import { listTasks, getTask, buildSystemPrompt } from '../../services/llm/tasks.mjs';
 
 const router = express.Router();
@@ -104,15 +105,64 @@ router.post('/run', async (req, res, next) => {
       return res.status(500).json({ error: 'Erro ao descriptografar a chave de IA' });
     }
 
-    // Executa a chamada ao LLM com prompt-base ajustado pela profissão/nicho/instruções internas do usuário.
-    const text = await chatComplete(credential, apiKey, {
-      system: buildSystemPrompt(task, req.user),
-      user: task.buildUser(lead),
-    });
+    const systemPrompt = buildSystemPrompt(task, req.user);
+    const userPrompt = task.buildUser(lead);
+    const startedAt = Date.now();
+    let generation;
+    let text;
+
+    try {
+      // Executa a chamada ao LLM com prompt-base ajustado pela profissão/nicho/instruções internas do usuário.
+      generation = await chatCompleteDetailed(credential, apiKey, {
+        system: systemPrompt,
+        user: userPrompt,
+      });
+      text = generation.text;
+    } catch (error) {
+      const audit = buildGenerationAudit({
+        credential,
+        taskId: task.id,
+        purpose: 'ai_assistant',
+        system: systemPrompt,
+        user: userPrompt,
+        text: '',
+        usage: {},
+        durationMs: Date.now() - startedAt,
+        status: 'error_provider',
+        errorMessage: error.message,
+      });
+      await recordLlmGeneration({ userId: req.user.id, leadId, audit });
+      throw error;
+    }
 
     if (!text) {
+      const audit = buildGenerationAudit({
+        credential,
+        taskId: task.id,
+        purpose: 'ai_assistant',
+        system: systemPrompt,
+        user: userPrompt,
+        text: '',
+        usage: generation?.usage,
+        durationMs: Date.now() - startedAt,
+        status: 'empty_response',
+        errorMessage: 'A IA não retornou conteúdo.',
+      });
+      await recordLlmGeneration({ userId: req.user.id, leadId, audit });
       return res.status(502).json({ error: 'A IA não retornou conteúdo. Tente novamente.' });
     }
+
+    const generationAudit = buildGenerationAudit({
+      credential,
+      taskId: task.id,
+      purpose: 'ai_assistant',
+      system: systemPrompt,
+      user: userPrompt,
+      text,
+      usage: generation.usage,
+      durationMs: Date.now() - startedAt,
+    });
+    const generationRecord = await recordLlmGeneration({ userId: req.user.id, leadId, audit: generationAudit });
 
     // Contabiliza 1 requisição na credencial
     await query(
@@ -152,8 +202,18 @@ router.post('/run', async (req, res, next) => {
       savesTo: task.savesTo,
       applied,
       provider: credential.type,
-      model: credential.model,
+      model: generation.model,
       credentialId: credential.id,
+      generation: {
+        id: generationRecord.id,
+        provider: generationRecord.provider,
+        model: generationRecord.model,
+        promptTokens: generationRecord.prompt_tokens,
+        completionTokens: generationRecord.completion_tokens,
+        totalTokens: generationRecord.total_tokens,
+        usageEstimated: generationRecord.usage_estimated,
+        estimatedCostUsd: generationRecord.estimated_cost_usd,
+      },
     });
   } catch (error) {
     // Erros do provedor de IA voltam como 502 com a mensagem original

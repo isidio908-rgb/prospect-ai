@@ -1,6 +1,8 @@
 import { query } from '../../database/init.mjs';
 import { sendTextToLead } from '../whatsapp/whatsappService.mjs';
 import { buildAutopilotDecision, getNextSendAt, normalizeAutopilotRule } from './autopilotService.mjs';
+import { buildBdrFollowupMessage, buildBdrInitialMessage } from './bdrAgentService.mjs';
+import { evaluateQueueSendSafety } from './autopilotSafetyService.mjs';
 
 const INITIAL_ELIGIBLE_STATUSES = ['novo', 'analisado', 'mensagem_pronta'];
 const ACTIVE_MESSAGE_STATUSES = ['pending', 'approved', 'queued', 'sent'];
@@ -256,28 +258,41 @@ export async function runAssistedScheduler(userId, options = {}) {
           lead_id: lead.id,
           nome_empresa: lead.nome_empresa,
           rule_id: rule.id,
+          whatsapp_instance_id: ruleRow.default_whatsapp_instance_id || lead.whatsapp_instance_id || null,
           eligible: true,
           status: decision.queueItem.status,
           scheduled_at: decision.queueItem.scheduled_at,
         });
 
         if (!dryRun) {
-          const message = buildMessageText({ ...lead, payload_json: decision.queueItem.payload_json }, 'initial');
+          const bdrMessage = await buildBdrInitialMessage(userId, lead);
           const inserted = await query(
             `INSERT INTO message_queue (
-              user_id, lead_id, automation_rule_id, automation_run_id, channel, message_type,
+              user_id, lead_id, automation_rule_id, whatsapp_instance_id, automation_run_id, channel, message_type,
               status, scheduled_at, payload_json
-            ) VALUES ($1, $2, $3, $4, 'whatsapp', 'initial', $5, $6, $7::jsonb)
+            ) VALUES ($1, $2, $3, $4, $5, 'whatsapp', 'initial', $6, $7, $8::jsonb)
             ON CONFLICT DO NOTHING
             RETURNING id`,
             [
               userId,
               lead.id,
               rule.id,
+              ruleRow.default_whatsapp_instance_id || lead.whatsapp_instance_id || null,
               run.id,
               decision.queueItem.status,
               decision.queueItem.scheduled_at,
-              JSON.stringify({ ...decision.queueItem.payload_json, message }),
+              JSON.stringify({
+                ...decision.queueItem.payload_json,
+                message: bdrMessage.message,
+                bdr: {
+                  source: bdrMessage.source,
+                  generated: bdrMessage.generated,
+                  provider: bdrMessage.provider || null,
+                  model: bdrMessage.model || null,
+                  generationId: bdrMessage.generationId || null,
+                  reason: bdrMessage.reason || null,
+                },
+              }),
             ]
           );
           if (inserted.rows.length > 0) queued += 1;
@@ -318,8 +333,12 @@ export async function processApprovedMessages(userId, options = {}) {
   const canSend = !dryRun && confirmSend;
 
   const result = await query(
-    `SELECT mq.*, l.nome_empresa, l.telefone, l.whatsapp, l.mensagem_whatsapp, l.mensagem_whatsapp_followup,
-            l.cidade, l.nicho, ar.name as automation_rule_name
+      `SELECT mq.*, COALESCE(mq.whatsapp_instance_id, l.whatsapp_instance_id, ar.default_whatsapp_instance_id) as selected_whatsapp_instance_id,
+            l.nome_empresa, l.telefone, l.whatsapp, l.mensagem_whatsapp, l.mensagem_whatsapp_followup,
+            l.cidade, l.nicho, l.status as lead_status, l.motivo_perda,
+            ar.name as automation_rule_name, ar.mode, ar.max_daily_sends, ar.max_hourly_sends,
+            ar.send_window_start, ar.send_window_end, ar.timezone, ar.require_manual_approval,
+            ar.stop_on_reply, ar.safety_accepted_at
      FROM message_queue mq
      JOIN leads l ON l.id = mq.lead_id AND l.user_id = mq.user_id
      LEFT JOIN automation_rules ar ON ar.id = mq.automation_rule_id AND ar.user_id = mq.user_id
@@ -350,6 +369,22 @@ export async function processApprovedMessages(userId, options = {}) {
       continue;
     }
 
+    const safety = await evaluateQueueSendSafety(userId, row, { ignoreSchedule });
+    if (!safety.allowed) {
+      await query(
+        `UPDATE message_queue SET status = 'failed', last_error = $1, updated_at = NOW()
+         WHERE id = $2 AND user_id = $3`,
+        [`[safety:${safety.reason}] ${safety.message}`, row.id, userId]
+      );
+      await query(
+        `INSERT INTO lead_followups (lead_id, user_id, tipo, mensagem)
+         VALUES ($1, $2, 'nota', $3)`,
+        [row.lead_id, userId, `[Autopilot/Seguranca] ${safety.message}`]
+      );
+      items.push({ ...item, status: 'failed', sent: false, safety });
+      continue;
+    }
+
     await query(
       `UPDATE message_queue SET status = 'queued', locked_at = NOW(), attempts = attempts + 1, updated_at = NOW()
        WHERE id = $1 AND user_id = $2 AND status = 'approved'`,
@@ -357,7 +392,7 @@ export async function processApprovedMessages(userId, options = {}) {
     );
 
     try {
-      await sendTextToLead(userId, row.lead_id, text);
+      await sendTextToLead(userId, row.lead_id, text, { instanceId: row.selected_whatsapp_instance_id || null });
       await query(
         `UPDATE message_queue SET status = 'sent', sent_at = NOW(), last_error = NULL, updated_at = NOW()
          WHERE id = $1 AND user_id = $2`,
@@ -371,7 +406,7 @@ export async function processApprovedMessages(userId, options = {}) {
       );
       await query(
         `INSERT INTO lead_followups (lead_id, user_id, tipo, mensagem)
-         VALUES ($1, $2, 'whatsapp', $3)`,
+         VALUES ($1, $2, 'nota', $3)`,
         [row.lead_id, userId, `[Autopilot/${row.message_type}] Mensagem enviada pelo worker controlado.`]
       );
       items.push({ ...item, status: 'sent', sent: true });
@@ -439,7 +474,8 @@ export async function queueFollowups(userId, options = {}) {
   await applyStopOnReply(userId);
 
   const result = await query(
-    `SELECT mq.*, l.nome_empresa, l.mensagem_whatsapp_followup, l.cidade, l.nicho,
+    `SELECT mq.*, COALESCE(mq.whatsapp_instance_id, l.whatsapp_instance_id, ar.default_whatsapp_instance_id) as selected_whatsapp_instance_id,
+            l.nome_empresa, l.mensagem_whatsapp_followup, l.cidade, l.nicho,
             ar.followup_1_delay_hours, ar.followup_2_delay_hours, ar.require_manual_approval, ar.mode
      FROM message_queue mq
      JOIN leads l ON l.id = mq.lead_id AND l.user_id = mq.user_id
@@ -472,22 +508,31 @@ export async function queueFollowups(userId, options = {}) {
   for (const row of result.rows) {
     const nextType = row.message_type === 'initial' ? 'followup_1' : 'followup_2';
     const rule = normalizeAutopilotRule(row);
-    const status = rule.require_manual_approval ? 'pending' : 'approved';
+    const status = rule.require_manual_approval || rule.mode === 'automatico_limitado' ? 'pending' : 'approved';
+    const followupMessage = await buildBdrFollowupMessage(userId, { ...row, id: row.lead_id }, { purpose: nextType });
     const payload = {
       leadName: row.nome_empresa,
-      message: buildMessageText(row, nextType),
+      message: followupMessage.message,
       sourceMessageId: row.id,
       manualApproval: rule.require_manual_approval,
+      followup: {
+        source: followupMessage.source,
+        generated: followupMessage.generated,
+        provider: followupMessage.provider || null,
+        model: followupMessage.model || null,
+        generationId: followupMessage.generationId || null,
+        reason: followupMessage.reason || null,
+      },
     };
 
     if (!dryRun) {
       const inserted = await query(
         `INSERT INTO message_queue (
-          user_id, lead_id, automation_rule_id, automation_run_id, channel, message_type, status, scheduled_at, payload_json
-        ) VALUES ($1, $2, $3, NULL, 'whatsapp', $4, $5, $6, $7::jsonb)
+          user_id, lead_id, automation_rule_id, whatsapp_instance_id, automation_run_id, channel, message_type, status, scheduled_at, payload_json
+        ) VALUES ($1, $2, $3, $4, NULL, 'whatsapp', $5, $6, $7, $8::jsonb)
         ON CONFLICT DO NOTHING
         RETURNING id`,
-        [userId, row.lead_id, row.automation_rule_id, nextType, status, getNextSendAt(new Date(), rule), JSON.stringify(payload)]
+        [userId, row.lead_id, row.automation_rule_id, row.selected_whatsapp_instance_id || null, nextType, status, getNextSendAt(new Date(), rule), JSON.stringify(payload)]
       );
       if (inserted.rows[0]) queued.push({ id: inserted.rows[0].id, lead_id: row.lead_id, message_type: nextType, status });
     } else {

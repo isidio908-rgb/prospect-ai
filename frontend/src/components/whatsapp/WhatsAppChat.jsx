@@ -16,7 +16,7 @@ const POLL_INTERVAL_MS = 10000;
  * que uma resposta é enviada (ver whatsappService.markPendingMessagesAsRead).
  * Este componente não chama nenhum endpoint de "marcar como lido".
  */
-export default function WhatsAppChat({ leadId, whatsappConnected }) {
+export default function WhatsAppChat({ leadId, whatsappConnected, instanceId = null }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -57,7 +57,7 @@ export default function WhatsAppChat({ leadId, whatsappConnected }) {
 
     setSending(true);
     try {
-      await whatsapp.sendText(leadId, text.trim());
+      await whatsapp.sendText(leadId, text.trim(), instanceId ? { instanceId } : {});
       setText('');
       await loadMessages();
     } catch (error) {
@@ -82,6 +82,7 @@ export default function WhatsAppChat({ leadId, whatsappConnected }) {
           audio: base64,
           mimetype: file.type,
           fileName: file.name,
+          ...(instanceId ? { instanceId } : {}),
         });
       } else {
         const mediatype = file.type.startsWith('image/')
@@ -95,6 +96,7 @@ export default function WhatsAppChat({ leadId, whatsappConnected }) {
           mimetype: file.type || 'application/octet-stream',
           media: base64,
           fileName: file.name,
+          ...(instanceId ? { instanceId } : {}),
         });
       }
 

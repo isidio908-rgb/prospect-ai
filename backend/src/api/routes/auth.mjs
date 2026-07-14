@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
+import { ensureUserWorkspace, getUserWorkspaces, recordAuditEvent } from '../../services/tenancy.mjs';
 
 const router = express.Router();
 
@@ -47,7 +48,9 @@ function toUserPayload(user) {
     profession: user.profession || 'Gestor de Tráfego',
     primary_niche: user.primary_niche || '',
     internal_context: user.internal_context || '',
-    approval_whatsapp: user.approval_whatsapp || ''
+    approval_whatsapp: user.approval_whatsapp || '',
+    organization_id: user.organization_id || user.default_organization_id || user.workspace?.id || null,
+    workspace: user.workspace || null
   };
 }
 
@@ -88,6 +91,14 @@ router.post('/register', async (req, res, next) => {
     );
     
     const user = result.rows[0];
+    const workspace = await ensureUserWorkspace(user);
+    await recordAuditEvent({
+      userId: user.id,
+      organizationId: workspace?.id,
+      entityType: 'user',
+      entityId: user.id,
+      action: 'user_registered'
+    });
     
     // Gerar token JWT
     const token = jwt.sign(
@@ -98,7 +109,7 @@ router.post('/register', async (req, res, next) => {
     
     res.status(201).json({
       message: 'Conta criada com sucesso',
-      user: toUserPayload(user),
+      user: toUserPayload({ ...user, organization_id: workspace?.id, workspace }),
       token
     });
   } catch (error) {
@@ -113,7 +124,7 @@ router.post('/login', async (req, res, next) => {
     
     // Buscar usuário
     const result = await query(
-      `SELECT id, email, name, profession, primary_niche, internal_context, approval_whatsapp, password_hash
+      `SELECT id, email, name, profession, primary_niche, internal_context, approval_whatsapp, default_organization_id, password_hash
        FROM users
        WHERE email = $1`,
       [email]
@@ -126,6 +137,7 @@ router.post('/login', async (req, res, next) => {
     }
     
     const user = result.rows[0];
+    const workspace = await ensureUserWorkspace(user);
     
     // Verificar senha
     const validPassword = await bcrypt.compare(password, user.password_hash);
@@ -145,7 +157,7 @@ router.post('/login', async (req, res, next) => {
     
     res.json({
       message: 'Login realizado com sucesso',
-      user: toUserPayload(user),
+      user: toUserPayload({ ...user, organization_id: workspace?.id, workspace }),
       token
     });
   } catch (error) {
@@ -155,8 +167,10 @@ router.post('/login', async (req, res, next) => {
 
 // GET /api/auth/me - Dados do usuário logado
 router.get('/me', authenticate, async (req, res) => {
+  const workspaces = await getUserWorkspaces(req.user.id);
   res.json({
-    user: toUserPayload(req.user)
+    user: toUserPayload(req.user),
+    workspaces
   });
 });
 
@@ -174,7 +188,7 @@ router.patch('/me', authenticate, async (req, res, next) => {
         approval_whatsapp = $5,
         updated_at = NOW()
        WHERE id = $6
-       RETURNING id, email, name, profession, primary_niche, internal_context, approval_whatsapp`,
+       RETURNING id, email, name, profession, primary_niche, internal_context, approval_whatsapp, default_organization_id`,
       [
         data.name === undefined ? req.user.name : (data.name === '' ? null : data.name),
         data.profession === undefined ? req.user.profession : data.profession,
@@ -185,9 +199,18 @@ router.patch('/me', authenticate, async (req, res, next) => {
       ]
     );
 
+    await recordAuditEvent({
+      userId: req.user.id,
+      organizationId: req.user.organization_id,
+      entityType: 'user',
+      entityId: req.user.id,
+      action: 'profile_updated',
+      metadata: { fields: Object.keys(data) }
+    });
+
     res.json({
       message: 'Perfil atualizado com sucesso',
-      user: toUserPayload(result.rows[0])
+      user: toUserPayload({ ...result.rows[0], organization_id: req.user.organization_id, workspace: req.user.workspace })
     });
   } catch (error) {
     next(error);

@@ -36,7 +36,39 @@ function getWebhookSecret() {
  * colisão entre diferentes contas do Prospect AI.
  */
 function buildInstanceName(userId) {
-  return `prospect-ai-user-${userId}`;
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `prospect-ai-user-${userId}-${suffix}`;
+}
+
+function sanitizeLabel(label) {
+  const value = String(label || '').trim();
+  return value.slice(0, 120) || null;
+}
+
+function serializeInstance(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    label: row.label,
+    is_default: row.is_default,
+    instance_name: row.instance_name,
+    phone_number: row.phone_number,
+    profile_name: row.profile_name,
+    status: row.status,
+    read_messages_auto: row.read_messages_auto,
+    read_status_auto: row.read_status_auto,
+    reject_call: row.reject_call,
+    msg_call: row.msg_call,
+    groups_ignore: row.groups_ignore,
+    always_online: row.always_online,
+    simulate_typing: row.simulate_typing,
+    last_qr_code: row.last_qr_code,
+    last_qr_at: row.last_qr_at,
+    connected_at: row.connected_at,
+    disconnected_at: row.disconnected_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 /**
@@ -52,11 +84,6 @@ function buildInstanceName(userId) {
  * - simulateTyping: true por padrão (delay simulando digitação ao enviar)
  */
 export async function connectInstance(userId, securityOptions = {}) {
-  const existing = await query(
-    'SELECT * FROM whatsapp_instances WHERE user_id = $1',
-    [userId]
-  );
-
   const options = {
     readMessagesAuto: false,
     readStatusAuto: false,
@@ -68,7 +95,14 @@ export async function connectInstance(userId, securityOptions = {}) {
     ...securityOptions,
   };
 
-  let instanceRow = existing.rows[0];
+  let instanceRow = null;
+  if (options.instanceId) {
+    instanceRow = await getInstanceRow(userId, options.instanceId);
+    if (!instanceRow) throw new Error('Instância WhatsApp não encontrada');
+  } else if (!options.createNew) {
+    instanceRow = await getDefaultInstanceRow(userId);
+  }
+
   const instanceName = instanceRow?.instance_name || buildInstanceName(userId);
 
   if (!instanceRow) {
@@ -86,13 +120,14 @@ export async function connectInstance(userId, securityOptions = {}) {
 
     const insertResult = await query(
       `INSERT INTO whatsapp_instances (
-        user_id, instance_name, instance_token_encrypted, status,
+        user_id, label, is_default, instance_name, instance_token_encrypted, status,
         read_messages_auto, read_status_auto, reject_call, msg_call,
         groups_ignore, always_online, simulate_typing
-      ) VALUES ($1, $2, $3, 'connecting', $4, $5, $6, $7, $8, $9, $10)
+      ) VALUES ($1, $2, NOT EXISTS (SELECT 1 FROM whatsapp_instances WHERE user_id = $1), $3, $4, 'connecting', $5, $6, $7, $8, $9, $10, $11)
       RETURNING *`,
       [
         userId,
+        sanitizeLabel(options.label),
         instanceName,
         encrypt(instanceToken),
         options.readMessagesAuto,
@@ -110,11 +145,13 @@ export async function connectInstance(userId, securityOptions = {}) {
     // Instância já existe: apenas atualiza as configurações de segurança escolhidas.
     await query(
       `UPDATE whatsapp_instances SET
-        read_messages_auto = $1, read_status_auto = $2, reject_call = $3,
-        msg_call = $4, groups_ignore = $5, always_online = $6, simulate_typing = $7,
+        label = COALESCE($1, label),
+        read_messages_auto = $2, read_status_auto = $3, reject_call = $4,
+        msg_call = $5, groups_ignore = $6, always_online = $7, simulate_typing = $8,
         updated_at = NOW()
-       WHERE id = $8`,
+       WHERE id = $9`,
       [
+        sanitizeLabel(options.label),
         options.readMessagesAuto,
         options.readStatusAuto,
         options.rejectCall,
@@ -151,6 +188,7 @@ export async function connectInstance(userId, securityOptions = {}) {
   }
 
   return {
+    id: instanceRow.id,
     instanceName,
     status: connectResult?.instance?.status || 'connecting',
     qrcode,
@@ -161,21 +199,11 @@ export async function connectInstance(userId, securityOptions = {}) {
  * Retorna o estado atual da instância do usuário (sem expor o token).
  */
 export async function getInstanceStatus(userId) {
-  const result = await query(
-    `SELECT id, instance_name, phone_number, profile_name, status,
-            read_messages_auto, read_status_auto, reject_call, msg_call,
-            groups_ignore, always_online, simulate_typing,
-            last_qr_code, last_qr_at, connected_at, disconnected_at
-     FROM whatsapp_instances WHERE user_id = $1`,
-    [userId]
-  );
+  const instances = await listInstances(userId);
+  if (instances.length === 0) return { connected: false, instance: null, instances: [] };
 
-  if (result.rows.length === 0) {
-    return { connected: false, instance: null };
-  }
-
-  const instanceRow = result.rows[0];
-  const instanceToken = await getInstanceToken(userId);
+  const instanceRow = instances.find((instance) => instance.is_default) || instances[0];
+  const instanceToken = await getInstanceToken(userId, instanceRow.id);
 
   // Consulta o estado real na Evolution API para refletir desconexões que
   // não passaram pelo webhook (ex: logout feito direto no celular).
@@ -192,25 +220,67 @@ export async function getInstanceStatus(userId) {
 
   return {
     connected: instanceRow.status === 'open',
-    instance: instanceRow,
+    instance: serializeInstance(instanceRow),
+    instances,
   };
 }
 
-async function getInstanceToken(userId) {
+export async function listInstances(userId) {
   const result = await query(
-    'SELECT instance_token_encrypted FROM whatsapp_instances WHERE user_id = $1',
+    `SELECT id, label, is_default, instance_name, phone_number, profile_name, status,
+            read_messages_auto, read_status_auto, reject_call, msg_call,
+            groups_ignore, always_online, simulate_typing,
+            last_qr_code, last_qr_at, connected_at, disconnected_at, created_at, updated_at
+     FROM whatsapp_instances
+     WHERE user_id = $1
+     ORDER BY is_default DESC, created_at ASC, id ASC`,
     [userId]
+  );
+  return result.rows.map(serializeInstance);
+}
+
+async function getInstanceToken(userId, instanceId = null) {
+  const result = await query(
+    `SELECT instance_token_encrypted
+     FROM whatsapp_instances
+     WHERE user_id = $1 AND ($2::int IS NULL OR id = $2)
+     ORDER BY is_default DESC, created_at ASC, id ASC
+     LIMIT 1`,
+    [userId, instanceId]
   );
   if (result.rows.length === 0) return null;
   return decrypt(result.rows[0].instance_token_encrypted);
 }
 
-async function getInstanceRow(userId) {
+async function getDefaultInstanceRow(userId) {
   const result = await query(
-    'SELECT * FROM whatsapp_instances WHERE user_id = $1',
+    `SELECT * FROM whatsapp_instances
+     WHERE user_id = $1
+     ORDER BY is_default DESC, created_at ASC, id ASC
+     LIMIT 1`,
     [userId]
   );
   return result.rows[0] || null;
+}
+
+async function getInstanceRow(userId, instanceId = null) {
+  if (!instanceId) return getDefaultInstanceRow(userId);
+
+  const result = await query(
+    'SELECT * FROM whatsapp_instances WHERE user_id = $1 AND id = $2',
+    [userId, instanceId]
+  );
+  return result.rows[0] || null;
+}
+
+export async function setDefaultInstance(userId, instanceId) {
+  const instanceRow = await getInstanceRow(userId, instanceId);
+  if (!instanceRow) throw new Error('Instância WhatsApp não encontrada');
+
+  await query('UPDATE whatsapp_instances SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1', [userId]);
+  await query('UPDATE whatsapp_instances SET is_default = TRUE, updated_at = NOW() WHERE id = $1 AND user_id = $2', [instanceId, userId]);
+
+  return serializeInstance({ ...instanceRow, is_default: true });
 }
 
 /**
@@ -251,8 +321,8 @@ export async function verifyLeadPhonesOnWhatsApp(userId, phones) {
 
   return resultMap;
 }
-export async function disconnectInstance(userId) {
-  const instanceRow = await getInstanceRow(userId);
+export async function disconnectInstance(userId, instanceId = null) {
+  const instanceRow = await getInstanceRow(userId, instanceId);
   if (!instanceRow) throw new Error('Nenhuma instância WhatsApp encontrada');
 
   const instanceToken = decrypt(instanceRow.instance_token_encrypted);
@@ -267,12 +337,25 @@ export async function disconnectInstance(userId) {
 /**
  * Remove permanentemente a instância (Evolution API + registro local).
  */
-export async function deleteInstance(userId) {
-  const instanceRow = await getInstanceRow(userId);
+export async function deleteInstance(userId, instanceId = null) {
+  const instanceRow = await getInstanceRow(userId, instanceId);
   if (!instanceRow) throw new Error('Nenhuma instância WhatsApp encontrada');
 
   await evolution.deleteInstance(getGlobalApiKey(), instanceRow.instance_name);
   await query('DELETE FROM whatsapp_instances WHERE id = $1', [instanceRow.id]);
+
+  if (instanceRow.is_default) {
+    await query(
+      `UPDATE whatsapp_instances SET is_default = TRUE, updated_at = NOW()
+       WHERE id = (
+         SELECT id FROM whatsapp_instances
+         WHERE user_id = $1
+         ORDER BY created_at ASC, id ASC
+         LIMIT 1
+       )`,
+      [userId]
+    );
+  }
 }
 
 /**
@@ -314,8 +397,8 @@ async function findLeadByPhone(userId, phoneNumber) {
  * contato — é o único momento em que a leitura é confirmada (por decisão de
  * produto: nunca confirmar leitura apenas por abrir o chat no CRM).
  */
-export async function sendTextToLead(userId, leadId, text) {
-  const { instanceRow, instanceToken, lead } = await loadContext(userId, leadId);
+export async function sendTextToLead(userId, leadId, text, options = {}) {
+  const { instanceRow, instanceToken, lead } = await loadContext(userId, leadId, options);
 
   await markPendingMessagesAsRead(instanceRow, instanceToken, lead.remoteJid);
 
@@ -344,8 +427,8 @@ export async function sendTextToLead(userId, leadId, text) {
  */
 export async function sendMediaToLead(userId, leadId, {
   mediatype, mimetype, media, fileName, caption,
-}) {
-  const { instanceRow, instanceToken, lead } = await loadContext(userId, leadId);
+}, options = {}) {
+  const { instanceRow, instanceToken, lead } = await loadContext(userId, leadId, options);
 
   await markPendingMessagesAsRead(instanceRow, instanceToken, lead.remoteJid);
 
@@ -380,8 +463,8 @@ export async function sendMediaToLead(userId, leadId, {
 /**
  * Envia áudio como nota de voz para o lead.
  */
-export async function sendAudioToLead(userId, leadId, { audio, mimetype = 'audio/ogg', fileName = 'audio.ogg' }) {
-  const { instanceRow, instanceToken, lead } = await loadContext(userId, leadId);
+export async function sendAudioToLead(userId, leadId, { audio, mimetype = 'audio/ogg', fileName = 'audio.ogg' }, options = {}) {
+  const { instanceRow, instanceToken, lead } = await loadContext(userId, leadId, options);
 
   await markPendingMessagesAsRead(instanceRow, instanceToken, lead.remoteJid);
 
@@ -411,8 +494,8 @@ export async function sendAudioToLead(userId, leadId, { audio, mimetype = 'audio
   });
 }
 
-async function loadContext(userId, leadId) {
-  const instanceRow = await getInstanceRow(userId);
+async function loadContext(userId, leadId, { instanceId = null } = {}) {
+  const instanceRow = await getInstanceRow(userId, instanceId);
   if (!instanceRow) throw new Error('Conecte um número de WhatsApp antes de enviar mensagens');
   if (instanceRow.status !== 'open') throw new Error('WhatsApp desconectado. Reconecte antes de enviar mensagens.');
 

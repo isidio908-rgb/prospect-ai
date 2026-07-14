@@ -4,6 +4,11 @@ import { query } from '../../database/init.mjs';
 import { authenticate } from '../middleware/auth.mjs';
 import { normalizeAutopilotRule } from '../../services/autopilot/autopilotService.mjs';
 import {
+  acceptAutomationSafety,
+  assertRuleSafetyCanBeEnabled,
+  recordSafetyEvent,
+} from '../../services/autopilot/autopilotSafetyService.mjs';
+import {
   buildApprovalBatchText,
   createApprovalBatch,
   getApprovalBatch,
@@ -20,7 +25,7 @@ router.use(authenticate);
 const ruleSchema = z.object({
   name: z.string().min(3).max(255),
   enabled: z.boolean().optional().default(false),
-  mode: z.enum(['assistido', 'automatico']).optional().default('assistido'),
+  mode: z.enum(['assistido', 'automatico', 'automatico_limitado', 'automatico_total']).optional().default('assistido'),
   source_type: z.string().max(100).optional().or(z.literal('')),
   niche: z.string().max(255).optional().or(z.literal('')),
   city: z.string().max(255).optional().or(z.literal('')),
@@ -32,9 +37,11 @@ const ruleSchema = z.object({
   timezone: z.string().max(100).optional().default('America/Cuiaba'),
   require_manual_approval: z.boolean().optional().default(true),
   stop_on_reply: z.boolean().optional().default(true),
+  default_whatsapp_instance_id: z.number().int().positive().nullable().optional(),
   followup_1_delay_hours: z.number().int().min(1).max(720).optional().default(24),
   followup_2_delay_hours: z.number().int().min(1).max(720).optional().default(48),
   notes: z.string().max(3000).optional().or(z.literal('')),
+  safety_acceptance: z.boolean().optional().default(false),
 });
 
 const updateRuleSchema = ruleSchema.partial().refine((data) => Object.keys(data).length > 0, {
@@ -60,6 +67,19 @@ function nullIfBlank(value) {
   if (value === undefined) return undefined;
   const next = String(value || '').trim();
   return next ? next : null;
+}
+
+async function ensureWhatsappInstanceBelongsToUser(userId, instanceId) {
+  if (instanceId === undefined || instanceId === null) return;
+  const result = await query(
+    'SELECT id FROM whatsapp_instances WHERE id = $1 AND user_id = $2',
+    [instanceId, userId]
+  );
+  if (result.rows.length === 0) {
+    const error = new Error('Instância WhatsApp não encontrada para este usuário');
+    error.status = 400;
+    throw error;
+  }
 }
 
 function sanitizeRulePayload(data) {
@@ -98,7 +118,7 @@ async function ensureApprovalRequestCanBeSent(userId) {
     `SELECT status
      FROM whatsapp_instances
      WHERE user_id = $1
-     ORDER BY id DESC
+     ORDER BY is_default DESC, created_at ASC, id ASC
      LIMIT 1`,
     [userId]
   );
@@ -135,18 +155,21 @@ router.get('/rules', async (req, res, next) => {
 
 router.post('/rules', async (req, res, next) => {
   try {
-    const data = sanitizeRulePayload(ruleSchema.parse(req.body));
+    const parsed = ruleSchema.parse(req.body);
+    const data = sanitizeRulePayload(parsed);
+    await ensureWhatsappInstanceBelongsToUser(req.user.id, data.default_whatsapp_instance_id);
+    assertRuleSafetyCanBeEnabled(data, { safetyAcceptance: parsed.safety_acceptance });
 
     const result = await query(
       `INSERT INTO automation_rules (
         user_id, name, enabled, mode, source_type, niche, city, min_score,
         max_daily_sends, max_hourly_sends, send_window_start, send_window_end,
         timezone, require_manual_approval, stop_on_reply,
-        followup_1_delay_hours, followup_2_delay_hours, notes
+        default_whatsapp_instance_id, followup_1_delay_hours, followup_2_delay_hours, notes
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18
+        $16, $17, $18, $19
       )
       RETURNING *`,
       [
@@ -165,15 +188,31 @@ router.post('/rules', async (req, res, next) => {
         data.timezone,
         data.require_manual_approval,
         data.stop_on_reply,
+        data.default_whatsapp_instance_id || null,
         data.followup_1_delay_hours,
         data.followup_2_delay_hours,
         data.notes,
       ]
     );
 
+    if (parsed.safety_acceptance) {
+      await acceptAutomationSafety(req.user.id, result.rows[0].id, data.mode, {
+        source: 'rule_create',
+        require_manual_approval: data.require_manual_approval,
+      });
+      result.rows[0].safety_accepted_at = new Date();
+      result.rows[0].safety_accepted_by = req.user.id;
+    } else {
+      await recordSafetyEvent(req.user.id, result.rows[0].id, 'rule_created', {
+        mode: data.mode,
+        enabled: data.enabled,
+        require_manual_approval: data.require_manual_approval,
+      });
+    }
+
     res.status(201).json({ rule: mapRule(result.rows[0]) });
   } catch (error) {
-    next(error);
+    handleServiceError(error, res, next);
   }
 });
 
@@ -190,6 +229,8 @@ router.patch('/rules/:id', async (req, res, next) => {
 
     const parsed = updateRuleSchema.parse(req.body);
     const merged = sanitizeRulePayload({ ...existing.rows[0], ...parsed });
+    await ensureWhatsappInstanceBelongsToUser(req.user.id, merged.default_whatsapp_instance_id);
+    assertRuleSafetyCanBeEnabled(merged, { safetyAcceptance: parsed.safety_acceptance });
 
     const result = await query(
       `UPDATE automation_rules SET
@@ -207,11 +248,12 @@ router.patch('/rules/:id', async (req, res, next) => {
         timezone = $12,
         require_manual_approval = $13,
         stop_on_reply = $14,
-        followup_1_delay_hours = $15,
-        followup_2_delay_hours = $16,
-        notes = $17,
+        default_whatsapp_instance_id = $15,
+        followup_1_delay_hours = $16,
+        followup_2_delay_hours = $17,
+        notes = $18,
         updated_at = NOW()
-       WHERE id = $18 AND user_id = $19
+       WHERE id = $19 AND user_id = $20
        RETURNING *`,
       [
         merged.name,
@@ -228,6 +270,7 @@ router.patch('/rules/:id', async (req, res, next) => {
         merged.timezone,
         merged.require_manual_approval,
         merged.stop_on_reply,
+        merged.default_whatsapp_instance_id || null,
         merged.followup_1_delay_hours,
         merged.followup_2_delay_hours,
         merged.notes,
@@ -236,9 +279,24 @@ router.patch('/rules/:id', async (req, res, next) => {
       ]
     );
 
+    if (parsed.safety_acceptance) {
+      await acceptAutomationSafety(req.user.id, result.rows[0].id, merged.mode, {
+        source: 'rule_update',
+        require_manual_approval: merged.require_manual_approval,
+      });
+      result.rows[0].safety_accepted_at = new Date();
+      result.rows[0].safety_accepted_by = req.user.id;
+    } else {
+      await recordSafetyEvent(req.user.id, result.rows[0].id, 'rule_updated', {
+        mode: merged.mode,
+        enabled: merged.enabled,
+        require_manual_approval: merged.require_manual_approval,
+      });
+    }
+
     res.json({ rule: mapRule(result.rows[0]) });
   } catch (error) {
-    next(error);
+    handleServiceError(error, res, next);
   }
 });
 
@@ -386,15 +444,19 @@ router.get('/queue', async (req, res, next) => {
     const result = await query(
       `SELECT
         mq.id, mq.lead_id, mq.automation_rule_id, mq.automation_run_id,
-        mq.approval_batch_id, mq.channel, mq.message_type, mq.status, mq.scheduled_at,
+        mq.whatsapp_instance_id, mq.approval_batch_id, mq.channel, mq.message_type, mq.status, mq.scheduled_at,
         mq.approval_requested_at, mq.approved_at, mq.sent_at, mq.cancelled_at,
         mq.approved_by_channel, mq.approval_response_text,
         mq.attempts, mq.last_error, mq.payload_json, mq.created_at, mq.updated_at,
         l.nome_empresa, l.telefone, l.whatsapp, l.cidade, l.nicho, l.score, l.prioridade,
-        ar.name as automation_rule_name
+        ar.name as automation_rule_name,
+        wi.label as whatsapp_instance_label,
+        wi.phone_number as whatsapp_instance_phone,
+        wi.status as whatsapp_instance_status
        FROM message_queue mq
        LEFT JOIN leads l ON l.id = mq.lead_id AND l.user_id = mq.user_id
        LEFT JOIN automation_rules ar ON ar.id = mq.automation_rule_id AND ar.user_id = mq.user_id
+       LEFT JOIN whatsapp_instances wi ON wi.id = mq.whatsapp_instance_id AND wi.user_id = mq.user_id
        WHERE ${where.join(' AND ')}
        ORDER BY mq.scheduled_at ASC, mq.created_at ASC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,

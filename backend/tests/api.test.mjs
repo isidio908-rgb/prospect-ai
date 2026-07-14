@@ -138,6 +138,43 @@ describe('Prospect AI API - Testes de Integração', () => {
     assert.strictEqual(response.status, 200);
     assert.strictEqual(data.lead.id, testLeadId);
   });
+
+  test('Deletar lead remove apenas o registro do usuário autenticado', async () => {
+    const createResponse = await fetch(`${API_URL}/api/leads/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({
+        nome_empresa: 'Empresa Delete API',
+        site: 'https://delete.example.com',
+        telefone: '65988888888',
+        cidade: 'Cuiaba',
+        nicho: 'teste',
+        categoria: 'Teste'
+      })
+    });
+    const created = await createResponse.json();
+
+    assert.strictEqual(createResponse.status, 201);
+    assert.ok(created.lead.id);
+
+    const deleteResponse = await fetch(`${API_URL}/api/leads/${created.lead.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    const deleted = await deleteResponse.json();
+
+    assert.strictEqual(deleteResponse.status, 200);
+    assert.strictEqual(deleted.message, 'Lead deletado com sucesso');
+
+    const getResponse = await fetch(`${API_URL}/api/leads/${created.lead.id}`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+
+    assert.strictEqual(getResponse.status, 404);
+  });
   
   test('Estatísticas deve retornar dados', async () => {
     const response = await fetch(`${API_URL}/api/stats`, {

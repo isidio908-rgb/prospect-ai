@@ -39,6 +39,8 @@ describe('autopilot routes HTTP', () => {
   let leadId;
   let queueId;
   let batchId;
+  let whatsappInstanceId;
+  let otherWhatsappInstanceId;
   const uniqueTag = Date.now();
 
   before(async () => {
@@ -88,6 +90,38 @@ describe('autopilot routes HTTP', () => {
     otherUserId = otherUserResult.rows[0].id;
     otherToken = jwt.sign({ userId: otherUserId, email: `autopilot-http-other-${uniqueTag}@prospect.ai` }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
+    await query(`
+      CREATE TABLE IF NOT EXISTS whatsapp_instances (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        instance_name VARCHAR(255) NOT NULL UNIQUE,
+        instance_token_encrypted TEXT,
+        phone_number VARCHAR(50),
+        profile_name VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'created',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await query(`ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS label VARCHAR(255)`);
+    await query(`ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE`);
+
+    const instanceResult = await query(
+      `INSERT INTO whatsapp_instances (user_id, label, is_default, instance_name, status, phone_number)
+       VALUES ($1, 'BDR Teste', TRUE, $2, 'close', '5565999991111')
+       RETURNING id`,
+      [userId, `autopilot-routing-${uniqueTag}`]
+    );
+    whatsappInstanceId = instanceResult.rows[0].id;
+
+    const otherInstanceResult = await query(
+      `INSERT INTO whatsapp_instances (user_id, label, is_default, instance_name, status, phone_number)
+       VALUES ($1, 'Outro BDR', TRUE, $2, 'open', '5565999992222')
+       RETURNING id`,
+      [otherUserId, `autopilot-routing-other-${uniqueTag}`]
+    );
+    otherWhatsappInstanceId = otherInstanceResult.rows[0].id;
+
     const leadResult = await query(
       `INSERT INTO leads (
         user_id, nome_empresa, telefone, whatsapp, cidade, nicho, fonte, score, status, data_coleta
@@ -136,6 +170,7 @@ describe('autopilot routes HTTP', () => {
         niche: 'imobiliarias',
         min_score: 70,
         require_manual_approval: false,
+        default_whatsapp_instance_id: whatsappInstanceId,
       }),
     });
 
@@ -143,6 +178,7 @@ describe('autopilot routes HTTP', () => {
     assert.ok(created.body.rule.id);
     assert.equal(created.body.rule.mode, 'assistido');
     assert.equal(created.body.rule.require_manual_approval, true);
+    assert.equal(created.body.rule.default_whatsapp_instance_id, whatsappInstanceId);
     assert.equal(hasSecretPattern(created.body), false);
     ruleId = created.body.rule.id;
 
@@ -160,14 +196,33 @@ describe('autopilot routes HTTP', () => {
       body: JSON.stringify({
         mode: 'automatico',
         require_manual_approval: false,
+        safety_acceptance: true,
         max_daily_sends: 30,
       }),
     });
 
     assert.equal(updated.response.status, 200);
-    assert.equal(updated.body.rule.mode, 'automatico');
+    assert.equal(updated.body.rule.mode, 'automatico_limitado');
     assert.equal(updated.body.rule.require_manual_approval, false);
     assert.equal(updated.body.rule.max_daily_sends, 30);
+  });
+
+  test('bloqueia regra com instância WhatsApp de outro usuário', async () => {
+    const created = await request(baseUrl, '/api/autopilot/rules', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: 'Regra com número de terceiro',
+        enabled: true,
+        mode: 'assistido',
+        min_score: 70,
+        default_whatsapp_instance_id: otherWhatsappInstanceId,
+      }),
+    });
+
+    assert.equal(created.response.status, 400);
+    assert.match(created.body.error, /Instância WhatsApp não encontrada/);
+    assert.equal(hasSecretPattern(created.body), false);
   });
 
   test('impede outro usuário de alterar regra', async () => {
@@ -272,8 +327,8 @@ describe('autopilot routes HTTP', () => {
       body: JSON.stringify({ limit: 1, send_approval_request: true }),
     });
 
-    assert.equal(created.response.status, 400);
-    assert.match(created.body.error, /Conecte um numero de WhatsApp/);
+    assert.equal(created.response.status, 409);
+    assert.match(created.body.error, /WhatsApp desconectado|Conecte um numero de WhatsApp/);
     assert.equal(hasSecretPattern(created.body), false);
 
     const queueState = await query(
@@ -342,8 +397,8 @@ describe('autopilot routes HTTP', () => {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
-    assert.equal(resendDisconnected.response.status, 400);
-    assert.match(resendDisconnected.body.error, /Conecte um numero de WhatsApp/);
+    assert.equal(resendDisconnected.response.status, 409);
+    assert.match(resendDisconnected.body.error, /WhatsApp desconectado|Conecte um numero de WhatsApp/);
     assert.equal(hasSecretPattern(resendDisconnected.body), false);
 
     const unauthorized = await processApprovalReply({

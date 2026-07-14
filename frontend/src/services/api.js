@@ -42,6 +42,7 @@ export const auth = {
 // Leads
 export const leads = {
   list: (params) => api.get('/api/leads', { params }),
+  kanban: (params) => api.get('/api/leads/kanban', { params }),
   get: (id) => api.get(`/api/leads/${id}`),
   import: (data) => api.post('/api/leads/import', data),
   importCSV: (csvContent) => api.post('/api/leads/import-csv', { csvContent }),
@@ -67,6 +68,12 @@ export const stats = {
   get: (params) => api.get('/api/stats', { params }),
 };
 
+// Billing
+export const billing = {
+  overview: () => api.get('/api/billing'),
+  changePlan: (plan_slug) => api.patch('/api/billing/subscription', { plan_slug }),
+};
+
 // Autopilot SDR
 export const autopilot = {
   listRules: () => api.get('/api/autopilot/rules'),
@@ -83,8 +90,21 @@ export const autopilot = {
   processApprovalCommand: (data) => api.post('/api/autopilot/approval-batches/process-command', data),
   stats: () => api.get('/api/autopilot/stats'),
   runs: (params) => api.get('/api/autopilot/runs', { params }),
+  nicheOptimization: () => api.get('/api/autopilot/niche-optimization'),
+  updateNicheOptimizationSettings: (data) => api.patch('/api/autopilot/niche-optimization/settings', data),
+  applyNicheOptimization: (data) => api.post('/api/autopilot/niche-optimization/apply', data),
+  rollbackNicheOptimization: (data) => api.post('/api/autopilot/niche-optimization/rollback', data || {}),
+  llmUsage: (params) => api.get('/api/autopilot/llm-usage', { params }),
+  exportLlmUsage: (params) => api.get('/api/autopilot/llm-usage/export.csv', { params, responseType: 'blob' }),
   semiAutoPlan: () => api.get('/api/autopilot/semi-auto/plan'),
   runSemiAuto: (data) => api.post('/api/autopilot/semi-auto/run', data),
+  daemonStatus: () => api.get('/api/autopilot/daemon/status'),
+  updateDaemonSettings: (data) => api.patch('/api/autopilot/daemon/settings', data),
+  runDaemonOnce: (data) => api.post('/api/autopilot/daemon/run-once', data),
+  listCollectionRules: () => api.get('/api/autopilot/collections/rules'),
+  createCollectionRule: (data) => api.post('/api/autopilot/collections/rules', data),
+  updateCollectionRule: (id, data) => api.patch(`/api/autopilot/collections/rules/${id}`, data),
+  runDueCollections: (data) => api.post('/api/autopilot/collections/run-due', data),
   runScheduler: (data) => api.post('/api/autopilot/scheduler/run', data),
   processApproved: (data) => api.post('/api/autopilot/worker/process-approved', data),
   queueFollowups: (data) => api.post('/api/autopilot/followups/queue', data),
@@ -126,11 +146,17 @@ export const ai = {
 // WhatsApp (Evolution API)
 export const whatsapp = {
   connect: (securityOptions) => api.post('/api/whatsapp/connect', securityOptions || {}),
+  createInstance: (data) => api.post('/api/whatsapp/instances', data || {}),
+  listInstances: () => api.get('/api/whatsapp/instances'),
+  reconnectInstance: (instanceId, data) => api.post(`/api/whatsapp/instances/${instanceId}/connect`, data || {}),
+  setDefaultInstance: (instanceId) => api.patch(`/api/whatsapp/instances/${instanceId}/default`),
   status: () => api.get('/api/whatsapp/status'),
   disconnect: () => api.post('/api/whatsapp/disconnect'),
+  disconnectInstance: (instanceId) => api.post(`/api/whatsapp/instances/${instanceId}/disconnect`),
   remove: () => api.delete('/api/whatsapp'),
+  removeInstance: (instanceId) => api.delete(`/api/whatsapp/instances/${instanceId}`),
   getLeadMessages: (leadId) => api.get(`/api/whatsapp/leads/${leadId}/messages`),
-  sendText: (leadId, text) => api.post(`/api/whatsapp/leads/${leadId}/messages/text`, { text }),
+  sendText: (leadId, text, options = {}) => api.post(`/api/whatsapp/leads/${leadId}/messages/text`, { text, ...options }),
   sendMedia: (leadId, data) => api.post(`/api/whatsapp/leads/${leadId}/messages/media`, data),
   sendAudio: (leadId, data) => api.post(`/api/whatsapp/leads/${leadId}/messages/audio`, data),
   // Busca a mídia como blob autenticado (evita colocar o token JWT na URL,

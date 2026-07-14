@@ -16,6 +16,7 @@ export const LLM_PROVIDERS = {
     freeTier: false,
     docs: 'https://platform.openai.com/api-keys',
     defaults: { base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+    pricingUsdPer1M: { input: 0.15, output: 0.6 },
     keyHint: 'Chave sk-... criada em platform.openai.com. Uso é pago.',
   },
   anthropic: {
@@ -25,6 +26,7 @@ export const LLM_PROVIDERS = {
     freeTier: false,
     docs: 'https://console.anthropic.com/settings/keys',
     defaults: { base_url: 'https://api.anthropic.com', model: 'claude-3-5-haiku-latest' },
+    pricingUsdPer1M: { input: 0.8, output: 4 },
     keyHint: 'Chave sk-ant-... criada em console.anthropic.com. Uso é pago.',
   },
   gemini: {
@@ -34,6 +36,7 @@ export const LLM_PROVIDERS = {
     freeTier: true,
     docs: 'https://aistudio.google.com/app/apikey',
     defaults: { base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash' },
+    pricingUsdPer1M: { input: 0.3, output: 2.5 },
     keyHint: 'Crie a chave gratuita no Google AI Studio (aistudio.google.com).',
   },
   groq: {
@@ -43,6 +46,7 @@ export const LLM_PROVIDERS = {
     freeTier: true,
     docs: 'https://console.groq.com/keys',
     defaults: { base_url: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
+    pricingUsdPer1M: null,
     keyHint: 'Gratuito sem cartão em console.groq.com (~30 req/min). Modelos open-source.',
   },
   openrouter: {
@@ -52,6 +56,7 @@ export const LLM_PROVIDERS = {
     freeTier: true,
     docs: 'https://openrouter.ai/keys',
     defaults: { base_url: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+    pricingUsdPer1M: null,
     keyHint: 'Uma chave, vários modelos. Os terminados em ":free" são gratuitos.',
   },
   cerebras: {
@@ -61,6 +66,7 @@ export const LLM_PROVIDERS = {
     freeTier: true,
     docs: 'https://cloud.cerebras.ai',
     defaults: { base_url: 'https://api.cerebras.ai/v1', model: 'llama-3.3-70b' },
+    pricingUsdPer1M: null,
     keyHint: 'Gratuito em cloud.cerebras.ai (~30 req/min).',
   },
   mistral: {
@@ -70,6 +76,7 @@ export const LLM_PROVIDERS = {
     freeTier: true,
     docs: 'https://console.mistral.ai/api-keys',
     defaults: { base_url: 'https://api.mistral.ai/v1', model: 'mistral-small-latest' },
+    pricingUsdPer1M: { input: 0.1, output: 0.3 },
     keyHint: 'Tier gratuito (pede telefone, não cartão) em console.mistral.ai.',
   },
 };
@@ -94,6 +101,7 @@ export function listLlmProviders() {
       model: 'Modelo a ser usado (ex: ' + p.defaults.model + ').',
       base_url: 'URL base da API (só altere se souber o que está fazendo).',
     },
+    pricingUsdPer1M: p.pricingUsdPer1M,
     keyHint: p.keyHint,
   }));
 }

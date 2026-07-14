@@ -8,6 +8,7 @@ import {
   normalizeAutopilotRule,
   shouldQueueInitialMessage,
 } from '../src/services/autopilot/autopilotService.mjs';
+import { classifyReplyText } from '../src/services/autopilot/autopilotExecutionService.mjs';
 import { approvalNumbersMatch } from '../src/services/autopilot/approvalBatchService.mjs';
 
 const baseLead = {
@@ -123,4 +124,12 @@ test('compara numero de aprovacao brasileiro com ou sem nono digito', () => {
   assert.equal(approvalNumbersMatch('55065999062706', '556599062706'), true);
   assert.equal(approvalNumbersMatch('5565999062706', '556588887777'), false);
 });
+
+  test('classifica respostas comerciais comuns para follow-up seguro', () => {
+    assert.equal(classifyReplyText('Sim, pode mandar').intent, 'interested');
+    assert.equal(classifyReplyText('Não tenho interesse, pode remover').intent, 'not_interested');
+    assert.equal(classifyReplyText('Tenho uma dúvida, como funciona?').intent, 'question');
+    assert.equal(classifyReplyText('Pode marcar uma reunião amanhã?').intent, 'meeting');
+    assert.equal(classifyReplyText('Qual o preço?').intent, 'pricing');
+  });
 });

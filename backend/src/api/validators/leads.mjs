@@ -51,7 +51,8 @@ export const updateLeadSchema = z.object({
   proxima_acao: z.string().max(500).optional(),
   data_proxima_acao: z.string().datetime().optional(),
   valor_potencial: z.number().nonnegative().optional(),
-  motivo_perda: z.string().optional()
+  motivo_perda: z.string().optional(),
+  whatsapp_instance_id: z.number().int().positive().nullable().optional()
 });
 
 export const listLeadsSchema = z.object({

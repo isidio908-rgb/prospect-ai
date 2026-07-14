@@ -1,4 +1,4 @@
-export const AUTOPILOT_MODES = ['assistido', 'automatico'];
+export const AUTOPILOT_MODES = ['assistido', 'automatico_limitado', 'automatico_total'];
 export const MESSAGE_TYPES = ['initial', 'followup_1', 'followup_2'];
 export const MESSAGE_STATUSES = ['pending', 'approved', 'queued', 'sent', 'skipped', 'failed', 'cancelled'];
 
@@ -43,11 +43,15 @@ export function normalizeAutopilotRule(rule = {}) {
   return {
     ...merged,
     enabled: Boolean(merged.enabled),
-    mode: AUTOPILOT_MODES.includes(merged.mode) ? merged.mode : 'assistido',
+    mode: merged.mode === 'automatico'
+      ? 'automatico_limitado'
+      : AUTOPILOT_MODES.includes(merged.mode) ? merged.mode : 'assistido',
     min_score: Math.max(Number(merged.min_score || 0), 0),
     max_daily_sends: Math.max(Number(merged.max_daily_sends || 0), 1),
     max_hourly_sends: Math.max(Number(merged.max_hourly_sends || 0), 1),
-    require_manual_approval: merged.mode === 'automatico' ? Boolean(merged.require_manual_approval) : true,
+    require_manual_approval: ['automatico_limitado', 'automatico_total', 'automatico'].includes(merged.mode)
+      ? Boolean(merged.require_manual_approval)
+      : true,
     stop_on_reply: merged.stop_on_reply !== false,
     followup_1_delay_hours: Math.max(Number(merged.followup_1_delay_hours || 24), 1),
     followup_2_delay_hours: Math.max(Number(merged.followup_2_delay_hours || 48), 1),

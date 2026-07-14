@@ -2,12 +2,11 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: prospect-ai-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: prospect_user
-      POSTGRES_PASSWORD: prospect_pass
-      POSTGRES_DB: prospect_ai
+      POSTGRES_USER: ${POSTGRES_USER:-prospect_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-prospect_ai}
     ports:
       - "5432:5432"
     volumes:
@@ -18,12 +17,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Redis (armazena sessão/estado das instâncias WhatsApp da Evolution API)
   redis:
     image: redis:7-alpine
-    container_name: prospect-ai-redis
     restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
     healthcheck:
@@ -31,11 +35,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Evolution API (gateway WhatsApp via Baileys, evoapicloud/evolution-api)
   evolution-api:
-    image: evoapicloud/evolution-api:latest
-    container_name: prospect-ai-evolution
+    image: ${EVOLUTION_API_IMAGE:?Set EVOLUTION_API_IMAGE in .env}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -43,10 +51,10 @@ services:
       redis:
         condition: service_healthy
     environment:
-      AUTHENTICATION_API_KEY: ${EVOLUTION_API_GLOBAL_KEY:-change-this-in-production}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_GLOBAL_KEY:?Set EVOLUTION_API_GLOBAL_KEY in .env}
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: postgresql
-      DATABASE_CONNECTION_URI: postgresql://prospect_user:prospect_pass@postgres:5432/evolution_api
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER:-prospect_user}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/evolution_api
       CACHE_REDIS_ENABLED: "true"
       CACHE_REDIS_URI: redis://redis:6379
       CACHE_REDIS_PREFIX_KEY: evolution
@@ -67,13 +75,17 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Backend API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: prospect-ai-backend
     restart: unless-stopped
     depends_on:
       postgres:
@@ -81,16 +93,20 @@ services:
       evolution-api:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://prospect_user:prospect_pass@postgres:5432/prospect_ai
-      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-this-in-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prospect_user}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-prospect_ai}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
       PORT: 3001
       NODE_ENV: production
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       EVOLUTION_API_URL: http://evolution-api:8080
-      EVOLUTION_API_GLOBAL_KEY: ${EVOLUTION_API_GLOBAL_KEY:-change-this-in-production}
-      EVOLUTION_WEBHOOK_URL: ${EVOLUTION_WEBHOOK_URL:-https://your-public-domain.com/api/whatsapp/webhook}
-      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-change-this-in-production}
+      EVOLUTION_API_GLOBAL_KEY: ${EVOLUTION_API_GLOBAL_KEY:?Set EVOLUTION_API_GLOBAL_KEY in .env}
+      EVOLUTION_WEBHOOK_URL: ${EVOLUTION_WEBHOOK_URL:?Set EVOLUTION_WEBHOOK_URL in .env}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:?Set EVOLUTION_WEBHOOK_SECRET in .env}
+      AUTOPILOT_DAEMON_ENABLED: ${AUTOPILOT_DAEMON_ENABLED:-true}
+      AUTOPILOT_DAEMON_CRON: ${AUTOPILOT_DAEMON_CRON:-*/5 * * * *}
+      AUTOPILOT_DAEMON_SCHEDULER_LIMIT: ${AUTOPILOT_DAEMON_SCHEDULER_LIMIT:-50}
+      AUTOPILOT_DAEMON_WORKER_LIMIT: ${AUTOPILOT_DAEMON_WORKER_LIMIT:-10}
     ports:
       - "3001:3001"
     volumes:
@@ -100,6 +116,13 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 45s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Frontend (React) 
   frontend:
@@ -110,10 +133,10 @@ services:
         # VITE_API_URL é "assada" no bundle JS durante o build (Vite não lê
         # variáveis de ambiente em runtime), por isso vai como build arg.
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
-    container_name: prospect-ai-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "5173:80"
     healthcheck:
@@ -121,6 +144,13 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres-data:
