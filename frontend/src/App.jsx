@@ -13,6 +13,7 @@ import Profile from './pages/Profile';
 import Credentials from './pages/Credentials';
 import WhatsAppSettings from './pages/WhatsAppSettings';
 import Collect from './pages/Collect';
+import Help from './pages/Help';
 import './store/themeStore';
 
 function PrivateRoute({ children }) {
@@ -157,6 +158,17 @@ function App() {
             <PrivateRoute>
               <Layout>
                 <WhatsAppSettings />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/help"
+          element={
+            <PrivateRoute>
+              <Layout>
+                <Help />
               </Layout>
             </PrivateRoute>
           }

@@ -4,14 +4,14 @@ import { leads } from '../services/api';
 import toast from 'react-hot-toast';
 import { 
   Search, 
-  Filter, 
   Download, 
   Upload, 
   Play,
   Eye,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
+  Trash2
 } from 'lucide-react';
 
 const EMPTY_NEW_LEAD = {
@@ -34,13 +34,19 @@ export default function Leads() {
   const [filters, setFilters] = useState({
     prioridade: '',
     status: '',
-    cidade: ''
+    cidade: '',
+    nicho: '',
+    responsavel: '',
+    whatsapp_instance_id: '',
+    reply_status: ''
   });
   const [selectedLeads, setSelectedLeads] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [showNewLeadForm, setShowNewLeadForm] = useState(false);
   const [newLead, setNewLead] = useState(EMPTY_NEW_LEAD);
   const [savingNewLead, setSavingNewLead] = useState(false);
+  const [deletingLeadId, setDeletingLeadId] = useState(null);
+  const [deletingSelected, setDeletingSelected] = useState(false);
 
   useEffect(() => {
     loadLeads();
@@ -155,6 +161,46 @@ export default function Leads() {
     }
   };
 
+  const handleDeleteLead = async (lead) => {
+    const name = lead.nome_empresa || 'este lead';
+    const confirmed = window.confirm(`Apagar "${name}"? Essa ação remove o lead e não pode ser desfeita.`);
+    if (!confirmed) return;
+
+    setDeletingLeadId(lead.id);
+    try {
+      await leads.delete(lead.id);
+      toast.success('Lead apagado com sucesso');
+      setSelectedLeads((prev) => prev.filter((id) => id !== lead.id));
+      await loadLeads();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao apagar lead');
+    } finally {
+      setDeletingLeadId(null);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedLeads.length === 0) {
+      toast.error('Selecione pelo menos um lead');
+      return;
+    }
+
+    const confirmed = window.confirm(`Apagar ${selectedLeads.length} lead(s) selecionado(s)? Essa ação não pode ser desfeita.`);
+    if (!confirmed) return;
+
+    setDeletingSelected(true);
+    try {
+      await Promise.all(selectedLeads.map((leadId) => leads.delete(leadId)));
+      toast.success(`${selectedLeads.length} lead(s) apagado(s) com sucesso`);
+      setSelectedLeads([]);
+      await loadLeads();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao apagar leads selecionados');
+    } finally {
+      setDeletingSelected(false);
+    }
+  };
+
   const toggleSelectLead = (id) => {
     setSelectedLeads(prev =>
       prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]
@@ -173,12 +219,12 @@ export default function Leads() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Leads</h1>
           <p className="text-gray-600 dark:text-gray-400">Gerencie seus leads de prospecção</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowNewLeadForm((v) => !v)}
             className="btn btn-primary flex items-center gap-2"
@@ -206,11 +252,19 @@ export default function Leads() {
           </button>
           <button
             onClick={handleAnalyze}
-            disabled={selectedLeads.length === 0 || analyzing}
+            disabled={selectedLeads.length === 0 || analyzing || deletingSelected}
             className="btn btn-primary flex items-center gap-2"
           >
             <Play className="w-5 h-5" />
             {analyzing ? 'Analisando...' : `Analisar (${selectedLeads.length})`}
+          </button>
+          <button
+            onClick={handleDeleteSelected}
+            disabled={selectedLeads.length === 0 || deletingSelected || analyzing}
+            className="btn btn-secondary flex items-center gap-2 text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="w-5 h-5" />
+            {deletingSelected ? 'Apagando...' : `Apagar (${selectedLeads.length})`}
           </button>
         </div>
       </div>
@@ -308,7 +362,7 @@ export default function Leads() {
 
       {/* Filters */}
       <div className="card">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
             <div className="relative">
@@ -363,6 +417,50 @@ export default function Leads() {
               value={filters.cidade}
               onChange={(e) => setFilters({ ...filters, cidade: e.target.value })}
               placeholder="Filtrar por cidade"
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nicho</label>
+            <input
+              type="text"
+              value={filters.nicho}
+              onChange={(e) => setFilters({ ...filters, nicho: e.target.value })}
+              placeholder="Filtrar por nicho"
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Responsável</label>
+            <input
+              type="text"
+              value={filters.responsavel}
+              onChange={(e) => setFilters({ ...filters, responsavel: e.target.value })}
+              placeholder="BDR/SDR"
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Resposta</label>
+            <select
+              value={filters.reply_status}
+              onChange={(e) => setFilters({ ...filters, reply_status: e.target.value })}
+              className="input"
+            >
+              <option value="">Todas</option>
+              <option value="has_reply">Com resposta</option>
+              <option value="no_reply">Sem resposta</option>
+              <option value="needs_human">Exige humano</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp ID</label>
+            <input
+              type="number"
+              min="1"
+              value={filters.whatsapp_instance_id}
+              onChange={(e) => setFilters({ ...filters, whatsapp_instance_id: e.target.value })}
+              placeholder="Número conectado"
               className="input"
             />
           </div>
@@ -440,12 +538,25 @@ export default function Leads() {
                       <span className="badge badge-info capitalize">{lead.status}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => navigate(`/leads/${lead.id}`)}
-                        className="text-primary-600 hover:text-primary-700"
-                      >
-                        <Eye className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/leads/${lead.id}`)}
+                          className="text-primary-600 hover:text-primary-700"
+                          title="Ver detalhes"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLead(lead)}
+                          disabled={deletingLeadId === lead.id || deletingSelected}
+                          className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                          title="Apagar lead"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

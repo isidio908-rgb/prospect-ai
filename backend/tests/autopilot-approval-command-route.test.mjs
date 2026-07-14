@@ -195,9 +195,7 @@ describe('approval command fallback route', () => {
     const instanceName = `approval-command-instance-${uniqueTag}`;
     await query(
       `INSERT INTO whatsapp_instances (user_id, instance_name, status)
-       VALUES ($1, $2, 'created')
-       ON CONFLICT (user_id)
-       DO UPDATE SET instance_name = EXCLUDED.instance_name, status = EXCLUDED.status`,
+       VALUES ($1, $2, 'created')`,
       [userId, instanceName]
     );
 

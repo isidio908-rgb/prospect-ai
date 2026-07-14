@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { MessageCircle, Save, User } from 'lucide-react';
+import { CreditCard, MessageCircle, Save, User } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { billing } from '../services/api';
 
 const DEFAULT_CONTEXT = 'Atuar como gestor de tráfego consultivo, focado em prospecção, diagnóstico comercial, qualidade do lead, WhatsApp e geração de reuniões.';
 
 export default function Profile() {
   const { user, updateProfile } = useAuthStore();
   const [saving, setSaving] = useState(false);
+  const [billingOverview, setBillingOverview] = useState(null);
+  const [billingBusy, setBillingBusy] = useState('');
   const [form, setForm] = useState({
     name: user?.name || '',
     profession: user?.profession || 'Gestor de Tráfego',
@@ -15,6 +18,19 @@ export default function Profile() {
     internal_context: user?.internal_context || DEFAULT_CONTEXT,
     approval_whatsapp: user?.approval_whatsapp || '',
   });
+
+  useEffect(() => {
+    loadBilling();
+  }, []);
+
+  async function loadBilling() {
+    try {
+      const response = await billing.overview();
+      setBillingOverview(response.data);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao carregar assinatura');
+    }
+  }
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -33,6 +49,19 @@ export default function Profile() {
       setSaving(false);
     }
   };
+
+  async function changePlan(planSlug) {
+    setBillingBusy(planSlug);
+    try {
+      const response = await billing.changePlan(planSlug);
+      setBillingOverview(response.data);
+      toast.success('Plano atualizado');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao atualizar plano');
+    } finally {
+      setBillingBusy('');
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -137,6 +166,86 @@ export default function Profile() {
           {saving ? 'Salvando...' : 'Salvar perfil'}
         </button>
       </form>
+
+      <BillingPanel overview={billingOverview} busy={billingBusy} onChangePlan={changePlan} />
     </div>
   );
+}
+
+function BillingPanel({ overview, busy, onChangePlan }) {
+  const usage = overview?.usage || {};
+  const limits = overview?.limits || {};
+  const plans = overview?.plans || [];
+  const currentPlan = overview?.subscription?.plan_slug;
+
+  return (
+    <section className="card space-y-5">
+      <div className="flex items-center gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
+        <div className="rounded-lg bg-primary-50 p-2 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300">
+          <CreditCard className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Assinatura e limites</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Planos internos por workspace com bloqueio no servidor para crescimento de leads.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        {['users', 'leads', 'imports', 'integrations'].map((key) => {
+          const used = Number(usage[key] || 0);
+          const limit = Number(limits[key] || 0);
+          const percent = limit ? Math.min((used / limit) * 100, 100) : 0;
+          return (
+            <div key={key} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+              <p className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{limitLabels[key]}</p>
+              <p className="mt-1 text-lg font-bold text-gray-900 dark:text-gray-100">{used}/{limit || '-'}</p>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                <div className="h-full rounded-full bg-primary-500" style={{ width: `${percent}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {plans.map((plan) => (
+          <div key={plan.slug} className={`rounded-lg border p-4 ${currentPlan === plan.slug ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">{plan.name}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{formatPlanPrice(plan)}</p>
+              </div>
+              {currentPlan === plan.slug ? <span className="badge badge-success">Atual</span> : null}
+            </div>
+            <div className="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+              <p>{plan.limits?.leads} leads</p>
+              <p>{plan.limits?.users} usuário(s)</p>
+              <p>{plan.limits?.integrations} integrações</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary mt-4 w-full"
+              disabled={busy === plan.slug || currentPlan === plan.slug}
+              onClick={() => onChangePlan(plan.slug)}
+            >
+              {busy === plan.slug ? 'Atualizando...' : currentPlan === plan.slug ? 'Plano ativo' : 'Selecionar'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const limitLabels = {
+  users: 'Usuários',
+  leads: 'Leads',
+  imports: 'Coletas/mês',
+  integrations: 'Integrações',
+};
+
+function formatPlanPrice(plan) {
+  const cents = Number(plan.price_cents || 0);
+  if (!cents) return 'Sem cobrança configurada';
+  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: plan.currency || 'BRL' });
 }

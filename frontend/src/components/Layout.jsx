@@ -14,6 +14,7 @@ import {
   Sun,
   Columns3,
   History,
+  HelpCircle,
   User,
   Bot
 } from 'lucide-react';
@@ -35,6 +36,7 @@ export default function Layout({ children }) {
     { name: 'Autopilot', href: '/autopilot', icon: Bot },
     { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
     { name: 'Credenciais', href: '/credentials', icon: Key },
+    { name: 'Ajuda', href: '/help', icon: HelpCircle },
     { name: 'Perfil', href: '/profile', icon: User },
   ];
 

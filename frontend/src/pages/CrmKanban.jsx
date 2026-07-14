@@ -10,7 +10,9 @@ import {
   MessageCircle,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Search,
+  Settings,
   User,
   X,
 } from 'lucide-react';
@@ -32,6 +34,36 @@ const EMPTY_FILTERS = {
   responsavel: '',
 };
 
+const CRM_COLUMNS_STORAGE_KEY = 'prospect-ai.crm.columns.v1';
+
+function normalizeCrmColumns(savedColumns) {
+  const savedById = new Map((Array.isArray(savedColumns) ? savedColumns : []).map((column) => [column.id, column]));
+  const merged = KANBAN_COLUMNS.map((column) => {
+    const saved = savedById.get(column.id) || {};
+    return {
+      ...column,
+      label: String(saved.label || column.label),
+      description: String(saved.description || column.description),
+      visible: saved.visible !== false,
+    };
+  });
+
+  const order = Array.isArray(savedColumns) ? savedColumns.map((column) => column.id) : [];
+  return merged.sort((a, b) => {
+    const indexA = order.includes(a.id) ? order.indexOf(a.id) : KANBAN_COLUMNS.findIndex((column) => column.id === a.id);
+    const indexB = order.includes(b.id) ? order.indexOf(b.id) : KANBAN_COLUMNS.findIndex((column) => column.id === b.id);
+    return indexA - indexB;
+  });
+}
+
+function loadCrmColumns() {
+  try {
+    return normalizeCrmColumns(JSON.parse(localStorage.getItem(CRM_COLUMNS_STORAGE_KEY) || '[]'));
+  } catch {
+    return normalizeCrmColumns([]);
+  }
+}
+
 export default function CrmKanban() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +74,8 @@ export default function CrmKanban() {
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [editingLeadId, setEditingLeadId] = useState(null);
   const [quickEdit, setQuickEdit] = useState({ responsavel: '', proxima_acao: '', valor_potencial: '' });
+  const [customizingPipeline, setCustomizingPipeline] = useState(false);
+  const [crmColumns, setCrmColumns] = useState(loadCrmColumns);
 
   useEffect(() => {
     loadLeads();
@@ -93,13 +127,15 @@ export default function CrmKanban() {
     });
   }, [leads, search, filters]);
 
+  const activeCrmColumns = useMemo(() => crmColumns.filter((column) => column.visible !== false), [crmColumns]);
+
   const columns = useMemo(() => {
-    return KANBAN_COLUMNS.map((status) => {
+    return activeCrmColumns.map((status) => {
       const columnLeads = filteredLeads.filter((lead) => (lead.status || 'novo') === status.id);
       const potential = columnLeads.reduce((sum, lead) => sum + Number(lead.valor_potencial || 0), 0);
       return { ...status, leads: columnLeads, potential };
     });
-  }, [filteredLeads]);
+  }, [activeCrmColumns, filteredLeads]);
 
   const totals = useMemo(() => ({
     total: filteredLeads.length,
@@ -144,9 +180,34 @@ export default function CrmKanban() {
   }
 
   function nextStatus(currentStatus) {
-    const index = KANBAN_COLUMNS.findIndex((status) => status.id === (currentStatus || 'novo'));
-    if (index < 0 || index >= KANBAN_COLUMNS.length - 1) return null;
-    return KANBAN_COLUMNS[index + 1];
+    const index = activeCrmColumns.findIndex((status) => status.id === (currentStatus || 'novo'));
+    if (index < 0 || index >= activeCrmColumns.length - 1) return null;
+    return activeCrmColumns[index + 1];
+  }
+
+  function persistCrmColumns(nextColumns) {
+    setCrmColumns(nextColumns);
+    localStorage.setItem(CRM_COLUMNS_STORAGE_KEY, JSON.stringify(nextColumns));
+  }
+
+  function updateCrmColumn(columnId, patch) {
+    persistCrmColumns(crmColumns.map((column) => column.id === columnId ? { ...column, ...patch } : column));
+  }
+
+  function moveCrmColumn(columnId, direction) {
+    const index = crmColumns.findIndex((column) => column.id === columnId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= crmColumns.length) return;
+    const nextColumns = [...crmColumns];
+    const [column] = nextColumns.splice(index, 1);
+    nextColumns.splice(nextIndex, 0, column);
+    persistCrmColumns(nextColumns);
+  }
+
+  function resetCrmColumns() {
+    localStorage.removeItem(CRM_COLUMNS_STORAGE_KEY);
+    setCrmColumns(normalizeCrmColumns([]));
+    toast.success('Fluxo CRM restaurado');
   }
 
   function startQuickEdit(lead) {
@@ -216,6 +277,14 @@ export default function CrmKanban() {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Atualizar
         </button>
+        <button
+          type="button"
+          onClick={() => setCustomizingPipeline((current) => !current)}
+          className="btn btn-secondary flex items-center justify-center gap-2"
+        >
+          <Settings className="h-4 w-4" />
+          Personalizar CRM
+        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
@@ -229,6 +298,15 @@ export default function CrmKanban() {
       </div>
 
       <CrmFocusPanel replyQueue={replyQueue} upcomingMeetings={upcomingMeetings} />
+
+      {customizingPipeline ? (
+        <PipelineSettingsPanel
+          columns={crmColumns}
+          onChange={updateCrmColumn}
+          onMove={moveCrmColumn}
+          onReset={resetCrmColumns}
+        />
+      ) : null}
 
       <div className="card space-y-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -244,7 +322,7 @@ export default function CrmKanban() {
 
           <SelectFilter label="Status" value={filters.status} onChange={(value) => setFilters((current) => ({ ...current, status: value }))}>
             <option value="">Todos os status</option>
-            {KANBAN_COLUMNS.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}
+            {crmColumns.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}
           </SelectFilter>
 
           <SelectFilter label="Prioridade" value={filters.prioridade} onChange={(value) => setFilters((current) => ({ ...current, prioridade: value }))}>
@@ -461,6 +539,87 @@ export default function CrmKanban() {
         </div>
       )}
     </div>
+  );
+}
+
+function PipelineSettingsPanel({ columns, onChange, onMove, onReset }) {
+  return (
+    <section className="card">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <Settings className="h-5 w-5 text-primary-600 dark:text-primary-300" />
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100">Fluxo do CRM</h2>
+          </div>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Ajuste nomes, descrições e ordem das etapas para adaptar o Kanban ao seu processo comercial.
+          </p>
+        </div>
+        <button type="button" onClick={onReset} className="btn btn-secondary flex items-center gap-2">
+          <RotateCcw className="h-4 w-4" />
+          Restaurar padrão
+        </button>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {columns.map((column, index) => (
+          <div key={column.id} className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700 xl:grid-cols-[150px_minmax(0,1fr)_minmax(0,1.2fr)_220px]">
+            <div>
+              <div className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">ID interno</div>
+              <div className="mt-1 rounded-md bg-gray-50 px-2 py-2 text-sm font-mono text-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
+                {column.id}
+              </div>
+            </div>
+            <label className="block">
+              <span className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Nome visível</span>
+              <input
+                className="input mt-1"
+                value={column.label}
+                onChange={(event) => onChange(column.id, { label: event.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Descrição</span>
+              <input
+                className="input mt-1"
+                value={column.description}
+                onChange={(event) => onChange(column.id, { description: event.target.value })}
+              />
+            </label>
+            <div className="flex flex-wrap items-end gap-2">
+              <button
+                type="button"
+                onClick={() => onMove(column.id, -1)}
+                disabled={index === 0}
+                className="btn btn-secondary px-2 py-2 text-xs"
+              >
+                Subir
+              </button>
+              <button
+                type="button"
+                onClick={() => onMove(column.id, 1)}
+                disabled={index === columns.length - 1}
+                className="btn btn-secondary px-2 py-2 text-xs"
+              >
+                Descer
+              </button>
+              <label className="flex items-center gap-2 rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900/40">
+                <input
+                  type="checkbox"
+                  checked={column.visible !== false}
+                  onChange={(event) => onChange(column.id, { visible: event.target.checked })}
+                />
+                Visível
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+        Os IDs internos continuam fixos para preservar automações, relatórios e histórico. A personalização atual fica salva neste navegador.
+      </p>
+    </section>
   );
 }
 

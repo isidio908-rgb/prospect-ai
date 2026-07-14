@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { query } from '../../database/init.mjs';
+import { ensureUserWorkspace } from '../../services/tenancy.mjs';
 
 export async function authenticate(req, res, next) {
   try {
@@ -18,7 +19,7 @@ export async function authenticate(req, res, next) {
       
       // Buscar usuário no banco, incluindo contexto profissional usado pela UI e IA.
       const result = await query(
-        `SELECT id, email, name, profession, primary_niche, internal_context, approval_whatsapp
+        `SELECT id, email, name, profession, primary_niche, internal_context, approval_whatsapp, default_organization_id
          FROM users
          WHERE id = $1`,
         [decoded.userId]
@@ -30,7 +31,13 @@ export async function authenticate(req, res, next) {
         });
       }
       
-      req.user = result.rows[0];
+      const user = result.rows[0];
+      const workspace = await ensureUserWorkspace(user);
+      req.user = {
+        ...user,
+        organization_id: workspace?.id || user.default_organization_id || null,
+        workspace,
+      };
       next();
     } catch (error) {
       if (error.name === 'TokenExpiredError') {

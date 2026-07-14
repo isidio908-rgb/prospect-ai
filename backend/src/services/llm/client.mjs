@@ -29,7 +29,14 @@ async function openaiChat({ baseUrl, apiKey, model, system, user, temperature = 
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content?.trim() || '';
+  return {
+    text: data.choices?.[0]?.message?.content?.trim() || '',
+    usage: {
+      promptTokens: data.usage?.prompt_tokens ?? null,
+      completionTokens: data.usage?.completion_tokens ?? null,
+      totalTokens: data.usage?.total_tokens ?? null,
+    },
+  };
 }
 
 /**
@@ -58,14 +65,23 @@ async function anthropicChat({ baseUrl, apiKey, model, system, user, maxTokens =
   }
 
   const data = await response.json();
-  return (data.content || []).map((c) => c.text).join('').trim();
+  const promptTokens = data.usage?.input_tokens ?? null;
+  const completionTokens = data.usage?.output_tokens ?? null;
+  return {
+    text: (data.content || []).map((c) => c.text).join('').trim(),
+    usage: {
+      promptTokens,
+      completionTokens,
+      totalTokens: promptTokens != null && completionTokens != null ? promptTokens + completionTokens : null,
+    },
+  };
 }
 
 /**
  * Executa uma conversa (system + user) usando o provedor da credencial.
  * `credential` deve conter { type, base_url, model }.
  */
-export async function chatComplete(credential, apiKey, { system, user, temperature, maxTokens }) {
+export async function chatCompleteDetailed(credential, apiKey, { system, user, temperature, maxTokens }) {
   const provider = getLlmProvider(credential.type);
   if (!provider) {
     throw new Error(`Provedor de IA não suportado: ${credential.type}`);
@@ -74,10 +90,44 @@ export async function chatComplete(credential, apiKey, { system, user, temperatu
   const baseUrl = credential.base_url || provider.defaults.base_url;
   const model = credential.model || provider.defaults.model;
 
-  if (provider.api === 'anthropic') {
-    return anthropicChat({ baseUrl, apiKey, model, system, user, maxTokens });
+  const request = provider.api === 'anthropic'
+    ? () => anthropicChat({ baseUrl, apiKey, model, system, user, maxTokens })
+    : () => openaiChat({ baseUrl, apiKey, model, system, user, temperature, maxTokens });
+
+  const result = await request();
+  return {
+    ...result,
+    provider: credential.type,
+    model,
+    baseUrl,
+  };
+}
+
+export async function chatComplete(credential, apiKey, options) {
+  const result = await chatCompleteDetailed(credential, apiKey, options);
+  return result.text;
+}
+
+export function estimateLlmCostUsd(providerConfig, usage = {}) {
+  const pricing = providerConfig?.pricingUsdPer1M;
+  if (!pricing || usage.promptTokens == null || usage.completionTokens == null) {
+    return null;
   }
-  return openaiChat({ baseUrl, apiKey, model, system, user, temperature, maxTokens });
+
+  const inputCost = (usage.promptTokens / 1_000_000) * pricing.input;
+  const outputCost = (usage.completionTokens / 1_000_000) * pricing.output;
+  return Number((inputCost + outputCost).toFixed(8));
+}
+
+export function getUsageWithFallback(usage = {}, { system = '', user = '', text = '' } = {}) {
+  const promptTokens = usage.promptTokens ?? Math.ceil(`${system}\n${user}`.length / 4);
+  const completionTokens = usage.completionTokens ?? Math.ceil(String(text).length / 4);
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: usage.totalTokens ?? promptTokens + completionTokens,
+    estimated: usage.promptTokens == null || usage.completionTokens == null,
+  };
 }
 
 /**

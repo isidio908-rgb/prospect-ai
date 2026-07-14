@@ -9,6 +9,7 @@ import statsRoutes from './api/routes/stats.mjs';
 import credentialsRoutes from './api/routes/credentials.mjs';
 import aiRoutes from './api/routes/ai.mjs';
 import collectionRunsRoutes from './api/routes/collectionRuns.mjs';
+import billingRoutes from './api/routes/billing.mjs';
 import autopilotRoutes from './api/routes/autopilot.mjs';
 import autopilotOpsRoutes from './api/routes/autopilotOps.mjs';
 import whatsappRoutes from './api/routes/whatsapp.mjs';
@@ -16,6 +17,7 @@ import whatsappWebhookRoutes from './api/routes/whatsappWebhook.mjs';
 import { errorHandler } from './api/middleware/errorHandler.mjs';
 import { initDatabase } from './database/init.mjs';
 import { startCredentialScheduler } from './services/credentialScheduler.mjs';
+import { startAutopilotDaemon } from './services/autopilot/autopilotDaemon.mjs';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -60,6 +62,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/credentials', credentialsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/collections', collectionRunsRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api/autopilot', autopilotRoutes);
 app.use('/api/autopilot', autopilotOpsRoutes);
 // Webhook público (chamado pela Evolution API, sem autenticação de usuário)
@@ -87,6 +90,7 @@ async function start() {
     
     // Iniciar scheduler de credenciais
     startCredentialScheduler();
+    startAutopilotDaemon();
     
     app.listen(PORT, () => {
       console.log(`🚀 API rodando em http://localhost:${PORT}`);
@@ -94,6 +98,7 @@ async function start() {
       console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔑 Sistema de credenciais: ATIVO`);
       console.log(`🧹 Sistema de deduplicação: ATIVO`);
+      console.log(`🤖 Autopilot daemon: ${process.env.AUTOPILOT_DAEMON_ENABLED === 'false' ? 'INATIVO' : 'ATIVO'}`);
     });
   } catch (error) {
     console.error('❌ Erro ao iniciar servidor:', error);

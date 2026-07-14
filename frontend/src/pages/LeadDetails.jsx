@@ -9,7 +9,7 @@ import {
   MessageCircle,
   CheckCircle,
   XCircle,
-  Clock
+  Trash2
 } from 'lucide-react';
 import WhatsAppChat from '../components/whatsapp/WhatsAppChat';
 import AiAssistant from '../components/AiAssistant';
@@ -39,11 +39,14 @@ export default function LeadDetails() {
     proxima_acao: '',
     valor_potencial: '',
     motivo_perda: '',
+    whatsapp_instance_id: '',
   });
   const [savingCrm, setSavingCrm] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [whatsappConnected, setWhatsappConnected] = useState(false);
+  const [whatsappInstances, setWhatsappInstances] = useState([]);
+  const [deletingLead, setDeletingLead] = useState(false);
 
   useEffect(() => {
     loadLead();
@@ -54,6 +57,8 @@ export default function LeadDetails() {
   const loadWhatsAppStatus = async () => {
     try {
       const response = await whatsapp.status();
+      const instances = response.data.instances || (response.data.instance ? [response.data.instance] : []);
+      setWhatsappInstances(instances);
       setWhatsappConnected(Boolean(response.data.connected));
     } catch {
       setWhatsappConnected(false);
@@ -70,6 +75,7 @@ export default function LeadDetails() {
         proxima_acao: response.data.lead.proxima_acao || '',
         valor_potencial: response.data.lead.valor_potencial || '',
         motivo_perda: response.data.lead.motivo_perda || '',
+        whatsapp_instance_id: response.data.lead.whatsapp_instance_id || '',
       });
     } catch (error) {
       toast.error('Erro ao carregar lead');
@@ -98,6 +104,7 @@ export default function LeadDetails() {
         proxima_acao: crmForm.proxima_acao || undefined,
         valor_potencial: crmForm.valor_potencial ? Number(crmForm.valor_potencial) : undefined,
         motivo_perda: crmForm.motivo_perda || undefined,
+        whatsapp_instance_id: crmForm.whatsapp_instance_id ? Number(crmForm.whatsapp_instance_id) : null,
       });
       toast.success('CRM atualizado com sucesso!');
       await loadLead();
@@ -137,6 +144,22 @@ export default function LeadDetails() {
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
   };
 
+  const handleDeleteLead = async () => {
+    const name = lead.nome_empresa || 'este lead';
+    const confirmed = window.confirm(`Apagar "${name}"? Essa ação remove o lead e não pode ser desfeita.`);
+    if (!confirmed) return;
+
+    setDeletingLead(true);
+    try {
+      await leads.delete(id);
+      toast.success('Lead apagado com sucesso');
+      navigate('/leads');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao apagar lead');
+      setDeletingLead(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -146,6 +169,8 @@ export default function LeadDetails() {
   }
 
   if (!lead) return null;
+  const selectedWhatsappInstance = whatsappInstances.find((instance) => String(instance.id) === String(crmForm.whatsapp_instance_id));
+  const leadWhatsappConnected = selectedWhatsappInstance ? selectedWhatsappInstance.status === 'open' : whatsappConnected;
 
   const ScoreBadge = ({ score }) => {
     let color = 'bg-gray-500';
@@ -218,6 +243,15 @@ export default function LeadDetails() {
                 {lead.prioridade}
               </span>
             </div>
+            <button
+              type="button"
+              onClick={handleDeleteLead}
+              disabled={deletingLead}
+              className="btn btn-secondary flex items-center gap-2 text-red-600 hover:text-red-700 self-start"
+            >
+              <Trash2 className="w-4 h-4" />
+              {deletingLead ? 'Apagando...' : 'Apagar'}
+            </button>
           </div>
         </div>
       </div>
@@ -378,13 +412,17 @@ export default function LeadDetails() {
             <MessageCircle className="w-5 h-5 text-green-600" />
             Conversa no WhatsApp
           </h2>
-          {!whatsappConnected && (
+          {!leadWhatsappConnected && (
             <Link to="/whatsapp" className="text-sm text-primary-600 hover:text-primary-700">
               Conectar WhatsApp →
             </Link>
           )}
         </div>
-        <WhatsAppChat leadId={id} whatsappConnected={whatsappConnected} />
+        <WhatsAppChat
+          leadId={id}
+          whatsappConnected={leadWhatsappConnected}
+          instanceId={crmForm.whatsapp_instance_id ? Number(crmForm.whatsapp_instance_id) : null}
+        />
       </div>
 
       {/* CRM - Status, responsável, próxima ação, valor potencial */}
@@ -412,6 +450,23 @@ export default function LeadDetails() {
               className="input"
               placeholder="Quem está conduzindo o contato"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Número WhatsApp do lead</label>
+            <select
+              value={crmForm.whatsapp_instance_id}
+              onChange={(e) => setCrmForm({ ...crmForm, whatsapp_instance_id: e.target.value })}
+              className="input"
+            >
+              <option value="">Usar número padrão</option>
+              {whatsappInstances.map((instance) => (
+                <option key={instance.id} value={instance.id}>
+                  {instance.label || instance.profile_name || instance.phone_number || `Número ${instance.id}`}
+                  {instance.is_default ? ' (padrão)' : ''}
+                  {instance.status !== 'open' ? ` - ${instance.status}` : ''}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Próxima ação</label>

@@ -17,6 +17,8 @@ import {
   saveCollectionCache
 } from '../../services/collectionRunService.mjs';
 import { updateLeadSchema } from '../validators/leads.mjs';
+import { recordAuditEvent } from '../../services/tenancy.mjs';
+import { assertBillingLimit } from '../../services/billing.mjs';
 
 const router = express.Router();
 
@@ -94,6 +96,7 @@ router.get('/', async (req, res, next) => {
         score, prioridade, status,
         tem_pixel_meta, tem_gtm, tem_ga4, tem_whatsapp_site,
         proxima_acao, responsavel, valor_potencial,
+        whatsapp_instance_id,
         data_coleta, data_analise, observacoes
        FROM leads
        WHERE ${whereClause}
@@ -209,6 +212,196 @@ router.get('/duplicates', async (req, res, next) => {
   }
 });
 
+const KANBAN_STAGES = [
+  { id: 'novo', title: 'Novo' },
+  { id: 'coletado', title: 'Coletado' },
+  { id: 'qualificado', title: 'Qualificado' },
+  { id: 'primeira_mensagem', title: 'Primeira mensagem' },
+  { id: 'respondeu', title: 'Respondeu' },
+  { id: 'followup', title: 'Follow-up' },
+  { id: 'reuniao', title: 'Reuniao' },
+  { id: 'ganho', title: 'Ganho' },
+  { id: 'perdido', title: 'Perdido' },
+];
+
+function mapLeadToKanbanStage(lead) {
+  if (lead.status === 'cliente_fechado') return 'ganho';
+  if (['sem_interesse', 'nao_respondeu'].includes(lead.status)) return 'perdido';
+  if (lead.status === 'reuniao_marcada') return 'reuniao';
+  if (lead.status === 'respondeu') return 'respondeu';
+  if (
+    lead.status === 'contato_enviado'
+    && ['followup_1', 'followup_2'].includes(lead.latest_message_type)
+  ) {
+    return 'followup';
+  }
+  if (['mensagem_pronta', 'contato_enviado'].includes(lead.status)) return 'primeira_mensagem';
+  if (lead.status === 'analisado') return 'qualificado';
+  if (lead.fonte || lead.data_coleta) return 'coletado';
+  return 'novo';
+}
+
+function isLeadOverdue(lead) {
+  if (lead.data_proxima_acao && new Date(lead.data_proxima_acao) < new Date()) return true;
+  if (!lead.last_sent_at || ['cliente_fechado', 'sem_interesse', 'reuniao_marcada'].includes(lead.status)) return false;
+  const sentAt = new Date(lead.last_sent_at).getTime();
+  return Number.isFinite(sentAt) && Date.now() - sentAt > 48 * 60 * 60 * 1000 && !lead.last_received_at;
+}
+
+// GET /api/leads/kanban - Visão Kanban 2.0 para operação BDR/SDR
+router.get('/kanban', async (req, res, next) => {
+  try {
+    const {
+      cidade,
+      nicho,
+      responsavel,
+      status,
+      search,
+      whatsapp_instance_id: whatsappInstanceId,
+      reply_status: replyStatus,
+      limit = 300,
+    } = req.query;
+
+    const where = ['l.user_id = $1'];
+    const params = [req.user.id];
+    let paramIndex = 2;
+
+    if (cidade) {
+      where.push(`LOWER(l.cidade) = LOWER($${paramIndex++})`);
+      params.push(cidade);
+    }
+
+    if (nicho) {
+      where.push(`LOWER(l.nicho) = LOWER($${paramIndex++})`);
+      params.push(nicho);
+    }
+
+    if (responsavel) {
+      where.push(`LOWER(COALESCE(l.responsavel, '')) = LOWER($${paramIndex++})`);
+      params.push(responsavel);
+    }
+
+    if (status) {
+      where.push(`l.status = $${paramIndex++}`);
+      params.push(status);
+    }
+
+    if (whatsappInstanceId) {
+      where.push(`l.whatsapp_instance_id = $${paramIndex++}`);
+      params.push(Number(whatsappInstanceId));
+    }
+
+    if (search) {
+      where.push(`(
+        LOWER(l.nome_empresa) LIKE LOWER($${paramIndex})
+        OR LOWER(COALESCE(l.telefone, '')) LIKE LOWER($${paramIndex})
+        OR LOWER(COALESCE(l.site, '')) LIKE LOWER($${paramIndex})
+      )`);
+      params.push(`%${search}%`);
+      paramIndex += 1;
+    }
+
+    if (replyStatus === 'has_reply') {
+      where.push('reply_meta.last_received_at IS NOT NULL');
+    } else if (replyStatus === 'needs_human') {
+      where.push('COALESCE(sdr_meta.escalation_required, FALSE) = TRUE');
+    } else if (replyStatus === 'no_reply') {
+      where.push('reply_meta.last_received_at IS NULL');
+    }
+
+    const safeLimit = Math.min(Math.max(Number(limit || 300), 1), 500);
+    params.push(safeLimit);
+
+    const result = await query(
+      `SELECT
+        l.id, l.nome_empresa, l.site, l.telefone, l.whatsapp, l.email,
+        l.cidade, l.nicho, l.categoria, l.fonte, l.score, l.prioridade, l.status,
+        l.proxima_acao, l.responsavel, l.valor_potencial, l.data_proxima_acao,
+        l.whatsapp_instance_id, l.data_coleta, l.created_at, l.updated_at,
+        wi.label as whatsapp_instance_label,
+        wi.phone_number as whatsapp_instance_phone,
+        wi.status as whatsapp_instance_status,
+        reply_meta.last_received_at,
+        reply_meta.reply_count,
+        sent_meta.last_sent_at,
+        queue_meta.latest_message_type,
+        sdr_meta.escalation_required as sdr_escalation_required,
+        sdr_meta.decision as sdr_decision,
+        FLOOR(EXTRACT(EPOCH FROM (NOW() - COALESCE(l.data_coleta, l.created_at))) / 86400)::int as age_days
+       FROM leads l
+       LEFT JOIN whatsapp_instances wi ON wi.id = l.whatsapp_instance_id AND wi.user_id = l.user_id
+       LEFT JOIN LATERAL (
+         SELECT MAX(created_at) as last_received_at, COUNT(*)::int as reply_count
+         FROM whatsapp_messages wm
+         WHERE wm.user_id = l.user_id AND wm.lead_id = l.id AND wm.direction = 'received'
+       ) reply_meta ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT MAX(created_at) as last_sent_at
+         FROM whatsapp_messages wm
+         WHERE wm.user_id = l.user_id AND wm.lead_id = l.id AND wm.direction = 'sent'
+       ) sent_meta ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT message_type as latest_message_type
+         FROM message_queue mq
+         WHERE mq.user_id = l.user_id AND mq.lead_id = l.id
+         ORDER BY mq.created_at DESC
+         LIMIT 1
+       ) queue_meta ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT escalation_required, decision
+         FROM sdr_events se
+         WHERE se.user_id = l.user_id AND se.lead_id = l.id
+         ORDER BY se.created_at DESC
+         LIMIT 1
+       ) sdr_meta ON TRUE
+       WHERE ${where.join(' AND ')}
+       ORDER BY COALESCE(l.data_proxima_acao, l.updated_at, l.created_at) DESC
+       LIMIT $${paramIndex}`,
+      params
+    );
+
+    const columns = KANBAN_STAGES.map((stage) => ({
+      ...stage,
+      leads: [],
+      count: 0,
+      overdue: 0,
+      needs_human: 0,
+      total_value: 0,
+    }));
+    const byStage = new Map(columns.map((column) => [column.id, column]));
+
+    for (const lead of result.rows) {
+      const stage = mapLeadToKanbanStage(lead);
+      const overdue = isLeadOverdue(lead);
+      const needsHuman = Boolean(lead.sdr_escalation_required);
+      const card = {
+        ...lead,
+        kanban_stage: stage,
+        overdue,
+        needs_human: needsHuman,
+      };
+      const column = byStage.get(stage) || byStage.get('novo');
+      column.leads.push(card);
+      column.count += 1;
+      column.overdue += overdue ? 1 : 0;
+      column.needs_human += needsHuman ? 1 : 0;
+      column.total_value += Number(lead.valor_potencial || 0);
+    }
+
+    res.json({
+      columns,
+      summary: {
+        total: result.rows.length,
+        overdue: columns.reduce((sum, column) => sum + column.overdue, 0),
+        needs_human: columns.reduce((sum, column) => sum + column.needs_human, 0),
+        total_value: columns.reduce((sum, column) => sum + column.total_value, 0),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/leads/:id - Detalhes de um lead
 router.get('/:id', async (req, res, next) => {
   try {
@@ -245,6 +438,17 @@ router.patch('/:id', async (req, res, next) => {
     }
 
     const statusAnterior = existing.rows[0].status;
+
+    if (data.whatsapp_instance_id !== undefined && data.whatsapp_instance_id !== null) {
+      const instance = await query(
+        'SELECT id FROM whatsapp_instances WHERE id = $1 AND user_id = $2',
+        [data.whatsapp_instance_id, req.user.id]
+      );
+      if (instance.rows.length === 0) {
+        return res.status(400).json({ error: 'Instância WhatsApp não encontrada para este usuário' });
+      }
+    }
+
     const updates = [];
     const values = [];
     let paramIndex = 1;
@@ -289,6 +493,11 @@ router.patch('/:id', async (req, res, next) => {
       values.push(data.motivo_perda);
     }
 
+    if (data.whatsapp_instance_id !== undefined) {
+      updates.push(`whatsapp_instance_id = $${paramIndex++}`);
+      values.push(data.whatsapp_instance_id);
+    }
+
     if (updates.length === 0) {
       return res.status(400).json({ error: 'Nenhum campo para atualizar' });
     }
@@ -310,6 +519,15 @@ router.patch('/:id', async (req, res, next) => {
         [id, req.user.id, statusAnterior, data.status, data.observacoes || null]
       );
     }
+
+    await recordAuditEvent({
+      userId: req.user.id,
+      organizationId: req.user.organization_id,
+      entityType: 'lead',
+      entityId: id,
+      action: 'lead_updated',
+      metadata: { fields: Object.keys(data) }
+    });
 
     res.json({ message: 'Lead atualizado com sucesso' });
   } catch (error) {
@@ -391,6 +609,14 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Lead não encontrado' });
     }
 
+    await recordAuditEvent({
+      userId: req.user.id,
+      organizationId: req.user.organization_id,
+      entityType: 'lead',
+      entityId: id,
+      action: 'lead_deleted'
+    });
+
     res.json({ message: 'Lead deletado com sucesso' });
   } catch (error) {
     next(error);
@@ -406,13 +632,16 @@ router.post('/import', async (req, res, next) => {
       return res.status(400).json({ error: 'nome_empresa é obrigatório' });
     }
 
+    await assertBillingLimit(req.user.organization_id, 'leads', 1);
+
     const result = await query(
       `INSERT INTO leads (
-        user_id, nome_empresa, site, telefone, cidade, nicho, categoria, fonte, observacoes, data_coleta
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        user_id, organization_id, nome_empresa, site, telefone, cidade, nicho, categoria, fonte, observacoes, data_coleta
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
       RETURNING id, nome_empresa, site, telefone, cidade, nicho, categoria`,
       [
         req.user.id,
+        req.user.organization_id,
         nome_empresa,
         site || '',
         telefone || '',
@@ -446,6 +675,8 @@ router.post('/import-csv', async (req, res, next) => {
       });
     }
 
+    const expectedRows = Math.max(String(csvContent).trim().split(/\r?\n/).length - 1, 1);
+    await assertBillingLimit(req.user.organization_id, 'leads', expectedRows);
     const results = await importLeadsFromCSV(req.user.id, csvContent);
 
     res.json({
@@ -502,6 +733,7 @@ router.post('/collect', async (req, res, next) => {
     }
 
     const normalizedLimit = limit || 20;
+    await assertBillingLimit(req.user.organization_id, 'leads', normalizedLimit);
     const cacheInput = {
       credentialId,
       query: searchQuery,

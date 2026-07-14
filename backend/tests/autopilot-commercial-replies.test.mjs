@@ -6,6 +6,7 @@ import autopilotOpsRoutes from '../src/api/routes/autopilotOps.mjs';
 import { errorHandler } from '../src/api/middleware/errorHandler.mjs';
 import { initDatabase, query } from '../src/database/init.mjs';
 import { classifyReplyText } from '../src/services/autopilot/autopilotExecutionService.mjs';
+import { classifySdrReplyText } from '../src/services/autopilot/sdrAgentService.mjs';
 
 function hasSecretPattern(payload) {
   return /api_key|apiKey|api_key_encrypted|secret|Bearer|x-api-key|x-rapidapi-key|token/i.test(
@@ -109,6 +110,14 @@ describe('autopilot commercial replies', () => {
     assert.equal(classification.confidence > 0.7, true);
   });
 
+  test('classifica resposta SDR com horario proposto sem confirmar agenda automaticamente', () => {
+    const classification = classifySdrReplyText('Pode ser amanha as 10h?');
+
+    assert.equal(classification.intent, 'meeting_time_proposed');
+    assert.equal(classification.stage, 'scheduling');
+    assert.equal(classification.qualification, 'high_intent');
+  });
+
   test('lista inbox comercial sem expor segredos', async () => {
     const listed = await request(baseUrl, '/api/autopilot/replies/inbox?limit=10', {
       headers: { Authorization: `Bearer ${token}` },
@@ -162,5 +171,97 @@ describe('autopilot commercial replies', () => {
     assert.equal(followups.rows[0].tipo, 'reuniao');
     assert.equal(followups.rows[0].status_anterior, 'contato_enviado');
     assert.equal(followups.rows[0].status_novo, 'reuniao_marcada');
+  });
+
+  test('SDR prepara intenção de agendamento sem criar evento externo', async () => {
+    const sdrLead = await query(
+      `INSERT INTO leads (
+        user_id, nome_empresa, telefone, whatsapp, cidade, nicho, fonte, score, status, data_coleta
+      ) VALUES ($1, 'Clinica SDR', '+5565999992000', '+5565999992000', 'Cuiaba', 'clinicas', 'serper', 93, 'contato_enviado', NOW())
+      RETURNING id`,
+      [userId]
+    );
+    const sdrLeadId = sdrLead.rows[0].id;
+
+    const instance = await query(
+      `SELECT id FROM whatsapp_instances WHERE user_id = $1 ORDER BY id ASC LIMIT 1`,
+      [userId]
+    );
+
+    await query(
+      `INSERT INTO whatsapp_messages (instance_id, lead_id, user_id, remote_jid, from_me, direction, text_content, created_at)
+       VALUES ($1, $2, $3, '5565999992000@s.whatsapp.net', FALSE, 'received', 'Tenho interesse, pode me mandar horarios?', NOW())
+       RETURNING id`,
+      [instance.rows[0].id, sdrLeadId, userId]
+    );
+
+    const dryRun = await request(baseUrl, `/api/autopilot/sdr/replies/${sdrLeadId}/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ dry_run: true, preferred_period: 'morning' }),
+    });
+
+    assert.equal(dryRun.response.status, 200);
+    assert.equal(dryRun.body.dryRun, true);
+    assert.equal(dryRun.body.classification.intent, 'meeting_request');
+    assert.equal(dryRun.body.decision.action, 'offer_scheduling_slots');
+    assert.equal(dryRun.body.scheduling_intent.calendar_payload.external_event_created, false);
+    assert.equal(dryRun.body.scheduling_intent.slots.length > 0, true);
+    assert.equal(hasSecretPattern(dryRun.body), false);
+
+    const applied = await request(baseUrl, `/api/autopilot/sdr/replies/${sdrLeadId}/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ dry_run: false, preferred_period: 'morning' }),
+    });
+
+    assert.equal(applied.response.status, 200);
+    assert.equal(applied.body.lead.status, 'respondeu');
+    assert.equal(applied.body.event.escalation_required, false);
+    assert.equal(applied.body.event.scheduling_intent.calendar_payload.external_event_created, false);
+    assert.match(applied.body.decision.recommended_message, /horarios|horários/i);
+
+    const history = await query(
+      `SELECT tipo, status_anterior, status_novo, mensagem
+       FROM lead_followups
+       WHERE user_id = $1 AND lead_id = $2
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId, sdrLeadId]
+    );
+    assert.equal(history.rows[0].tipo, 'sdr');
+    assert.equal(history.rows[0].status_anterior, 'contato_enviado');
+    assert.equal(history.rows[0].status_novo, 'respondeu');
+    assert.match(history.rows[0].mensagem, /Raciocinio/i);
+  });
+
+  test('SDR escala horario proposto para humano antes de marcar reuniao', async () => {
+    const response = await request(baseUrl, `/api/autopilot/sdr/replies/${leadId}/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        dry_run: false,
+        text: 'Pode ser amanha as 10h?',
+      }),
+    });
+
+    assert.equal(response.response.status, 200);
+    assert.equal(response.body.classification.intent, 'meeting_time_proposed');
+    assert.equal(response.body.decision.action, 'confirm_scheduling_safely');
+    assert.equal(response.body.decision.escalation_required, true);
+    assert.equal(response.body.lead.status, 'respondeu');
+    assert.equal(response.body.scheduling_intent.calendar_payload.external_event_created, false);
+  });
+
+  test('SDR impede outro usuario de analisar lead alheio', async () => {
+    const response = await request(baseUrl, `/api/autopilot/sdr/replies/${leadId}/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${otherToken}` },
+      body: JSON.stringify({ text: 'Tenho interesse', dry_run: false }),
+    });
+
+    assert.equal(response.response.status, 404);
+    assert.equal(response.body.error, 'Lead nao encontrado');
+    assert.equal(hasSecretPattern(response.body), false);
   });
 });

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Software DevOps Engineer"
+  short_description: "Full-cycle software and DevOps execution"
+  default_prompt: "Use $software-devops-engineer to plan, implement, verify, and document a full-cycle software or DevOps task."
+
+policy:
+  allow_implicit_invocation: true

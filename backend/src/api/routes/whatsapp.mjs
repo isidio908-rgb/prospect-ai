@@ -11,6 +11,7 @@ const router = express.Router();
 router.use(authenticate);
 
 const securityOptionsSchema = z.object({
+  label: z.string().max(120).optional(),
   readMessagesAuto: z.boolean().optional(),
   readStatusAuto: z.boolean().optional(),
   rejectCall: z.boolean().optional(),
@@ -22,9 +23,11 @@ const securityOptionsSchema = z.object({
 
 const sendTextSchema = z.object({
   text: z.string().min(1, 'Mensagem não pode ser vazia'),
+  instanceId: z.coerce.number().int().positive().optional(),
 });
 
 const sendMediaSchema = z.object({
+  instanceId: z.coerce.number().int().positive().optional(),
   mediatype: z.enum(['image', 'video', 'document']),
   mimetype: z.string().min(1),
   media: z.string().min(1, 'media (URL, base64 ou data-URI) é obrigatório'),
@@ -33,9 +36,82 @@ const sendMediaSchema = z.object({
 });
 
 const sendAudioSchema = z.object({
+  instanceId: z.coerce.number().int().positive().optional(),
   audio: z.string().min(1, 'audio (URL, base64 ou data-URI) é obrigatório'),
   mimetype: z.string().optional(),
   fileName: z.string().optional(),
+});
+
+const instanceParamsSchema = z.object({
+  instanceId: z.coerce.number().int().positive(),
+});
+
+// GET /api/whatsapp/instances - Lista todos os números conectados/configurados
+router.get('/instances', async (req, res, next) => {
+  try {
+    const instances = await whatsappService.listInstances(req.user.id);
+    res.json({ instances });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/whatsapp/instances - Cria uma nova instância para conectar +1 número
+router.post('/instances', async (req, res, next) => {
+  try {
+    const securityOptions = securityOptionsSchema.parse(req.body || {});
+    const result = await whatsappService.connectInstance(req.user.id, {
+      ...securityOptions,
+      createNew: true,
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/instances/:instanceId/connect', async (req, res, next) => {
+  try {
+    const { instanceId } = instanceParamsSchema.parse(req.params);
+    const securityOptions = securityOptionsSchema.parse(req.body || {});
+    const result = await whatsappService.connectInstance(req.user.id, {
+      ...securityOptions,
+      instanceId,
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/instances/:instanceId/default', async (req, res, next) => {
+  try {
+    const { instanceId } = instanceParamsSchema.parse(req.params);
+    const instance = await whatsappService.setDefaultInstance(req.user.id, instanceId);
+    res.json({ instance });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/instances/:instanceId/disconnect', async (req, res, next) => {
+  try {
+    const { instanceId } = instanceParamsSchema.parse(req.params);
+    await whatsappService.disconnectInstance(req.user.id, instanceId);
+    res.json({ message: 'WhatsApp desconectado' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/instances/:instanceId', async (req, res, next) => {
+  try {
+    const { instanceId } = instanceParamsSchema.parse(req.params);
+    await whatsappService.deleteInstance(req.user.id, instanceId);
+    res.json({ message: 'Instância WhatsApp removida' });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // POST /api/whatsapp/connect - Cria/conecta a instância do usuário e retorna o QR code
@@ -111,8 +187,8 @@ router.get('/messages/:messageId/media', async (req, res, next) => {
 // POST /api/whatsapp/leads/:leadId/messages/text - Envia texto (confirma leitura pendente antes)
 router.post('/leads/:leadId/messages/text', async (req, res, next) => {
   try {
-    const { text } = sendTextSchema.parse(req.body);
-    const message = await whatsappService.sendTextToLead(req.user.id, req.params.leadId, text);
+    const { text, instanceId } = sendTextSchema.parse(req.body);
+    const message = await whatsappService.sendTextToLead(req.user.id, req.params.leadId, text, { instanceId });
     res.status(201).json({ message: 'Mensagem enviada', data: message });
   } catch (error) {
     next(error);
@@ -123,7 +199,8 @@ router.post('/leads/:leadId/messages/text', async (req, res, next) => {
 router.post('/leads/:leadId/messages/media', async (req, res, next) => {
   try {
     const data = sendMediaSchema.parse(req.body);
-    const message = await whatsappService.sendMediaToLead(req.user.id, req.params.leadId, data);
+    const { instanceId, ...payload } = data;
+    const message = await whatsappService.sendMediaToLead(req.user.id, req.params.leadId, payload, { instanceId });
     res.status(201).json({ message: 'Mídia enviada', data: message });
   } catch (error) {
     next(error);
@@ -134,7 +211,8 @@ router.post('/leads/:leadId/messages/media', async (req, res, next) => {
 router.post('/leads/:leadId/messages/audio', async (req, res, next) => {
   try {
     const data = sendAudioSchema.parse(req.body);
-    const message = await whatsappService.sendAudioToLead(req.user.id, req.params.leadId, data);
+    const { instanceId, ...payload } = data;
+    const message = await whatsappService.sendAudioToLead(req.user.id, req.params.leadId, payload, { instanceId });
     res.status(201).json({ message: 'Áudio enviado', data: message });
   } catch (error) {
     next(error);

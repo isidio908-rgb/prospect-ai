@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { QrCode, CheckCircle2, XCircle, Loader2, ShieldCheck, Unplug, Trash2 } from 'lucide-react';
+import { QrCode, CheckCircle2, XCircle, Loader2, ShieldCheck, Unplug, Trash2, Plus, Star } from 'lucide-react';
 import { whatsapp } from '../services/api';
 
 const STATUS_POLL_MS = 5000;
@@ -17,6 +17,9 @@ const DEFAULT_SECURITY = {
 
 export default function WhatsAppSettings() {
   const [statusData, setStatusData] = useState(null);
+  const [instances, setInstances] = useState([]);
+  const [activeInstanceId, setActiveInstanceId] = useState(null);
+  const [newLabel, setNewLabel] = useState('');
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [qrcode, setQrcode] = useState(null);
@@ -32,6 +35,9 @@ export default function WhatsAppSettings() {
     try {
       const response = await whatsapp.status();
       setStatusData(response.data);
+      const nextInstances = response.data.instances || (response.data.instance ? [response.data.instance] : []);
+      setInstances(nextInstances);
+      setActiveInstanceId((current) => current || response.data.instance?.id || nextInstances[0]?.id || null);
 
       if (response.data.instance) {
         setSecurity({
@@ -69,7 +75,9 @@ export default function WhatsAppSettings() {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const response = await whatsapp.connect(security);
+      const response = activeInstanceId
+        ? await whatsapp.reconnectInstance(activeInstanceId, security)
+        : await whatsapp.connect(security);
       setQrcode(response.data.qrcode);
       toast.success('Escaneie o QR code com o WhatsApp do número que deseja conectar.');
       startPolling();
@@ -80,10 +88,28 @@ export default function WhatsAppSettings() {
     }
   };
 
-  const handleDisconnect = async () => {
+  const handleAddNumber = async () => {
+    setConnecting(true);
+    try {
+      const response = await whatsapp.createInstance({ ...security, label: newLabel });
+      setActiveInstanceId(response.data.id);
+      setQrcode(response.data.qrcode);
+      setNewLabel('');
+      toast.success('Novo número criado. Escaneie o QR code para conectar.');
+      startPolling();
+      await loadStatus();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao adicionar número');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async (instanceId = null) => {
     if (!confirm('Desconectar o WhatsApp? Você poderá reconectar depois escaneando um novo QR code.')) return;
     try {
-      await whatsapp.disconnect();
+      if (instanceId) await whatsapp.disconnectInstance(instanceId);
+      else await whatsapp.disconnect();
       toast.success('WhatsApp desconectado');
       await loadStatus();
     } catch (error) {
@@ -91,16 +117,30 @@ export default function WhatsAppSettings() {
     }
   };
 
-  const handleRemove = async () => {
+  const handleRemove = async (instanceId = null) => {
     if (!confirm('Remover a instância permanentemente? Isso apaga a configuração salva.')) return;
     try {
-      await whatsapp.remove();
+      if (instanceId) await whatsapp.removeInstance(instanceId);
+      else await whatsapp.remove();
       toast.success('Instância removida');
       setStatusData(null);
+      setInstances((current) => current.filter((instance) => instance.id !== instanceId));
+      setActiveInstanceId(null);
       setQrcode(null);
       setSecurity(DEFAULT_SECURITY);
+      await loadStatus();
     } catch (error) {
       toast.error(error.response?.data?.error || 'Erro ao remover instância');
+    }
+  };
+
+  const handleSetDefault = async (instanceId) => {
+    try {
+      await whatsapp.setDefaultInstance(instanceId);
+      toast.success('Número padrão atualizado');
+      await loadStatus();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao definir número padrão');
     }
   };
 
@@ -110,17 +150,19 @@ export default function WhatsAppSettings() {
 
   const connected = statusData?.connected;
   const instance = statusData?.instance;
+  const activeInstance = instances.find((item) => item.id === activeInstanceId) || instance;
+  const shouldShowQrPanel = Boolean(qrcode) || !activeInstance || activeInstance.status !== 'open';
 
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">WhatsApp</h1>
-        <p className="text-gray-600 dark:text-gray-400">Conecte um número para conversar com os leads direto pelo CRM</p>
+        <p className="text-gray-600 dark:text-gray-400">Conecte um ou mais números para conversar com os leads direto pelo CRM</p>
       </div>
 
       {/* Status atual */}
       <div className="card">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             {connected ? (
               <CheckCircle2 className="w-8 h-8 text-green-600" />
@@ -129,7 +171,7 @@ export default function WhatsAppSettings() {
             )}
             <div>
               <p className="font-semibold text-gray-900 dark:text-gray-100">
-                {connected ? 'Conectado' : instance ? 'Desconectado' : 'Nenhum número conectado'}
+                {connected ? 'Número padrão conectado' : instance ? 'Número padrão desconectado' : 'Nenhum número conectado'}
               </p>
               {instance?.phone_number && (
                 <p className="text-sm text-gray-500 dark:text-gray-400">{instance.phone_number}</p>
@@ -139,17 +181,17 @@ export default function WhatsAppSettings() {
 
           {connected ? (
             <div className="flex gap-2">
-              <button onClick={handleDisconnect} className="btn btn-secondary flex items-center gap-2">
+              <button onClick={() => handleDisconnect(instance?.id)} className="btn btn-secondary flex items-center gap-2">
                 <Unplug className="w-4 h-4" />
                 Desconectar
               </button>
-              <button onClick={handleRemove} className="btn btn-danger flex items-center gap-2">
+              <button onClick={() => handleRemove(instance?.id)} className="btn btn-danger flex items-center gap-2">
                 <Trash2 className="w-4 h-4" />
                 Remover
               </button>
             </div>
           ) : instance ? (
-            <button onClick={handleRemove} className="btn btn-danger flex items-center gap-2">
+            <button onClick={() => handleRemove(instance?.id)} className="btn btn-danger flex items-center gap-2">
               <Trash2 className="w-4 h-4" />
               Remover
             </button>
@@ -157,15 +199,80 @@ export default function WhatsAppSettings() {
         </div>
       </div>
 
+      {instances.length > 0 && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Números conectados</h2>
+          <div className="space-y-3">
+            {instances.map((item) => (
+              <div
+                key={item.id}
+                className={`border rounded-lg p-4 ${activeInstanceId === item.id ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700'}`}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setActiveInstanceId(item.id)}
+                    className="text-left"
+                  >
+                    <p className="font-medium text-gray-900 dark:text-gray-100">
+                      {item.label || item.profile_name || item.phone_number || `Número ${item.id}`}
+                      {item.is_default && <span className="ml-2 text-xs text-primary-600">padrão</span>}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {item.phone_number || 'Aguardando conexão'} · {item.status || 'created'}
+                    </p>
+                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {!item.is_default && (
+                      <button onClick={() => handleSetDefault(item.id)} className="btn btn-secondary flex items-center gap-2">
+                        <Star className="w-4 h-4" />
+                        Padrão
+                      </button>
+                    )}
+                    <button onClick={() => setActiveInstanceId(item.id)} className="btn btn-secondary">
+                      Selecionar
+                    </button>
+                    <button onClick={() => handleDisconnect(item.id)} className="btn btn-secondary flex items-center gap-2">
+                      <Unplug className="w-4 h-4" />
+                      Desconectar
+                    </button>
+                    <button onClick={() => handleRemove(item.id)} className="btn btn-danger flex items-center gap-2">
+                      <Trash2 className="w-4 h-4" />
+                      Remover
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Adicionar outro número</h2>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <input
+            value={newLabel}
+            onChange={(event) => setNewLabel(event.target.value)}
+            placeholder="Ex: BDR 01, SDR Cuiabá, Atendimento 02"
+            className="input flex-1"
+          />
+          <button onClick={handleAddNumber} disabled={connecting} className="btn btn-primary bg-green-600 hover:bg-green-700 flex items-center justify-center gap-2">
+            {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            Adicionar número
+          </button>
+        </div>
+      </div>
+
       {/* QR Code */}
-      {!connected && (
+      {shouldShowQrPanel && (
         <div className="card text-center">
           {qrcode ? (
             <>
               <p className="text-gray-700 dark:text-gray-300 mb-4">Abra o WhatsApp no celular, vá em Aparelhos conectados e escaneie:</p>
               <img src={qrcode} alt="QR Code WhatsApp" className="mx-auto rounded-lg border bg-white p-2" style={{ maxWidth: 280 }} />
               <p className="text-xs text-gray-400 mt-3">O código expira em alguns minutos. Clique em "Gerar novo QR code" se necessário.</p>
-              <button onClick={handleConnect} disabled={connecting} className="btn btn-secondary mt-4">
+              <button onClick={handleConnect} disabled={connecting || !activeInstanceId} className="btn btn-secondary mt-4">
                 {connecting ? 'Gerando...' : 'Gerar novo QR code'}
               </button>
             </>
@@ -230,8 +337,8 @@ export default function WhatsAppSettings() {
           <button onClick={handleConnect} disabled={connecting} className="btn btn-primary bg-green-600 hover:bg-green-700">
             {connecting ? (
               <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Conectando...</span>
-            ) : instance ? (
-              'Salvar e reconectar'
+            ) : activeInstanceId ? (
+              'Salvar e reconectar número selecionado'
             ) : (
               'Conectar WhatsApp'
             )}
